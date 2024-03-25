@@ -556,7 +556,7 @@ const Graph = class SystemMonitor_Graph {
         this.actor.connect('repaint', this._draw.bind(this));
     }
     create_menu_item() {
-        this.menu_item = new PopupMenu.PopupBaseMenuItem({ reactive: false });
+        this.menu_item = new PopupMenu.PopupBaseMenuItem({reactive: false});
         this.menu_item.actor.add_child(this.actor);
         // tray.menu.addMenuItem(this.menu_item);
     }
