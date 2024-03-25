@@ -72,7 +72,7 @@ function sm_log(message) {
 }
 
 function parse_bytearray(maybeBA) {
-    const decoder = new TextDecoder('utf-8');
+    const decoder = new TextDecoder('utf8');
     return decoder.decode(maybeBA);
 }
 
@@ -106,7 +106,7 @@ function build_menu_info(extension) {
 
     let menu_info_box_table = new St.Widget({
         style: 'padding: 10px 0px 10px 0px; spacing-rows: 10px; spacing-columns: 15px;',
-        layout_manager: new Clutter.GridLayout({orientation: Clutter.Orientation.VERTICAL})
+        layout_manager: new Clutter.GridLayout({ orientation: Clutter.Orientation.VERTICAL })
     });
     let menu_info_box_table_layout = menu_info_box_table.layout_manager;
 
@@ -162,7 +162,6 @@ function interesting_mountpoint(mount) {
 
     return ((mount[0].indexOf('/dev/') === 0 || mount[2].toLowerCase() === 'nfs') && mount[2].toLowerCase() !== 'udf');
 }
-
 
 const smStyleManager = class SystemMonitor_smStyleManager {
     constructor(extension) {
@@ -259,31 +258,45 @@ gnome-system-monitor and libgtop, clutter and Network Manager gir bindings \n\
 \t    on openSUSE: typelib-1_0-GTop-2_0, typelib-1_0-NetworkManager-1_0, gnome-system-monitor \n\
 \t    on Mageia 64-bit: lib64gtop-gir2.0, lib64nm-gir1.0, lib64clutter-gir1.0, gnome-system-monitor\n');
 
-            super({styleClass: 'prompt-dialog'});
-            let mainContentBox = new St.BoxLayout({style_class: 'prompt-dialog-main-layout',
-                                                   vertical: false});
+            super({ styleClass: 'prompt-dialog' });
+            let mainContentBox = new St.BoxLayout({
+                style_class: 'prompt-dialog-main-layout',
+                vertical: false
+            });
             this.contentLayout.add(mainContentBox,
-                                   {x_fill: true,
-                                    y_fill: true});
+                {
+                    x_fill: true,
+                    y_fill: true
+                });
 
-            let messageBox = new St.BoxLayout({style_class: 'prompt-dialog-message-layout',
-                                               vertical: true});
+            let messageBox = new St.BoxLayout({
+                style_class: 'prompt-dialog-message-layout',
+                vertical: true
+            });
             mainContentBox.add(messageBox,
-                               {y_align: St.Align.START});
+                { y_align: St.Align.START });
 
-            this._subjectLabel = new St.Label({style_class: 'prompt-dialog-headline',
-                                               text: _('System Monitor Extension')});
+            this._subjectLabel = new St.Label({
+                style_class: 'prompt-dialog-headline',
+                text: _('System Monitor Extension')
+            });
 
             messageBox.add(this._subjectLabel,
-                           {y_fill: false,
-                            y_align: St.Align.START});
+                {
+                    y_fill: false,
+                    y_align: St.Align.START
+                });
 
-            this._descriptionLabel = new St.Label({style_class: 'prompt-dialog-description',
-                                                   text: MESSAGE});
+            this._descriptionLabel = new St.Label({
+                style_class: 'prompt-dialog-description',
+                text: MESSAGE
+            });
 
             messageBox.add(this._descriptionLabel,
-                           {y_fill: true,
-                            y_align: St.Align.START});
+                {
+                    y_fill: true,
+                    y_align: St.Align.START
+                });
 
 
             this.setButtons([
@@ -301,7 +314,7 @@ gnome-system-monitor and libgtop, clutter and Network Manager gir bindings \n\
 const Chart = class SystemMonitor_Chart {
     constructor(extension, width, height, parent) {
         this.extension = extension;
-        this.actor = new St.DrawingArea({style_class: extension._Style.get('sm-chart'), reactive: false});
+        this.actor = new St.DrawingArea({ style_class: extension._Style.get('sm-chart'), reactive: false });
         this.parentC = parent;
         this.width = width;
         let themeContext = St.ThemeContext.get_for_stage(global.stage);
@@ -346,7 +359,7 @@ const Chart = class SystemMonitor_Chart {
             max = Math.max.apply(this, this.data[this.data.length - 1]);
             max = Math.max(1, Math.pow(2, Math.ceil(Math.log(max) / Math.log(2))));
         }
-        Clutter.cairo_set_source_color(cr, this.extension._Background);
+        cr.setSourceColor(this.extension._Background);
         cr.rectangle(0, 0, width, height);
         cr.fill();
         for (let i = this.parentC.colors.length - 1; i >= 0; i--) {
@@ -367,7 +380,7 @@ const Chart = class SystemMonitor_Chart {
                 cr.lineTo(x, (1 - this.data[i][0] / max) * height);
                 cr.lineTo(x, height);
                 cr.closePath();
-                Clutter.cairo_set_source_color(cr, this.parentC.colors[i]);
+                cr.setSourceColor(this.parentC.colors[i]);
                 cr.fill();
             }
         }
@@ -439,7 +452,7 @@ const smMountsMonitor = class SystemMonitor_smMountsMonitor {
         let mount_lines = this._volumeMonitor.get_mounts();
         mount_lines.forEach((mount) => {
             if ((!this.is_net_mount(mount) || ENABLE_NETWORK_DISK_USAGE) &&
-                 !this.is_ro_mount(mount)) {
+                !this.is_ro_mount(mount)) {
                 let mpath = mount.get_root().get_path() || mount.get_default_location().get_path();
                 if (mpath) {
                     this.mounts.push(mpath);
@@ -531,7 +544,7 @@ const Graph = class SystemMonitor_Graph {
     constructor(extension, width, height) {
         this.extension = extension;
         this.menu_item = '';
-        this.actor = new St.DrawingArea({style_class: this.extension._Style.get('sm-chart'), reactive: false});
+        this.actor = new St.DrawingArea({ style_class: this.extension._Style.get('sm-chart'), reactive: false });
         this.width = width;
         this.height = height;
         this.gtop = new GTop.glibtop_fsusage();
@@ -557,7 +570,7 @@ const Graph = class SystemMonitor_Graph {
         this.actor.connect('repaint', this._draw.bind(this));
     }
     create_menu_item() {
-        this.menu_item = new PopupMenu.PopupBaseMenuItem({reactive: false});
+        this.menu_item = new PopupMenu.PopupBaseMenuItem({ reactive: false });
         this.menu_item.actor.add_child(this.actor);
         // tray.menu.addMenuItem(this.menu_item);
     }
@@ -603,7 +616,7 @@ const Bar = class SystemMonitor_Bar extends Graph {
         for (let mount in this.mounts) {
             GTop.glibtop_get_fsusage(this.gtop, this.mounts[mount]);
             let perc_full = (this.gtop.blocks - this.gtop.bfree) / this.gtop.blocks;
-            Clutter.cairo_set_source_color(cr, this.colors[mount % this.colors.length]);
+            cr.setSourceColor(this.colors[mount % this.colors.length]);
 
             let text = this.mounts[mount];
             if (text.length > 10) {
@@ -669,7 +682,7 @@ const Pie = class SystemMonitor_Pie extends Graph {
         let r = (height - ring_width) / 2;
         for (let mount in this.mounts) {
             GTop.glibtop_get_fsusage(this.gtop, this.mounts[mount]);
-            Clutter.cairo_set_source_color(cr, this.colors[mount % this.colors.length]);
+            cr.setSourceColor(this.colors[mount % this.colors.length]);
             arc(r, this.gtop.blocks - this.gtop.bfree, this.gtop.blocks, -pi / 2);
             cr.stroke();
             r -= ring_width;
@@ -715,7 +728,7 @@ const TipMenu = class SystemMonitor_TipMenu extends PopupMenu.PopupMenuBase {
         //     this._boxGetPreferredWidth).bind(this);
         // this.actor.connect('get-preferred-height',
         //     this._boxGetPreferredHeight.bind(this));
-        this.actor.add_actor(this.box);
+        this.actor.add_child(this.box);
     }
     // _boxGetPreferredWidth (actor, forHeight, alloc) {
     //     // let columnWidths = this.getColumnWidths();
@@ -748,11 +761,11 @@ const TipMenu = class SystemMonitor_TipMenu extends PopupMenu.PopupMenuBase {
         }
         let monitor = Main.layoutManager.findMonitorForActor(this.sourceActor);
         let [x, y] = [sourceTopLeftX + contentbox.x1,
-            sourceTopLeftY + contentbox.y1];
+        sourceTopLeftY + contentbox.y1];
         let [cx, cy] = [sourceTopLeftX + (contentbox.x1 + contentbox.x2) / 2,
-            sourceTopLeftY + (contentbox.y1 + contentbox.y2) / 2];
+        sourceTopLeftY + (contentbox.y1 + contentbox.y2) / 2];
         let [xm, ym] = [sourceTopLeftX + contentbox.x2,
-            sourceTopLeftY + contentbox.y2];
+        sourceTopLeftY + contentbox.y2];
         let [width, height] = this.actor.get_size();
         let tipx = cx - width / 2;
         tipx = Math.max(tipx, monitor.x);
@@ -785,7 +798,7 @@ const TipMenu = class SystemMonitor_TipMenu extends PopupMenu.PopupMenuBase {
 const TipBox = class SystemMonitor_TipBox {
     constructor(extension) {
         this.extension = extension;
-        this.actor = new St.BoxLayout({reactive: true});
+        this.actor = new St.BoxLayout({ reactive: true });
         this.actor._delegate = this;
         this.set_tip(new TipMenu(this.actor));
         this.in_to = this.out_to = 0;
@@ -798,7 +811,7 @@ const TipBox = class SystemMonitor_TipBox {
         }
         this.tipmenu = tipmenu;
         if (this.tipmenu) {
-            Main.uiGroup.add_actor(this.tipmenu.actor);
+            Main.uiGroup.add_child(this.tipmenu.actor);
             this.hide_tip();
         }
     }
@@ -935,23 +948,25 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
                 });
         }
 
-        this.label = new St.Label({text: this.elt === 'memory' ? _('mem') : _(this.elt),
-            style_class: Style.get('sm-status-label')});
+        this.label = new St.Label({
+            text: this.elt === 'memory' ? _('mem') : _(this.elt),
+            style_class: Style.get('sm-status-label')
+        });
         change_text.call(this);
         Schema.connect('changed::' + this.elt + '-show-text', change_text.bind(this));
 
         this.menu_visible = Schema.get_boolean(this.elt + '-show-menu');
         Schema.connect('changed::' + this.elt + '-show-menu', change_menu.bind(this));
 
-        this.actor.add_actor(this.label);
+        this.actor.add_child(this.label);
         this.text_box = new St.BoxLayout();
 
-        this.actor.add_actor(this.text_box);
+        this.actor.add_child(this.text_box);
         this.text_items = this.create_text_items();
         for (let item in this.text_items) {
-            this.text_box.add_actor(this.text_items[item]);
+            this.text_box.add_child(this.text_items[item]);
         }
-        this.actor.add_actor(this.chart.actor);
+        this.actor.add_child(this.chart.actor);
         change_style.call(this);
         Schema.connect('changed::' + this.elt + '-style', change_style.bind(this));
         this.menu_items = this.create_menu_items();
@@ -986,12 +1001,12 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         for (let i = 0; i < this.color_name.length; i++) {
             let tipline = new TipItem();
             this.tipmenu.addMenuItem(tipline);
-            tipline.actor.add(new St.Label({text: _(this.color_name[i])}));
-            this.tip_labels[i] = new St.Label({text: ''});
-            tipline.actor.add(this.tip_labels[i]);
+            tipline.actor.add_child(new St.Label({ text: _(this.color_name[i]) }));
+            this.tip_labels[i] = new St.Label({ text: '' });
+            tipline.actor.add_child(this.tip_labels[i]);
 
-            this.tip_unit_labels[i] = new St.Label({text: unit[i]});
-            tipline.actor.add(this.tip_unit_labels[i]);
+            this.tip_unit_labels[i] = new St.Label({ text: unit[i] });
+            tipline.actor.add_child(this.tip_unit_labels[i]);
             this.tip_vals[i] = 0;
         }
     }
@@ -1216,25 +1231,30 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
         return [
             new St.Icon({
                 gicon: Gio.icon_new_for_string(this.icon),
-                style_class: this.extension._Style.get('sm-status-icon')}),
+                style_class: this.extension._Style.get('sm-status-icon')
+            }),
             new St.Label({
                 text: '',
                 style_class: this.extension._Style.get('sm-status-value'),
-                y_align: Clutter.ActorAlign.CENTER}),
+                y_align: Clutter.ActorAlign.CENTER
+            }),
             new St.Label({
                 text: this.get_battery_unit(),
                 style_class: this.extension._Style.get('sm-perc-label'),
-                y_align: Clutter.ActorAlign.CENTER})
+                y_align: Clutter.ActorAlign.CENTER
+            })
         ];
     }
     create_menu_items() {
         return [
             new St.Label({
                 text: '',
-                style_class: this.extension._Style.get('sm-value')}),
+                style_class: this.extension._Style.get('sm-value')
+            }),
             new St.Label({
                 text: this.get_battery_unit(),
-                style_class: this.extension._Style.get('sm-label')})
+                style_class: this.extension._Style.get('sm-label')
+            })
         ];
     }
     destroy() {
@@ -1360,7 +1380,7 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
         let percent = 0;
         if (this.cpuid === -1) {
             percent = Math.round(((100 * this.total_cores) - this.usage[3]) /
-                                 this.total_cores);
+                this.total_cores);
         } else {
             percent = Math.round((100 - this.usage[3]));
         }
@@ -1373,7 +1393,7 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
         // Not to be confusing
         other = Math.max(0, other);
         this.vals = [this.usage[0], this.usage[1],
-            this.usage[2], this.usage[4], other];
+        this.usage[2], this.usage[4], other];
         for (let i = 0; i < 5; i++) {
             this.tip_vals[i] = Math.round(this.vals[i]);
         }
@@ -1396,20 +1416,24 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
             new St.Label({
                 text: '',
                 style_class: this.extension._Style.get('sm-status-value'),
-                y_align: Clutter.ActorAlign.CENTER}),
+                y_align: Clutter.ActorAlign.CENTER
+            }),
             new St.Label({
                 text: '%', style_class: this.extension._Style.get('sm-perc-label'),
-                y_align: Clutter.ActorAlign.CENTER})
+                y_align: Clutter.ActorAlign.CENTER
+            })
         ];
     }
     create_menu_items() {
         return [
             new St.Label({
                 text: '',
-                style_class: this.extension._Style.get('sm-value')}),
+                style_class: this.extension._Style.get('sm-value')
+            }),
             new St.Label({
                 text: '%',
-                style_class: this.extension._Style.get('sm-label')})
+                style_class: this.extension._Style.get('sm-label')
+            })
         ];
     }
 }
@@ -1511,26 +1535,32 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
         return [
             new St.Label({
                 text: _('R'),
-                style_class: Style.get('sm-status-label')}),
+                style_class: Style.get('sm-status-label')
+            }),
             new St.Label({
                 text: '',
                 style_class: Style.get('sm-disk-value'),
-                y_align: Clutter.ActorAlign.CENTER}),
+                y_align: Clutter.ActorAlign.CENTER
+            }),
             new St.Label({
                 text: Style.diskunits(),
                 style_class: Style.get('sm-disk-unit-label'),
-                y_align: Clutter.ActorAlign.CENTER}),
+                y_align: Clutter.ActorAlign.CENTER
+            }),
             new St.Label({
                 text: _('W'),
-                style_class: Style.get('sm-status-label')}),
+                style_class: Style.get('sm-status-label')
+            }),
             new St.Label({
                 text: '',
                 style_class: Style.get('sm-disk-value'),
-                y_align: Clutter.ActorAlign.CENTER}),
+                y_align: Clutter.ActorAlign.CENTER
+            }),
             new St.Label({
                 text: Style.diskunits(),
                 style_class: Style.get('sm-disk-unit-label'),
-                y_align: Clutter.ActorAlign.CENTER})
+                y_align: Clutter.ActorAlign.CENTER
+            })
         ];
     }
     create_menu_items() {
@@ -1538,22 +1568,28 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
         return [
             new St.Label({
                 text: '',
-                style_class: Style.get('sm-value')}),
+                style_class: Style.get('sm-value')
+            }),
             new St.Label({
                 text: Style.diskunits(),
-                style_class: Style.get('sm-label')}),
+                style_class: Style.get('sm-label')
+            }),
             new St.Label({
                 text: ' ' + _('R'),
-                style_class: Style.get('sm-label')}),
+                style_class: Style.get('sm-label')
+            }),
             new St.Label({
                 text: '',
-                style_class: Style.get('sm-value')}),
+                style_class: Style.get('sm-value')
+            }),
             new St.Label({
                 text: Style.diskunits(),
-                style_class: Style.get('sm-label')}),
+                style_class: Style.get('sm-label')
+            }),
             new St.Label({
                 text: ' ' + _('W'),
-                style_class: Style.get('sm-label')})
+                style_class: Style.get('sm-label')
+            })
         ];
     }
 }
@@ -1611,20 +1647,24 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
             new St.Label({
                 text: '',
                 style_class: this.extension._Style.get('sm-big-status-value'),
-                y_align: Clutter.ActorAlign.CENTER}),
+                y_align: Clutter.ActorAlign.CENTER
+            }),
             new St.Label({
                 text: 'MHz', style_class: this.extension._Style.get('sm-perc-label'),
-                y_align: Clutter.ActorAlign.CENTER})
+                y_align: Clutter.ActorAlign.CENTER
+            })
         ];
     }
     create_menu_items() {
         return [
             new St.Label({
                 text: '',
-                style_class: this.extension._Style.get('sm-value')}),
+                style_class: this.extension._Style.get('sm-value')
+            }),
             new St.Label({
                 text: 'MHz',
-                style_class: this.extension._Style.get('sm-label')})
+                style_class: this.extension._Style.get('sm-label')
+            })
         ];
     }
 }
@@ -1678,10 +1718,10 @@ const Mem = class SystemMonitor_Mem extends ElementBase {
         if (this.useGiB) {
             if (number < 1) {
                 // examples: 0.01, 0.10, 0.88
-                return number.toLocaleString(Locale, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                return number.toLocaleString(Locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             }
             // examples: 5.85, 16.0, 128
-            return number.toLocaleString(Locale, {minimumSignificantDigits: 3, maximumSignificantDigits: 3});
+            return number.toLocaleString(Locale, { minimumSignificantDigits: 3, maximumSignificantDigits: 3 });
         }
 
         return number.toLocaleString(Locale);
@@ -1710,10 +1750,12 @@ const Mem = class SystemMonitor_Mem extends ElementBase {
             new St.Label({
                 text: '',
                 style_class: this.extension._Style.get('sm-status-value'),
-                y_align: Clutter.ActorAlign.CENTER}),
+                y_align: Clutter.ActorAlign.CENTER
+            }),
             new St.Label({
                 text: '%', style_class: this.extension._Style.get('sm-perc-label'),
-                y_align: Clutter.ActorAlign.CENTER})
+                y_align: Clutter.ActorAlign.CENTER
+            })
         ];
     }
     create_menu_items() {
@@ -1724,18 +1766,24 @@ const Mem = class SystemMonitor_Mem extends ElementBase {
         return [
             new St.Label({
                 text: '',
-                style_class: this.extension._Style.get('sm-value')}),
+                style_class: this.extension._Style.get('sm-value')
+            }),
             new St.Label({
                 text: '%',
-                style_class: this.extension._Style.get('sm-label')}),
+                style_class: this.extension._Style.get('sm-label')
+            }),
             new St.Label({
                 text: '',
-                style_class: this.extension._Style.get('sm-label')}),
+                style_class: this.extension._Style.get('sm-label')
+            }),
             new St.Label({
                 text: '',
-                style_class: this.extension._Style.get('sm-value')}),
-            new St.Label({text: unit,
-                style_class: this.extension._Style.get('sm-label')})
+                style_class: this.extension._Style.get('sm-value')
+            }),
+            new St.Label({
+                text: unit,
+                style_class: this.extension._Style.get('sm-label')
+            })
         ];
     }
 }
@@ -1902,26 +1950,32 @@ const Net = class SystemMonitor_Net extends ElementBase {
         return [
             new St.Icon({
                 icon_size: 2 * IconSize / 3 * Style.iconsize(),
-                icon_name: 'go-down-symbolic'}),
+                icon_name: 'go-down-symbolic'
+            }),
             new St.Label({
                 text: '',
                 style_class: Style.get('sm-net-value'),
-                y_align: Clutter.ActorAlign.CENTER}),
+                y_align: Clutter.ActorAlign.CENTER
+            }),
             new St.Label({
                 text: _('KiB/s'),
                 style_class: Style.get('sm-net-unit-label'),
-                y_align: Clutter.ActorAlign.CENTER}),
+                y_align: Clutter.ActorAlign.CENTER
+            }),
             new St.Icon({
                 icon_size: 2 * IconSize / 3 * Style.iconsize(),
-                icon_name: 'go-up-symbolic'}),
+                icon_name: 'go-up-symbolic'
+            }),
             new St.Label({
                 text: '',
                 style_class: Style.get('sm-net-value'),
-                y_align: Clutter.ActorAlign.CENTER}),
+                y_align: Clutter.ActorAlign.CENTER
+            }),
             new St.Label({
                 text: _('KiB/s'),
                 style_class: Style.get('sm-net-unit-label'),
-                y_align: Clutter.ActorAlign.CENTER})
+                y_align: Clutter.ActorAlign.CENTER
+            })
         ];
     }
     create_menu_items() {
@@ -1929,22 +1983,28 @@ const Net = class SystemMonitor_Net extends ElementBase {
         return [
             new St.Label({
                 text: '',
-                style_class: Style.get('sm-value')}),
+                style_class: Style.get('sm-value')
+            }),
             new St.Label({
                 text: _('KiB/s'),
-                style_class: Style.get('sm-label')}),
+                style_class: Style.get('sm-label')
+            }),
             new St.Label({
                 text: _(' ↓'),
-                style_class: Style.get('sm-label')}),
+                style_class: Style.get('sm-label')
+            }),
             new St.Label({
                 text: '',
-                style_class: Style.get('sm-value')}),
+                style_class: Style.get('sm-value')
+            }),
             new St.Label({
                 text: _(' KiB/s'),
-                style_class: Style.get('sm-label')}),
+                style_class: Style.get('sm-label')
+            }),
             new St.Label({
                 text: _(' ↑'),
-                style_class: Style.get('sm-label')})
+                style_class: Style.get('sm-label')
+            })
         ];
     }
 }
@@ -1989,10 +2049,10 @@ const Swap = class SystemMonitor_Swap extends ElementBase {
         if (this.useGiB) {
             if (number < 1) {
                 // examples: 0.01, 0.10, 0.88
-                return number.toLocaleString(this.extension._Locale, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                return number.toLocaleString(this.extension._Locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             }
             // examples: 5.85, 16.0, 128
-            return number.toLocaleString(this.extension._Locale, {minimumSignificantDigits: 3, maximumSignificantDigits: 3});
+            return number.toLocaleString(this.extension._Locale, { minimumSignificantDigits: 3, maximumSignificantDigits: 3 });
         }
 
         return number.toLocaleString(this.extension._Locale);
@@ -2020,11 +2080,13 @@ const Swap = class SystemMonitor_Swap extends ElementBase {
             new St.Label({
                 text: '',
                 style_class: this.extension._Style.get('sm-status-value'),
-                y_align: Clutter.ActorAlign.CENTER}),
+                y_align: Clutter.ActorAlign.CENTER
+            }),
             new St.Label({
                 text: '%',
                 style_class: this.extension._Style.get('sm-perc-label'),
-                y_align: Clutter.ActorAlign.CENTER})
+                y_align: Clutter.ActorAlign.CENTER
+            })
         ];
     }
     create_menu_items() {
@@ -2035,19 +2097,24 @@ const Swap = class SystemMonitor_Swap extends ElementBase {
         return [
             new St.Label({
                 text: '',
-                style_class: this.extension._Style.get('sm-value')}),
+                style_class: this.extension._Style.get('sm-value')
+            }),
             new St.Label({
                 text: '%',
-                style_class: this.extension._Style.get('sm-label')}),
+                style_class: this.extension._Style.get('sm-label')
+            }),
             new St.Label({
                 text: '',
-                style_class: this.extension._Style.get('sm-label')}),
+                style_class: this.extension._Style.get('sm-label')
+            }),
             new St.Label({
                 text: '',
-                style_class: this.extension._Style.get('sm-value')}),
+                style_class: this.extension._Style.get('sm-value')
+            }),
             new St.Label({
                 text: _(unit),
-                style_class: this.extension._Style.get('sm-label')})
+                style_class: this.extension._Style.get('sm-label')
+            })
         ];
     }
 }
@@ -2097,21 +2164,25 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
             new St.Label({
                 text: '',
                 style_class: this.extension._Style.get('sm-status-value'),
-                y_align: Clutter.ActorAlign.CENTER}),
+                y_align: Clutter.ActorAlign.CENTER
+            }),
             new St.Label({
                 text: this.temperature_symbol(),
                 style_class: this.extension._Style.get('sm-temp-label'),
-                y_align: Clutter.ActorAlign.CENTER})
+                y_align: Clutter.ActorAlign.CENTER
+            })
         ];
     }
     create_menu_items() {
         return [
             new St.Label({
                 text: '',
-                style_class: this.extension._Style.get('sm-value')}),
+                style_class: this.extension._Style.get('sm-value')
+            }),
             new St.Label({
                 text: this.temperature_symbol(),
-                style_class: this.extension._Style.get('sm-label')})
+                style_class: this.extension._Style.get('sm-label')
+            })
         ];
     }
     temperature_text() {
@@ -2163,20 +2234,24 @@ const Fan = class SystemMonitor_Fan extends ElementBase {
             new St.Label({
                 text: '',
                 style_class: this.extension._Style.get('sm-status-value'),
-                y_align: Clutter.ActorAlign.CENTER}),
+                y_align: Clutter.ActorAlign.CENTER
+            }),
             new St.Label({
                 text: _('rpm'), style_class: this.extension._Style.get('sm-unit-label'),
-                y_align: Clutter.ActorAlign.CENTER})
+                y_align: Clutter.ActorAlign.CENTER
+            })
         ];
     }
     create_menu_items() {
         return [
             new St.Label({
                 text: '',
-                style_class: this.extension._Style.get('sm-value')}),
+                style_class: this.extension._Style.get('sm-value')
+            }),
             new St.Label({
                 text: _('rpm'),
-                style_class: this.extension._Style.get('sm-label')})
+                style_class: this.extension._Style.get('sm-label')
+            })
         ];
     }
 }
@@ -2214,7 +2289,7 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
             let script = ['/bin/bash', path + '/gpu_usage.sh'];
 
             // Create subprocess and capture STDOUT
-            let proc = new Gio.Subprocess({argv: script, flags: Gio.SubprocessFlags.STDOUT_PIPE});
+            let proc = new Gio.Subprocess({ argv: script, flags: Gio.SubprocessFlags.STDOUT_PIPE });
             proc.init(null);
             // Asynchronously call the output handler when script output is ready
             proc.communicate_utf8_async(null, null, this._handleOutput.bind(this));
@@ -2223,7 +2298,7 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
         }
     }
     _handleOutput(proc, result) {
-        let [ok, output, ] = proc.communicate_utf8_finish(result);
+        let [ok, output,] = proc.communicate_utf8_finish(result);
         if (ok) {
             this._readTemperature(output);
         } else {
@@ -2307,11 +2382,13 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
             new St.Label({
                 text: '',
                 style_class: Style.get('sm-status-value'),
-                y_align: Clutter.ActorAlign.CENTER}),
+                y_align: Clutter.ActorAlign.CENTER
+            }),
             new St.Label({
                 text: '%',
                 style_class: Style.get('sm-perc-label'),
-                y_align: Clutter.ActorAlign.CENTER})
+                y_align: Clutter.ActorAlign.CENTER
+            })
         ];
     }
     create_menu_items() {
@@ -2323,19 +2400,24 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
         return [
             new St.Label({
                 text: '',
-                style_class: Style.get('sm-value')}),
+                style_class: Style.get('sm-value')
+            }),
             new St.Label({
                 text: '%',
-                style_class: Style.get('sm-label')}),
+                style_class: Style.get('sm-label')
+            }),
             new St.Label({
                 text: '',
-                style_class: Style.get('sm-label')}),
+                style_class: Style.get('sm-label')
+            }),
             new St.Label({
                 text: '',
-                style_class: Style.get('sm-value')}),
+                style_class: Style.get('sm-value')
+            }),
             new St.Label({
                 text: unit,
-                style_class: Style.get('sm-label')})
+                style_class: Style.get('sm-label')
+            })
         ];
     }
 }
@@ -2430,7 +2512,7 @@ export default class SystemMonitorExtension extends Extension {
 
             if (this._Schema.get_boolean('move-clock')) {
                 let dateMenu = Main.panel.statusArea.dateMenu;
-                Main.panel._centerBox.remove_actor(dateMenu.container);
+                Main.panel._centerBox.remove_child(dateMenu.container);
                 Main.panel._addToPanelBox('dateMenu', dateMenu, -1, Main.panel._rightBox);
                 tray.clockMoved = true;
             }
@@ -2442,9 +2524,9 @@ export default class SystemMonitorExtension extends Extension {
 
             // The spacing adds a distance between the graphs/text on the top bar
             let spacing = this._Schema.get_boolean('compact-display') ? '1' : '4';
-            let box = new St.BoxLayout({style: 'spacing: ' + spacing + 'px;'});
-            tray.add_actor(box);
-            box.add_actor(this.__sm.icon.actor);
+            let box = new St.BoxLayout({ style: 'spacing: ' + spacing + 'px;' });
+            tray.add_child(box);
+            box.add_child(this.__sm.icon.actor);
 
             // Need to convert the positionList object into an array
             // (sorted by object key) and then expand out the CPUs list
@@ -2454,13 +2536,13 @@ export default class SystemMonitorExtension extends Extension {
 
             // Add items to panel box
             for (const elt of this.__sm.elts) {
-                box.add_actor(elt.actor);
+                box.add_child(elt.actor);
             }
 
             // Build Menu Info Box Table
-            let menu_info = new PopupMenu.PopupBaseMenuItem({reactive: false});
+            let menu_info = new PopupMenu.PopupBaseMenuItem({ reactive: false });
             let menu_info_box = new St.BoxLayout();
-            menu_info.actor.add(menu_info_box);
+            menu_info.actor.add_child(menu_info_box);
             this.__sm.tray.menu.addMenuItem(menu_info, 0);
 
             build_menu_info(this);
@@ -2530,7 +2612,7 @@ export default class SystemMonitorExtension extends Extension {
         // restore clock
         if (this.__sm.tray.clockMoved) {
             let dateMenu = Main.panel.statusArea.dateMenu;
-            Main.panel._rightBox.remove_actor(dateMenu.container);
+            Main.panel._rightBox.remove_child(dateMenu.container);
             Main.panel._addToPanelBox('dateMenu', dateMenu, Main.sessionMode.panel.center.indexOf('dateMenu'), Main.panel._centerBox);
         }
         // restore system power icon if necessary
