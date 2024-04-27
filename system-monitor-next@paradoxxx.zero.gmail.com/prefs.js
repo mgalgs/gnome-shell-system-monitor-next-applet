@@ -454,7 +454,7 @@ const SMExpanderRow = GObject.registerClass({
                 let stringListModel = new Gtk.StringList();
 
                 if (labels.length === 0)
-                    stringListModel.append(_('Please install lm-sensors'));
+                    stringListModel.append(_('No temperature sensors found');
                 else if (labels.length === 1)
                     this._settings.set_string('thermal-sensor-file', labels[0]);
 
@@ -512,7 +512,7 @@ const SMExpanderRow = GObject.registerClass({
                 let stringListModel = new Gtk.StringList();
 
                 if (labels.length === 0)
-                    stringListModel.append(_('Please install lm-sensors'));
+                    stringListModel.append(_('No fan sensors found');
                 else if (labels.length === 1)
                     this._settings.set_string('fan-sensor-file', labels[0]);
 
