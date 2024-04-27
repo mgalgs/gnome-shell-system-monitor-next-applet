@@ -25,7 +25,7 @@ function check_sensors(sensor_type) {
                     return parse_bytearray(contents).trim('\n');
                 }
             } catch (e) {
-                console.log('error loading label from file ' + file.get_path() + ': ' + e);
+                console.log(`error loading label from file ${file.get_path()}: ${e}`);
             }
         }
         return null;
@@ -35,11 +35,11 @@ function check_sensors(sensor_type) {
         const chip_children = chip_dir.enumerate_children(
             'standard::name,standard::type', Gio.FileQueryInfoFlags.NONE, null);
         if (!chip_children) {
-            console.log('error enumerating children of chip ' + chip_dir.get_path());
+            console.log(`error enumerating children of chip ${chip_dir.get_path()}`);
             return false;
         }
 
-        const input_entry_regex = new RegExp('^' + sensor_type + '(\\d+)_input$');
+        const input_entry_regex = new RegExp(`^${sensor_type}(\\d+)_input$`);
         let info;
         while ((info = chip_children.next_file(null))) {
             if (info.get_file_type() !== Gio.FileType.REGULAR) {
@@ -51,9 +51,9 @@ function check_sensors(sensor_type) {
             }
             const input_ordinal = matches[1];
             const input = chip_children.get_child(info);
-            const input_label = get_label_from(chip_dir.get_child(sensor_type + input_ordinal + '_label'));
+            const input_label = get_label_from(chip_dir.get_child(`${sensor_type}${input_ordinal}_label`));
 
-            const label = chip_label + ' - ' + (input_label || input_ordinal);
+            const label = `${chip_label} - ${input_label || input_ordinal}`;
             sensors[label] = input.get_path();
         }
     }
