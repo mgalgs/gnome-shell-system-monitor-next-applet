@@ -41,6 +41,7 @@ function check_sensors(sensor_type) {
 
         const input_entry_regex = new RegExp(`^${sensor_type}(\\d+)_input$`);
         let info;
+        let added = false;
         while ((info = chip_children.next_file(null))) {
             if (info.get_file_type() !== Gio.FileType.REGULAR) {
                 continue;
@@ -55,7 +56,9 @@ function check_sensors(sensor_type) {
 
             const label = `${chip_label} - ${input_label || input_ordinal}`;
             sensors[label] = input.get_path();
+            added = true;
         }
+        return added;
     }
 
     const hwmon_children = hwmon_dir.enumerate_children(
@@ -73,7 +76,14 @@ function check_sensors(sensor_type) {
         const chip = hwmon_children.get_child(info);
         const chip_label = get_label_from(chip.get_child('name')) || chip.get_basename();
 
-        add_sensors_from(chip, chip_label);
+        if (!add_sensors_from(chip, chip_label)) {
+            // This is here to provide compatibility with previous code, but I can't find any
+            // information about sensors being stored in chip/device directory. Can we delete it?
+            const chip_device = chip.get_child('device');
+            if (chip_device.query_exists(null)) {
+                add_sensors_from(chip_device, chip_label);
+            }
+        }
     }
     return sensors;
 }
