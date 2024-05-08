@@ -77,8 +77,11 @@ function check_sensors(sensor_type) {
         const chip_label = get_label_from(chip.get_child('name')) || chip.get_basename();
 
         if (!add_sensors_from(chip, chip_label)) {
-            // This is here to provide compatibility with previous code, but I can't find any
-            // information about sensors being stored in chip/device directory. Can we delete it?
+            // Some hwmon devices don't place their sensor files
+            // into their "/sys/hwmon/hwmonN" directory, but into
+            // the "device" sub directory instead. An example is the
+            // Apple System Management Controller (kernel module "applesmc")
+            // in Intel-based Macs.
             const chip_device = chip.get_child('device');
             if (chip_device.query_exists(null)) {
                 add_sensors_from(chip_device, chip_label);
