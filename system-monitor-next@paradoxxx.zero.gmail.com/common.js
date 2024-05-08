@@ -82,9 +82,10 @@ function check_sensors(sensor_type) {
             // the "device" sub directory instead. An example is the
             // Apple System Management Controller (kernel module "applesmc")
             // in Intel-based Macs.
-            const chip_device = chip.get_child('device');
-            if (chip_device.query_exists(null)) {
-                add_sensors_from(chip_device, chip_label);
+            const device = chip.get_child('device');
+            if (device.query_exists(null)) {
+                const device_label = get_label_from(device.get_child('name')) || chip_label;
+                add_sensors_from(device, device_label);
             }
         }
     }
