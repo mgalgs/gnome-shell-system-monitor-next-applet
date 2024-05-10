@@ -41,6 +41,7 @@ function check_sensors(sensor_type) {
 
         const input_entry_regex = new RegExp(`^${sensor_type}(\\d+)_input$`);
         let info;
+        let added = false;
         while ((info = chip_children.next_file(null))) {
             if (info.get_file_type() !== Gio.FileType.REGULAR) {
                 continue;
@@ -55,7 +56,9 @@ function check_sensors(sensor_type) {
 
             const label = `${chip_label} - ${input_label || input_ordinal}`;
             sensors[label] = input.get_path();
+            added = true;
         }
+        return added;
     }
 
     const hwmon_children = hwmon_dir.enumerate_children(
@@ -73,7 +76,18 @@ function check_sensors(sensor_type) {
         const chip = hwmon_children.get_child(info);
         const chip_label = get_label_from(chip.get_child('name')) || chip.get_basename();
 
-        add_sensors_from(chip, chip_label);
+        if (!add_sensors_from(chip, chip_label)) {
+            // Some hwmon devices don't place their sensor files
+            // into their "/sys/hwmon/hwmonN" directory, but into
+            // the "device" sub directory instead. An example is the
+            // Apple System Management Controller (kernel module "applesmc")
+            // in Intel-based Macs.
+            const device = chip.get_child('device');
+            if (device.query_exists(null)) {
+                const device_label = get_label_from(device.get_child('name')) || chip_label;
+                add_sensors_from(device, device_label);
+            }
+        }
     }
     return sensors;
 }
