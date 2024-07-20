@@ -58,6 +58,19 @@ Before installing this extension, ensure you have the necessary system packages 
 
       sudo dnf install lib64gtop-gir2.0 lib64nm-gir1.0 lib64clutter-gir1.0 gnome-system-monitor
 
+* On NixOS
+
+You may need to add the following to your `configuration.nix`:
+
+```nix
+environment.variables = {
+    GI_TYPELIB_PATH = "/run/current-system/sw/lib/girepository-1.0";
+};
+environment.systemPackages = with pkgs; [
+    libgtop
+];
+```
+
 
 Additionally, if you have an NVIDIA graphics card, and want to monitor its memory usage, you'll need to install `nvidia-smi`.
 
