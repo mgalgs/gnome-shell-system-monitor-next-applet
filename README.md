@@ -60,7 +60,7 @@ Before installing this extension, ensure you have the necessary system packages 
 
 * On NixOS
 
-You may need to add the following to your `configuration.nix`:
+    You may need to add the following to your `configuration.nix`:
 
 ```nix
 environment.variables = {
@@ -71,6 +71,7 @@ environment.systemPackages = with pkgs; [
 ];
 ```
 
+---
 
 Additionally, if you have an NVIDIA graphics card, and want to monitor its memory usage, you'll need to install `nvidia-smi`.
 
