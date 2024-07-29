@@ -163,6 +163,17 @@ function sm_cairo_set_source_color(cr, bg_color) {
         cr.setSourceColor(bg_color);
 }
 
+function try_read_int_file(filename, callback) {
+    if (filename && GLib.file_test(filename, GLib.FileTest.EXISTS)) {
+        let file = Gio.file_new_for_path(filename);
+        file.load_contents_async(null, (source, result) => {
+            let as_r = source.load_contents_finish(result);
+            callback(parseInt(parse_bytearray(as_r[1])));
+        });
+        return true;
+    }
+}
+
 const smStyleManager = class SystemMonitor_smStyleManager {
     constructor(extension) {
         this.extension = extension;
@@ -285,13 +296,17 @@ const Chart = class SystemMonitor_Chart {
         }
         let [width, height] = this.actor.get_surface_size();
         let cr = this.actor.get_context();
-        let max;
+        let min = 0, max;
+        if (this.parentC.min) {
+            min = this.parentC.min;
+        }
         if (this.parentC.max) {
             max = this.parentC.max;
         } else {
             max = Math.max.apply(this, this.data[this.data.length - 1]);
             max = Math.max(1, Math.pow(2, Math.ceil(Math.log(max) / Math.log(2))));
         }
+        const range = max - min, top = 1 + min / range;
         sm_cairo_set_source_color(cr, this.extension._Background);
         cr.rectangle(0, 0, width, height);
         cr.fill();
@@ -300,17 +315,17 @@ const Chart = class SystemMonitor_Chart {
             if (samples > 0) {
                 cr.moveTo(width, height); // bottom right
                 let x = width - 0.25 * this.scale_factor;
-                cr.lineTo(x, (1 - this.data[i][samples] / max) * height);
+                cr.lineTo(x, (top - this.data[i][samples] / range) * height);
                 x -= 0.5 * this.scale_factor;
                 for (let j = samples; j >= 0; j--) {
-                    let y = (1 - this.data[i][j] / max) * height;
+                    let y = (top - this.data[i][j] / range) * height;
                     cr.lineTo(x, y);
                     x -= 0.5 * this.scale_factor;
                     cr.lineTo(x, y);
                     x -= 0.5 * this.scale_factor;
                 }
                 x += 0.25 * this.scale_factor;
-                cr.lineTo(x, (1 - this.data[i][0] / max) * height);
+                cr.lineTo(x, (top - this.data[i][0] / range) * height);
                 cr.lineTo(x, height);
                 cr.closePath();
                 sm_cairo_set_source_color(cr, this.parentC.colors[i]);
@@ -2020,13 +2035,7 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
     refresh() {
         let label = this.extension._Schema.get_string(this.elt + '-sensor-label');
         let sfile = this.sensors[label];
-        if (sfile !== undefined && GLib.file_test(sfile, GLib.FileTest.EXISTS)) {
-            let file = Gio.file_new_for_path(sfile);
-            file.load_contents_async(null, (source, result) => {
-                let as_r = source.load_contents_finish(result)
-                this.temperature = Math.round(parseInt(parse_bytearray(as_r[1])) / 1000);
-            });
-        } else if (this.display_error) {
+        if (!try_read_int_file(sfile, value => this.temperature = Math.round(value / 1000)) && this.display_error) {
             console.error('error reading: ' + sfile);
             this.display_error = false;
         }
@@ -2092,21 +2101,19 @@ const Fan = class SystemMonitor_Fan extends ElementBase {
     refresh() {
         let label = this.extension._Schema.get_string(this.elt + '-sensor-label');
         let sfile = this.sensors[label];
-        if (sfile && GLib.file_test(sfile, GLib.FileTest.EXISTS)) {
-            let file = Gio.file_new_for_path(sfile);
-            file.load_contents_async(null, (source, result) => {
-                let as_r = source.load_contents_finish(result)
-                this.rpm = parseInt(parse_bytearray(as_r[1]));
-            });
-        } else if (this.display_error) {
+        if (!try_read_int_file(sfile, value => this.rpm = value) && this.display_error) {
             console.error('error reading: ' + sfile);
             this.display_error = false;
+        }
+        if (sfile) {
+            try_read_int_file(sfile.replace(/_input$/, '_min'), value => this.min = value);
+            try_read_int_file(sfile.replace(/_input$/, '_max'), value => this.max = value);
         }
     }
     _apply() {
         this.text_items[0].text = this.rpm.toString();
         this.menu_items[0].text = this.rpm.toString();
-        this.vals = [this.rpm / 10];
+        this.vals = [this.rpm];
         this.tip_vals[0] = this.rpm;
     }
     create_text_items() {
