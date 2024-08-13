@@ -828,10 +828,52 @@ const TipBox = class SystemMonitor_TipBox {
     }
 }
 
+const RotateBin = GObject.registerClass(
+    {
+        GTypeName: 'RotateBin'
+    },
+    class SystemMonitor_RotateBin extends St.Bin {
+        vfunc_get_preferred_width(for_height) {
+            const child = this.get_child();
+            if (!child || !child.is_visible()) {
+                return [0, 0];
+            }
+            const theme_node = this.get_theme_node();
+            const [min, natural] = child.get_preferred_height(theme_node.adjust_for_width(for_height));
+            return theme_node.adjust_preferred_width(min, natural);
+        }
+        vfunc_get_preferred_height(for_width) {
+            const child = this.get_child();
+            if (!child || !child.is_visible()) {
+                return [0, 0];
+            }
+            const theme_node = this.get_theme_node();
+            const [min, natural] = child.get_preferred_width(theme_node.adjust_for_height(for_width));
+            return theme_node.adjust_preferred_height(min, natural);
+        }
+        vfunc_allocate(box) {
+            this.set_allocation(box);
+            const child = this.get_child();
+            if (!child || !child.is_visible()) {
+                return;
+            }
+            box = this.get_theme_node().get_content_box(box);
+            const child_box = new Clutter.ActorBox({
+                x1: box.x1,
+                x2: box.x1 + box.y2 - box.y1,
+                y1: box.y2, y2:
+                box.y2 + box.x2 - box.x1
+            });
+            child.allocate_align_fill(child_box, 0.5, 0.5, true, true);
+        }
+    }
+);
+
 const ElementBase = class SystemMonitor_ElementBase extends TipBox {
     constructor(extension, properties) {
         super(extension);
         this.elt = '';
+        this.elt_short = '';
         this.item_name = _('');
         this.color_name = [];
         this.text_items = [];
@@ -897,7 +939,7 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
                 });
         }
 
-        this.label = new St.Label({text: this.elt === 'memory' ? _('mem') : _(this.elt),
+        this.label = new St.Label({text: _(this.elt_short || this.elt),
             style_class: Style.get('sm-status-label')});
         change_text.call(this);
         Schema.connect('changed::' + this.elt + '-show-text', change_text.bind(this));
@@ -905,7 +947,33 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this.menu_visible = Schema.get_boolean(this.elt + '-show-menu');
         Schema.connect('changed::' + this.elt + '-show-menu', change_menu.bind(this));
 
-        this.actor.add_child(this.label);
+        const getWrappedLabel = () => {
+            if (Schema.get_boolean('rotate-labels')) {
+                this.label.set_rotation_angle(Clutter.RotateAxis.Z_AXIS, -90);
+                this.label.add_style_class_name('rotated');
+                return new RotateBin();
+            } else {
+                this.label.set_rotation_angle(Clutter.RotateAxis.Z_AXIS, 0);
+                this.label.remove_style_class_name('rotated');
+                return this.label;
+            }
+        };
+        let wrappedLabel = getWrappedLabel();
+        Schema.connect('changed::rotate-labels', () => {
+            if (wrappedLabel !== this.label) {
+                wrappedLabel.remove_child(this.label);
+            }
+            const newWrappedLabel = getWrappedLabel();
+            this.actor.replace_child(wrappedLabel, newWrappedLabel);
+            wrappedLabel = newWrappedLabel;
+            if (wrappedLabel !== this.label) {
+                wrappedLabel.add_child(this.label);
+            }
+        });
+        this.actor.add_child(wrappedLabel);
+        if (wrappedLabel !== this.label) {
+            wrappedLabel.add_child(this.label);
+        }
         this.text_box = new St.BoxLayout();
 
         this.actor.add_child(this.text_box);
@@ -1595,6 +1663,7 @@ const Mem = class SystemMonitor_Mem extends ElementBase {
     constructor(extension) {
         super(extension, {
             elt: 'memory',
+            elt_short: 'mem',
             item_name: _('Memory'),
             color_name: ['program', 'buffer', 'cache']
         });
@@ -2018,6 +2087,7 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
     constructor(extension) {
         super(extension, {
             elt: 'thermal',
+            elt_short: 'thrm',
             item_name: _('Thermal'),
             color_name: ['tz0']
         });

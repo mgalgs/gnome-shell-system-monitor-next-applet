@@ -28,6 +28,10 @@
     font-size: 0.625em;
     padding: 0 2px 0 5px;
 }
+.sm-status-label.rotated {
+    padding: 0;
+    text-align: center;
+}
 
 .sm-unit-label,
 .sm-net-unit-label {
