@@ -40,7 +40,7 @@ const SMGeneralPrefsPage = GObject.registerClass({
     GTypeName: 'SMGeneralPrefsPage',
     Template: import.meta.url.replace('prefs.js', 'ui/prefsGeneralSettings.ui'),
     InternalChildren: ['background', 'icon_display', 'show_tooltip', 'move_clock',
-        'compact_display', 'center_display', 'tooltip_delay_ms'],
+        'compact_display', 'center_display', 'rotate_labels', 'tooltip_delay_ms'],
 }, class SMGeneralPrefsPage extends Adw.PreferencesPage {
     constructor(settings, params = {}) {
         super(params);
@@ -78,6 +78,9 @@ const SMGeneralPrefsPage = GObject.registerClass({
             'active', Gio.SettingsBindFlags.DEFAULT
         );
         this._settings.bind('center-display', this._center_display,
+            'active', Gio.SettingsBindFlags.DEFAULT
+        );
+        this._settings.bind('rotate-labels', this._rotate_labels,
             'active', Gio.SettingsBindFlags.DEFAULT
         );
         this._settings.bind('tooltip-delay-ms', this._tooltip_delay_ms,
