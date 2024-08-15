@@ -828,10 +828,38 @@ const TipBox = class SystemMonitor_TipBox {
     }
 }
 
+// This class swaps the vertical and horizontal dimensions of a child element,
+// because rotating the child only changes how it is painted, not its geometry.
+// It also moves the bounds on allocation so that the rotated child ends up in
+// the right position.
+const RotateBinLayout = GObject.registerClass(
+    {
+        GTypeName: 'RotateBinLayout'
+    },
+    class SystemMonitor_RotateBinLayout extends Clutter.BinLayout {
+        vfunc_get_preferred_width(container, for_height) {
+            return super.vfunc_get_preferred_height(container, for_height);
+        }
+        vfunc_get_preferred_height(container, for_width) {
+            return super.vfunc_get_preferred_width(container, for_width);
+        }
+        vfunc_allocate(container, box) {
+            const box2 = new Clutter.ActorBox({
+                x1: box.x1,
+                x2: box.x1 + box.y2 - box.y1,
+                y1: box.y2,
+                y2: box.y2 + box.x2 - box.x1,
+            });
+            return super.vfunc_allocate(container, box2);
+        }
+    }
+);
+
 const ElementBase = class SystemMonitor_ElementBase extends TipBox {
     constructor(extension, properties) {
         super(extension);
         this.elt = '';
+        this.elt_short = '';
         this.item_name = _('');
         this.color_name = [];
         this.text_items = [];
@@ -897,7 +925,7 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
                 });
         }
 
-        this.label = new St.Label({text: this.elt === 'memory' ? _('mem') : _(this.elt),
+        this.label = new St.Label({text: _(this.elt_short || this.elt),
             style_class: Style.get('sm-status-label')});
         change_text.call(this);
         Schema.connect('changed::' + this.elt + '-show-text', change_text.bind(this));
@@ -905,7 +933,25 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this.menu_visible = Schema.get_boolean(this.elt + '-show-menu');
         Schema.connect('changed::' + this.elt + '-show-menu', change_menu.bind(this));
 
-        this.actor.add_child(this.label);
+        this.label_bin = new St.Bin({child: this.label});
+        const default_layout = this.label_bin.layout_manager;
+        const change_rotate_labels = () => {
+            if (Schema.get_boolean('rotate-labels')) {
+                this.label.set_rotation_angle(Clutter.RotateAxis.Z_AXIS, -90);
+                this.label.add_style_class_name('rotated');
+                this.label_bin.layout_manager = new RotateBinLayout();
+                this.label_bin.y_align = Clutter.ActorAlign.CENTER;
+            } else {
+                this.label.set_rotation_angle(Clutter.RotateAxis.Z_AXIS, 0);
+                this.label.remove_style_class_name('rotated');
+                this.label_bin.layout_manager = default_layout;
+                this.label_bin.y_align = Clutter.ActorAlign.START;
+            }
+        };
+        change_rotate_labels();
+        Schema.connect('changed::rotate-labels', change_rotate_labels);
+
+        this.actor.add_child(this.label_bin);
         this.text_box = new St.BoxLayout();
 
         this.actor.add_child(this.text_box);
@@ -1595,6 +1641,7 @@ const Mem = class SystemMonitor_Mem extends ElementBase {
     constructor(extension) {
         super(extension, {
             elt: 'memory',
+            elt_short: 'mem',
             item_name: _('Memory'),
             color_name: ['program', 'buffer', 'cache']
         });
@@ -2018,6 +2065,7 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
     constructor(extension) {
         super(extension, {
             elt: 'thermal',
+            elt_short: 'thrm',
             item_name: _('Thermal'),
             color_name: ['tz0']
         });
