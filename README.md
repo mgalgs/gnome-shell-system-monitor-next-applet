@@ -127,6 +127,12 @@ will be configured to point at the nested session), and run the above
 to enable extensions using the Gnome Extensions app inside your nested
 session.
 
+You might also want to enable and capture debug logs from the Wayland
+session or alter the nested session screen size, which you can do with
+environment variables like so:
+
+    G_MESSAGES_DEBUG=all MUTTER_DEBUG_DUMMY_MODE_SPECS=1366x768 dbus-run-session -- gnome-shell --nested --wayland |& tee /tmp/logs.txt
+
 #### Translation
 
 If we do not have the translation for your language and you want to translate it by yourself, please make a fork, add your `po/<YOUR_LANG>/system-monitor-applet.po` file, and make a pull request.
