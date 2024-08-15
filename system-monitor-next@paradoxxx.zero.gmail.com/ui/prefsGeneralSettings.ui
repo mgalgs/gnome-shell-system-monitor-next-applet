@@ -44,6 +44,11 @@
           </object>
         </child>
         <child>
+          <object class="AdwSwitchRow" id="rotate_labels">
+            <property name="title" translatable="yes">Rotate labels</property>
+          </object>
+        </child>
+        <child>
           <object class="AdwSpinRow" id="tooltip_delay_ms">
             <property name="title" translatable="yes">Tooltip delay</property>
             <property name="numeric">true</property>

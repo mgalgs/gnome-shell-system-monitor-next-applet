@@ -318,6 +318,11 @@
       <summary>Move the clock to the right when center-display is true</summary>
       <description>True: Move the clock to the right, False: Keep it in center</description>
     </key>
+    <key name="rotate-labels" type="b">
+      <default>false</default>
+      <summary>Rotate the chart labels one quarter-turn</summary>
+      <description>True: Chart labels are rotated, False: Chart labels are presented normally</description>
+    </key>
     <key name="show-tooltip" type="b">
       <default>false</default>
       <summary>Enable or disable the tooltip</summary>
