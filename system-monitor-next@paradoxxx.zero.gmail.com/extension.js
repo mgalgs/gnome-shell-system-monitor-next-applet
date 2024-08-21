@@ -23,6 +23,7 @@ import { Extension, gettext as _ } from "resource:///org/gnome/shell/extensions/
 import Clutter from "gi://Clutter";
 import GLib from "gi://GLib";
 import GObject from "gi://GObject";
+import Cogl from "gi://Cogl";
 
 import Gio from "gi://Gio";
 import Shell from "gi://Shell";
@@ -143,8 +144,25 @@ function change_usage(extension) {
     extension.__sm.bar.show(usage === 'bar');
 }
 
-function color_from_string(color) {
-    return Clutter.Color.from_string(color)[1];
+function cogl_color_from_string(colorString) {
+    sm_log(`Attempting ye parse of ${colorString}`);
+    let [ok, color] = Cogl.Color.from_string(colorString);
+    if (!ok) {
+        sm_log(`Failed to parse color string (${colorString}). Falling back to red.`);
+        color = new Cogl.Color();
+        Cogl.Color.init_from_4ub(color, 255, 0, 0, 255);
+    }
+    return color;
+}
+
+function clutter_color_from_string(colorString) {
+    return Clutter.Color.from_string(colorString)[1];
+}
+
+function color_from_string(colorString) {
+    if (Cogl.Color.from_string)
+        return cogl_color_from_string(colorString);
+    return clutter_color_from_string(colorString);
 }
 
 function interesting_mountpoint(mount) {
