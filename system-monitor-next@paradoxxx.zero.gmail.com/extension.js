@@ -145,7 +145,6 @@ function change_usage(extension) {
 }
 
 function cogl_color_from_string(colorString) {
-    sm_log(`Attempting ye parse of ${colorString}`);
     let [ok, color] = Cogl.Color.from_string(colorString);
     if (!ok) {
         sm_log(`Failed to parse color string (${colorString}). Falling back to red.`);
