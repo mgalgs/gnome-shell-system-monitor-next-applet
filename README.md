@@ -134,7 +134,7 @@ Wayland currently doesn't have a way to reload GNOME Shell, so you'll need to lo
    ```
    dbus-run-session -- gnome-shell --nested --wayland
    ```
-2. Start a new terminal *inside* the nested session. Don't panic if it appears outside the nested window - the dbus session address will be configured correctly.
+2. Start a new terminal *inside* the nested session. Don't panic if the terminal appears outside the nested window - the dbus session address will be configured to point at the nested session.
 3. In this new terminal, enable the extension:
    ```
    gnome-extensions enable system-monitor-next@paradoxxx.zero.gmail.com
