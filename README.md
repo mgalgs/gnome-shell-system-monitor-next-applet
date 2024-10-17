@@ -11,7 +11,7 @@ A GNOME Shell extension that displays system resource usage in the top panel.
 
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
-  - [Browser Installation](#browser-installation)
+  - [Browser Installation](#browser-installation-recommended)
   - [Manual Installation](#manual-installation)
 - [Usage](#usage)
 - [Screenshots](#screenshots)
