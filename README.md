@@ -91,7 +91,7 @@ This extension is available in the repositories of several distributions for any
 
 After installation, the extension will be available for enabling in GNOME Extensions app.
 
-(Note for maintainers: if your distro is not listed here please feel free to open an issue or drop a PR!)
+*(Note for maintainers: if your distro is not listed here please feel free to open an issue or drop a PR!)*
 
 ### Manual Installation
 
