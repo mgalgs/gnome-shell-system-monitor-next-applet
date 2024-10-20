@@ -11,7 +11,8 @@ A GNOME Shell extension that displays system resource usage in the top panel.
 
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
-  - [Browser Installation](#browser-installation-recommended)
+  - [Browser Installation](#browser-installation)
+  - [Package Manager Installation](#package-manager-installation)
   - [Manual Installation](#manual-installation)
 - [Usage](#usage)
 - [Screenshots](#screenshots)
@@ -72,13 +73,23 @@ For NVIDIA graphics card memory monitoring, install `nvidia-smi`.
 
 ## Installation
 
-### Browser Installation (Recommended)
+### Browser Installation
 
 1. If you haven't done so already, install the [gnome-browser-connector](https://gnome.pages.gitlab.gnome.org/gnome-browser-integration/pages/installation-guide.html) package using your distro's package manager, as well as the GNOME Shell integration browser extension for [Firefox](https://addons.mozilla.org/en-US/firefox/addon/gnome-shell-integration/) or [Chrome](https://chrome.google.com/webstore/detail/gnome-shell-integration/gphhapmejobijbbhgpjhcjognlahblep). If you've already installed other GNOME Shell extensions from extensions.gnome.org, you can skip this step.
 2. Visit [the system-monitor-next page on extensions.gnome.org](https://extensions.gnome.org/extension/3010/system-monitor-next/).
 3. Click the toggle button next to the extension's name to install.
 
 If the installation was successful, the toggle button should now show "ON". If it failed (or if you see an error message like "Meta is null" in the GNOME Extensions app), please ensure that you have installed all of the [prerequisites](#prerequisites), that you have restarted GNOME Shell, and that your GNOME Shell version is supported.
+
+### Package Manager Installation
+
+This extension is available in the repositories of several distributions for any users who prefer to leave extension updates to their package manager:
+
+- **Fedora**: `dnf install gnome-shell-extension-system-monitor-applet`
+
+After installation, the extension will be available for enabling in GNOME Extensions app.
+
+(Note for maintainers: if your distro is not listed here please feel free to open an issue or drop a PR!)
 
 ### Manual Installation
 
