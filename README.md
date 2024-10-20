@@ -27,7 +27,7 @@ A GNOME Shell extension that displays system resource usage in the top panel.
 
 This extension requires GNOME Shell 45 or later. For earlier versions, please see the `pre-45` git branch.
 
-Before installing, ensure you have the necessary system packages:
+Before installing, ensure you have the necessary system packages (note that if you're installing [via a package manager](#package-manager-installation), you may not need to manually install these packages):
 
 - Ubuntu/Debian:
   ```
