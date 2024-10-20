@@ -73,6 +73,8 @@ For NVIDIA graphics card memory monitoring, install `nvidia-smi`.
 
 ## Installation
 
+There are three ways to install this extension: via the browser, via a package manager, or manually.
+
 ### Browser Installation
 
 1. If you haven't done so already, install the [gnome-browser-connector](https://gnome.pages.gitlab.gnome.org/gnome-browser-integration/pages/installation-guide.html) package using your distro's package manager, as well as the GNOME Shell integration browser extension for [Firefox](https://addons.mozilla.org/en-US/firefox/addon/gnome-shell-integration/) or [Chrome](https://chrome.google.com/webstore/detail/gnome-shell-integration/gphhapmejobijbbhgpjhcjognlahblep). If you've already installed other GNOME Shell extensions from extensions.gnome.org, you can skip this step.
