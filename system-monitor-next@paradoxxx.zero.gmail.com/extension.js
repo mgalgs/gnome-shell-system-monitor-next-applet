@@ -65,8 +65,18 @@ Clutter.Actor.prototype.reparent = function reparent(newParent) {
     newParent.add_child(this);
 }
 
-function sm_log(message) {
-    console.log(`[system-monitor-next] ${message}`);
+function sm_log(message, level = 'log') {
+    const prefix = '[system-monitor-next]';
+    switch (level) {
+        case 'error':
+            console.error(`${prefix} ${message}`);
+            break;
+        case 'warn':
+            console.warn(`${prefix} ${message}`);
+            break;
+        default:
+            console.log(`${prefix} ${message}`);
+    }
 }
 
 function l_limit(t) {
@@ -487,8 +497,8 @@ const smMountsMonitor = class SystemMonitor_smMountsMonitor {
             // need to add the other signals here
             this.connected = true;
         } catch (e) {
-            sm_log('Failed to register on placesManager notifications');
-            sm_log('Got exception : ' + e);
+            sm_log('Failed to register on placesManager notifications', 'error');
+            sm_log('Got exception : ' + e, 'error');
         }
         this.refresh();
     }
@@ -984,7 +994,7 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
     restart_update_timer(interval = null) {
         interval = interval || this._lastInterval;
         if (!interval) {
-            sm_log("Invalid call to restart_update_timer");
+            sm_log("Invalid call to restart_update_timer", 'error');
             return;
         }
         if (this.timeout) {
@@ -1127,7 +1137,7 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
         } else {
             this._proxy.GetDevicesRemote((devices, error) => {
                 if (error) {
-                    sm_log('Power proxy error: ' + error);
+                    sm_log('Power proxy error: ' + error, 'error');
                     this.actor.hide();
                     this.menu_visible = false;
                     build_menu_info(this.extension);
