@@ -42,6 +42,7 @@ import * as Util from "resource:///org/gnome/shell/misc/util.js";
 
 import { sm_log } from './utils.js';
 import { parse_bytearray, check_sensors } from './common.js';
+import { migrateSettings } from './migration.js';
 
 const NetworkManager = NM;
 const UPower = UPowerGlib;
@@ -2398,6 +2399,8 @@ const Icon = class SystemMonitor_Icon {
 export default class SystemMonitorExtension extends Extension {
     enable() {
         sm_log('applet enable from ' + this.path);
+
+        migrateSettings(this);
 
         // Get locale, needed as an argument for toLocaleString() since GNOME Shell 3.24
         // See: mozjs library bug https://bugzilla.mozilla.org/show_bug.cgi?id=999003

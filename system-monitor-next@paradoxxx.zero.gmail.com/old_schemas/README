@@ -1,0 +1,13 @@
+LOOK AWAY!!!
+
+This is the old gsettings schema definition (source and compiled). The
+reason it's here is because we had to rename our extension schema ID to
+avoid clashing with other extensions (see #65). Unfortunately, moving to a
+new schema ID will result in losing all settings under the old schema
+ID. We'd like to support migrating old settings to the new schema ID
+(without user intervention) and it appears that the best way to do it is by
+having the old schema available at runtime. We also explored a dconf
+solution but it got really ugly in the code, and asking users to run `dconf
+dump | dconf load` is not ideal.
+
+Having fun yet?
