@@ -2095,10 +2095,19 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
         this.update();
     }
     refresh() {
+        if (this.sensors === undefined || Object.keys(this.sensors).length === 0) {
+            return;
+        }
         let label = this.extension._Schema.get_string(this.elt + '-sensor-label');
         let sfile = this.sensors[label];
+        if (sfile === undefined && this.display_error) {
+            const validLabels = Object.keys(this.sensors).join(', ');
+            sm_log(`Invalid thermal sensor label: "${label}" (valid choices: ${validLabels})`, 'error');
+            this.display_error = false;
+            return;
+        }
         if (!try_read_int_file(sfile, value => this.temperature = Math.round(value / 1000)) && this.display_error) {
-            console.error('error reading: ' + sfile);
+            sm_log(`Error reading thermal sensor file: ${sfile}`, 'error');
             this.display_error = false;
         }
 
@@ -2161,10 +2170,19 @@ const Fan = class SystemMonitor_Fan extends ElementBase {
         this.update();
     }
     refresh() {
+        if (this.sensors === undefined || Object.keys(this.sensors).length === 0) {
+            return;
+        }
         let label = this.extension._Schema.get_string(this.elt + '-sensor-label');
         let sfile = this.sensors[label];
+        if (sfile === undefined && this.display_error) {
+            const validLabels = Object.keys(this.sensors).join(', ');
+            sm_log(`Invalid fan sensor label: "${label}" (valid choices: ${validLabels})`, 'error');
+            this.display_error = false;
+            return;
+        }
         if (!try_read_int_file(sfile, value => this.rpm = value) && this.display_error) {
-            console.error('error reading: ' + sfile);
+            sm_log(`Error reading fan sensor file: ${sfile}`, 'error');
             this.display_error = false;
         }
         if (sfile) {
