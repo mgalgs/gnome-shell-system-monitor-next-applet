@@ -40,6 +40,7 @@ import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 
 import * as Util from "resource:///org/gnome/shell/misc/util.js";
 
+import { sm_log } from './utils.js';
 import { parse_bytearray, check_sensors } from './common.js';
 
 const NetworkManager = NM;
@@ -63,20 +64,6 @@ Clutter.Actor.prototype.reparent = function reparent(newParent) {
         parent.remove_child(this);
     }
     newParent.add_child(this);
-}
-
-function sm_log(message, level = 'log') {
-    const prefix = '[system-monitor-next]';
-    switch (level) {
-        case 'error':
-            console.error(`${prefix} ${message}`);
-            break;
-        case 'warn':
-            console.warn(`${prefix} ${message}`);
-            break;
-        default:
-            console.log(`${prefix} ${message}`);
-    }
 }
 
 function l_limit(t) {
