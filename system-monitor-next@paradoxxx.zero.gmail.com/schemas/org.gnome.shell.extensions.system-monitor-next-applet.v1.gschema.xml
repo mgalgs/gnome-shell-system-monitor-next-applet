@@ -513,5 +513,10 @@
       <default>9</default>
       <summary>Position in which to display the battery display</summary>
     </key>
+    <key name="custom-monitor-command" type="s">
+      <default>''</default>
+      <summary>Custom system monitor command</summary>
+      <description>When set, this command will be executed instead of launching GNOME System Monitor</description>
+    </key>
   </schema>
 </schemalist>

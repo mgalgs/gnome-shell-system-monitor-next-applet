@@ -40,7 +40,8 @@ const SMGeneralPrefsPage = GObject.registerClass({
     GTypeName: 'SMGeneralPrefsPage',
     Template: import.meta.url.replace('prefs.js', 'ui/prefsGeneralSettings.ui'),
     InternalChildren: ['background', 'icon_display', 'show_tooltip', 'move_clock',
-        'compact_display', 'center_display', 'rotate_labels', 'tooltip_delay_ms'],
+        'compact_display', 'center_display', 'rotate_labels', 'tooltip_delay_ms',
+        'custom_monitor_switch', 'custom_monitor_command'],
 }, class SMGeneralPrefsPage extends Adw.PreferencesPage {
     constructor(settings, params = {}) {
         super(params);
@@ -85,6 +86,21 @@ const SMGeneralPrefsPage = GObject.registerClass({
         );
         this._settings.bind('tooltip-delay-ms', this._tooltip_delay_ms,
             'value', Gio.SettingsBindFlags.DEFAULT
+        );
+
+        const hasCommand = this._settings.get_string('custom-monitor-command').trim() !== '';
+        this._custom_monitor_switch.active = hasCommand;
+        this._custom_monitor_command.visible = hasCommand;
+
+        this._custom_monitor_switch.connect('notify::active', () => {
+            this._custom_monitor_command.visible = this._custom_monitor_switch.active;
+            if (!this._custom_monitor_switch.active) {
+                this._settings.set_string('custom-monitor-command', '');
+            }
+        });
+
+        this._settings.bind('custom-monitor-command', this._custom_monitor_command,
+            'text', Gio.SettingsBindFlags.DEFAULT
         );
     }
 });
