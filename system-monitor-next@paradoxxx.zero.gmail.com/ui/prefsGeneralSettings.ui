@@ -64,6 +64,18 @@
             </property>
           </object>
         </child>
+        <child>
+          <object class="AdwSwitchRow" id="custom_monitor_switch">
+            <property name="title" translatable="yes">Custom System Monitor Command</property>
+            <property name="subtitle" translatable="yes">Use a custom command instead of GNOME System Monitor</property>
+          </object>
+        </child>
+        <child>
+          <object class="AdwEntryRow" id="custom_monitor_command">
+            <property name="title" translatable="yes">Command (e.g. 'missioncenter')</property>
+            <property name="tooltip-text" translatable="yes">Command to run instead of GNOME System Monitor</property>
+          </object>
+        </child>
       </object>
     </child>
   </template>

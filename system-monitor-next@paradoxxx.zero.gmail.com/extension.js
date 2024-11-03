@@ -2397,6 +2397,45 @@ const Icon = class SystemMonitor_Icon {
 }
 
 export default class SystemMonitorExtension extends Extension {
+    openSystemMonitor() {
+        let _appSys = Shell.AppSystem.get_default();
+        let _gsmApp = _appSys.lookup_app('org.gnome.SystemMonitor.desktop') || _appSys.lookup_app('gnome-system-monitor.desktop');
+        let customCmd = this._Schema.get_string('custom-monitor-command');
+
+        if (!customCmd || customCmd.trim() === '') {
+            sm_log("No custom system monitor command set, falling back to default");
+            _gsmApp.activate();
+            return;
+        }
+
+        sm_log("Executing custom system monitor command: " + customCmd);
+        try {
+            let [success, argv] = GLib.shell_parse_argv(customCmd);
+            if (!success) {
+                sm_log('Failed to parse custom monitor command: ' + customCmd, 'error');
+                _gsmApp.activate();
+                return;
+            }
+
+            let proc = new Gio.Subprocess({
+                argv: argv,
+                flags: Gio.SubprocessFlags.NONE
+            });
+            proc.init(null);
+            proc.wait_async(null, (proc, result) => {
+                try {
+                    proc.wait_finish(result);
+                    sm_log('Custom system monitor command completed with exit code: ' + proc.get_exit_status());
+                } catch (e) {
+                    sm_log('Error waiting for process completion: ' + e.message, 'error');
+                }
+            });
+        } catch (e) {
+            sm_log('Failed to execute custom monitor command: ' + e.message, 'error');
+            _gsmApp.activate();
+        }
+    }
+
     enable() {
         sm_log('applet enable from ' + this.path);
 
@@ -2526,13 +2565,10 @@ export default class SystemMonitorExtension extends Extension {
             }
         );
 
-        let _appSys = Shell.AppSystem.get_default();
-        let _gsmApp = _appSys.lookup_app('org.gnome.SystemMonitor.desktop') || _appSys.lookup_app('gnome-system-monitor.desktop');
-
         let item;
         item = new PopupMenu.PopupMenuItem(_('System Monitor...'));
         item.connect('activate', () => {
-            _gsmApp.activate();
+            this.openSystemMonitor();
         });
         tray.menu.addMenuItem(item);
 
