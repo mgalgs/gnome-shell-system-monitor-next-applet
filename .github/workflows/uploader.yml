@@ -16,7 +16,7 @@ jobs:
         USERNAME: ${{ secrets.GNOME_USERNAME }}
         PASSWORD: ${{ secrets.GNOME_PASSWORD }}
     - name: Archive extension zipball
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: zipball
         path: dist/system-monitor-next@paradoxxx.zero.gmail.com.zip
