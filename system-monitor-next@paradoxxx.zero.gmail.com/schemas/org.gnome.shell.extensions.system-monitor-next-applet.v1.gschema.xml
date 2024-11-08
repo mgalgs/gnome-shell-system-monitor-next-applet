@@ -1,15 +1,20 @@
 <schemalist gettext-domain="system-monitor">
-  <enum id="org.gnome.shell.extensions.system-monitor.display-style">
+  <enum id="org.gnome.shell.extensions.system-monitor-next-applet.display-style">
     <value value="0" nick="digit"/>
     <value value="1" nick="graph"/>
     <value value="2" nick="both"/>
   </enum>
-  <enum id="org.gnome.shell.extensions.system-monitor.disk-usage-style">
+  <enum id="org.gnome.shell.extensions.system-monitor-next-applet.disk-usage-style">
     <value value="0" nick="pie"/>
     <value value="1" nick="bar"/>
     <value value="2" nick="none"/>
   </enum>
-  <schema id="org.gnome.shell.extensions.system-monitor" path="/org/gnome/shell/extensions/system-monitor/">
+  <schema id="org.gnome.shell.extensions.system-monitor-next-applet" path="/org/gnome/shell/extensions/system-monitor-next-applet/">
+    <key name="settings-schema-version" type="i">
+      <default>0</default>
+      <summary>Settings schema version</summary>
+      <description>Internal flag to track the version of the settings schema. Checked during startup to see if migration is needed.</description>
+    </key>
     <key name="icon-display" type="b">
       <default>true</default>
       <summary>Display system monitor icon</summary>
@@ -40,7 +45,7 @@
       <summary>Display Memory In Menu</summary>
       <description>Set to true to show memory in pop-up menu</description>
     </key>
-    <key name="memory-style" enum="org.gnome.shell.extensions.system-monitor.display-style">
+    <key name="memory-style" enum="org.gnome.shell.extensions.system-monitor-next-applet.display-style">
       <default>'graph'</default>
       <summary>Choose the display style.</summary>
     </key>
@@ -64,12 +69,12 @@
       <summary>Display 'swap'</summary>
       <description>Set to true to show 'swap' before swap display</description>
     </key>
-        <key name="swap-show-menu" type="b">
+    <key name="swap-show-menu" type="b">
       <default>true</default>
       <summary>Display Swap In Menu</summary>
       <description>Set to true to show swap in pop-up menu</description>
     </key>
-    <key name="swap-style" enum="org.gnome.shell.extensions.system-monitor.display-style">
+    <key name="swap-style" enum="org.gnome.shell.extensions.system-monitor-next-applet.display-style">
       <default>'graph'</default>
       <summary>Choose the display style.</summary>
     </key>
@@ -98,7 +103,7 @@
       <summary>Display Cpu In Menu</summary>
       <description>Set to true to show cpu in pop-up menu</description>
     </key>
-    <key name="cpu-style" enum="org.gnome.shell.extensions.system-monitor.display-style">
+    <key name="cpu-style" enum="org.gnome.shell.extensions.system-monitor-next-applet.display-style">
       <default>'graph'</default>
       <summary>Choose the display style.</summary>
     </key>
@@ -132,7 +137,7 @@
       <summary>Display GPU In Menu</summary>
       <description>Set to true to show GPU in pop-up menu</description>
     </key>
-    <key name="gpu-style" enum="org.gnome.shell.extensions.system-monitor.display-style">
+    <key name="gpu-style" enum="org.gnome.shell.extensions.system-monitor-next-applet.display-style">
       <default>'graph'</default>
       <summary>Choose the display style.</summary>
     </key>
@@ -161,7 +166,7 @@
       <summary>Display Freq In Menu</summary>
       <description>Set to true to show freq in pop-up menu</description>
     </key>
-    <key name="freq-style" enum="org.gnome.shell.extensions.system-monitor.display-style">
+    <key name="freq-style" enum="org.gnome.shell.extensions.system-monitor-next-applet.display-style">
       <default>'graph'</default>
       <summary>Choose the display style.</summary>
     </key>
@@ -190,7 +195,7 @@
       <summary>Display Net In Menu</summary>
       <description>Set to true to show net in pop-up menu</description>
     </key>
-    <key name="net-style" enum="org.gnome.shell.extensions.system-monitor.display-style">
+    <key name="net-style" enum="org.gnome.shell.extensions.system-monitor-next-applet.display-style">
       <default>'graph'</default>
       <summary>Choose the display style.</summary>
     </key>
@@ -223,11 +228,11 @@
       <summary>Display Disk In Menu</summary>
       <description>Set to true to show disk in pop-up menu</description>
     </key>
-    <key name="disk-style" enum="org.gnome.shell.extensions.system-monitor.display-style">
+    <key name="disk-style" enum="org.gnome.shell.extensions.system-monitor-next-applet.display-style">
       <default>'graph'</default>
       <summary>Choose the display style.</summary>
     </key>
-    <key name="disk-usage-style" enum="org.gnome.shell.extensions.system-monitor.disk-usage-style">
+    <key name="disk-usage-style" enum="org.gnome.shell.extensions.system-monitor-next-applet.disk-usage-style">
       <default>'pie'</default>
       <summary>Choose the disk usage display style.</summary>
     </key>
@@ -256,7 +261,7 @@
       <summary>Display Temps In Menu</summary>
       <description>Set to true to show thermal in pop-up menu</description>
     </key>
-    <key name="thermal-style" enum="org.gnome.shell.extensions.system-monitor.display-style">
+    <key name="thermal-style" enum="org.gnome.shell.extensions.system-monitor-next-applet.display-style">
       <default>'graph'</default>
       <summary>Choose the display style.</summary>
     </key>
@@ -295,7 +300,7 @@
       <summary>Display Fans In Menu</summary>
       <description>Set to true to show fan in pop-up menu</description>
     </key>
-    <key name="fan-style" enum="org.gnome.shell.extensions.system-monitor.display-style">
+    <key name="fan-style" enum="org.gnome.shell.extensions.system-monitor-next-applet.display-style">
       <default>'graph'</default>
       <summary>Choose the display style.</summary>
     </key>
@@ -427,12 +432,12 @@
       <default>'#ffffff16'</default>
       <summary>Color of background</summary>
     </key>
-	<key name="battery-display" type="b">
+    <key name="battery-display" type="b">
       <default>false</default>
       <summary>Display battery</summary>
       <description>Set to false to remove battery display in status bar</description>
     </key>
-	<key name="battery-refresh-time" type="i">
+    <key name="battery-refresh-time" type="i">
       <default>5000</default>
       <summary>thermal refresh time</summary>
       <description>Time in ms between 2 refresh of thermal</description>
@@ -442,7 +447,7 @@
       <summary>thermal graph width</summary>
       <description>Graph width in pixel</description>
     </key>
-	<key name="battery-show-text" type="b">
+    <key name="battery-show-text" type="b">
       <default>true</default>
       <summary>Display 'batt'</summary>
       <description>Set to true to show 'batt' before net display</description>
@@ -452,62 +457,61 @@
       <summary>Display 'batt'</summary>
       <description>Set to true to show battery in pop-up menu</description>
     </key>
-	<key name="battery-style" enum="org.gnome.shell.extensions.system-monitor.display-style">
+    <key name="battery-style" enum="org.gnome.shell.extensions.system-monitor-next-applet.display-style">
       <default>'digit'</default>
       <summary>Choose the display style.</summary>
     </key>
-	<key name="battery-batt0-color" type="s">
+    <key name="battery-batt0-color" type="s">
       <default>'#f2002e'</default>
       <summary>Color of battery</summary>
     </key>
     <key name="battery-time" type="b">
-	  <default>false</default>
-	  <summary>Display battery time remaining rather than percentage</summary>
-	</key>
+      <default>false</default>
+      <summary>Display battery time remaining rather than percentage</summary>
+    </key>
     <key name="battery-hidesystem" type="b">
-	  <default>false</default>
-	  <summary>Hide system battery icon</summary>
-	</key>
-  <key name="cpu-position" type="i">
-    <default>0</default>
-    <summary>Position in which to display the CPU display</summary>
-  </key>
-  <key name="freq-position" type="i">
-    <default>1</default>
-    <summary>Position in which to display the frequency display</summary>
-  </key>
-  <key name="memory-position" type="i">
-    <default>2</default>
-    <summary>Position in which to display the memory display</summary>
-  </key>
-  <key name="swap-position" type="i">
-    <default>3</default>
-    <summary>Position in which to display the swap display</summary>
-  </key>
-  <key name="net-position" type="i">
-    <default>4</default>
-    <summary>Position in which to display the net display</summary>
-  </key>
-  <key name="disk-position" type="i">
-    <default>5</default>
-    <summary>Position in which to display the disk display</summary>
-  </key>
-  <key name="gpu-position" type="i">
-    <default>6</default>
-    <summary>Position in which to display the GPU display</summary>
-  </key>
-  <key name="thermal-position" type="i">
-    <default>7</default>
-    <summary>Position in which to display the thermal display</summary>
-  </key>
-  <key name="fan-position" type="i">
-    <default>8</default>
-    <summary>Position in which to display the fan display</summary>
-  </key>
-  <key name="battery-position" type="i">
-    <default>9</default>
-    <summary>Position in which to display the battery display</summary>
-  </key>
-
+      <default>false</default>
+      <summary>Hide system battery icon</summary>
+    </key>
+    <key name="cpu-position" type="i">
+      <default>0</default>
+      <summary>Position in which to display the CPU display</summary>
+    </key>
+    <key name="freq-position" type="i">
+      <default>1</default>
+      <summary>Position in which to display the frequency display</summary>
+    </key>
+    <key name="memory-position" type="i">
+      <default>2</default>
+      <summary>Position in which to display the memory display</summary>
+    </key>
+    <key name="swap-position" type="i">
+      <default>3</default>
+      <summary>Position in which to display the swap display</summary>
+    </key>
+    <key name="net-position" type="i">
+      <default>4</default>
+      <summary>Position in which to display the net display</summary>
+    </key>
+    <key name="disk-position" type="i">
+      <default>5</default>
+      <summary>Position in which to display the disk display</summary>
+    </key>
+    <key name="gpu-position" type="i">
+      <default>6</default>
+      <summary>Position in which to display the GPU display</summary>
+    </key>
+    <key name="thermal-position" type="i">
+      <default>7</default>
+      <summary>Position in which to display the thermal display</summary>
+    </key>
+    <key name="fan-position" type="i">
+      <default>8</default>
+      <summary>Position in which to display the fan display</summary>
+    </key>
+    <key name="battery-position" type="i">
+      <default>9</default>
+      <summary>Position in which to display the battery display</summary>
+    </key>
   </schema>
 </schemalist>

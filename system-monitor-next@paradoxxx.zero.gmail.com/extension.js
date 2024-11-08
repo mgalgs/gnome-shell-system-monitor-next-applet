@@ -40,7 +40,9 @@ import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 
 import * as Util from "resource:///org/gnome/shell/misc/util.js";
 
+import { sm_log } from './utils.js';
 import { parse_bytearray, check_sensors } from './common.js';
+import { migrateSettings } from './migration.js';
 
 const NetworkManager = NM;
 const UPower = UPowerGlib;
@@ -63,10 +65,6 @@ Clutter.Actor.prototype.reparent = function reparent(newParent) {
         parent.remove_child(this);
     }
     newParent.add_child(this);
-}
-
-function sm_log(message) {
-    console.log(`[system-monitor-next] ${message}`);
 }
 
 function l_limit(t) {
@@ -487,8 +485,8 @@ const smMountsMonitor = class SystemMonitor_smMountsMonitor {
             // need to add the other signals here
             this.connected = true;
         } catch (e) {
-            sm_log('Failed to register on placesManager notifications');
-            sm_log('Got exception : ' + e);
+            sm_log('Failed to register on placesManager notifications', 'error');
+            sm_log('Got exception : ' + e, 'error');
         }
         this.refresh();
     }
@@ -984,7 +982,7 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
     restart_update_timer(interval = null) {
         interval = interval || this._lastInterval;
         if (!interval) {
-            sm_log("Invalid call to restart_update_timer");
+            sm_log("Invalid call to restart_update_timer", 'error');
             return;
         }
         if (this.timeout) {
@@ -1127,7 +1125,7 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
         } else {
             this._proxy.GetDevicesRemote((devices, error) => {
                 if (error) {
-                    sm_log('Power proxy error: ' + error);
+                    sm_log('Power proxy error: ' + error, 'error');
                     this.actor.hide();
                     this.menu_visible = false;
                     build_menu_info(this.extension);
@@ -2098,10 +2096,19 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
         this.update();
     }
     refresh() {
+        if (this.sensors === undefined || Object.keys(this.sensors).length === 0) {
+            return;
+        }
         let label = this.extension._Schema.get_string(this.elt + '-sensor-label');
         let sfile = this.sensors[label];
+        if (sfile === undefined && this.display_error) {
+            const validLabels = Object.keys(this.sensors).join(', ');
+            sm_log(`Invalid thermal sensor label: "${label}" (valid choices: ${validLabels})`, 'error');
+            this.display_error = false;
+            return;
+        }
         if (!try_read_int_file(sfile, value => this.temperature = Math.round(value / 1000)) && this.display_error) {
-            console.error('error reading: ' + sfile);
+            sm_log(`Error reading thermal sensor file: ${sfile}`, 'error');
             this.display_error = false;
         }
 
@@ -2164,10 +2171,19 @@ const Fan = class SystemMonitor_Fan extends ElementBase {
         this.update();
     }
     refresh() {
+        if (this.sensors === undefined || Object.keys(this.sensors).length === 0) {
+            return;
+        }
         let label = this.extension._Schema.get_string(this.elt + '-sensor-label');
         let sfile = this.sensors[label];
+        if (sfile === undefined && this.display_error) {
+            const validLabels = Object.keys(this.sensors).join(', ');
+            sm_log(`Invalid fan sensor label: "${label}" (valid choices: ${validLabels})`, 'error');
+            this.display_error = false;
+            return;
+        }
         if (!try_read_int_file(sfile, value => this.rpm = value) && this.display_error) {
-            console.error('error reading: ' + sfile);
+            sm_log(`Error reading fan sensor file: ${sfile}`, 'error');
             this.display_error = false;
         }
         if (sfile) {
@@ -2383,6 +2399,8 @@ const Icon = class SystemMonitor_Icon {
 export default class SystemMonitorExtension extends Extension {
     enable() {
         sm_log('applet enable from ' + this.path);
+
+        migrateSettings(this);
 
         // Get locale, needed as an argument for toLocaleString() since GNOME Shell 3.24
         // See: mozjs library bug https://bugzilla.mozilla.org/show_bug.cgi?id=999003
