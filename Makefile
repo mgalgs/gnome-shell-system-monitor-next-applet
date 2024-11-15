@@ -122,7 +122,7 @@ zip-install: zip-file
 
 clean:: zip-file.clean
 zip-file.clean:
-	$(Q)rm $(VV) -f $(ZIPFILE)
+	$(Q)rm $(VV) -vf ./dist/$(ZIPFILE)
 	$(call msg,$@,OK)
 
 
