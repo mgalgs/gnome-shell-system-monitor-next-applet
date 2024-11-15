@@ -136,7 +136,7 @@ extension.clean:
 	$(Q)git checkout -f -- ./$(UUID)/schemas/gschemas.compiled
 	$(call msg,$@,OK)
 
-./$(UUID)/schemas/gschemas.compiled: ./$(UUID)/schemas/org.gnome.shell.extensions.system-monitor-next-applet.v1.gschema.xml
+./$(UUID)/schemas/gschemas.compiled: ./$(UUID)/schemas/org.gnome.shell.extensions.system-monitor.gschema.xml  ./$(UUID)/schemas/org.gnome.shell.extensions.system-monitor-next-applet.gschema.xml
 	$(Q)glib-compile-schemas ./$(UUID)/schemas/
 	$(call msg,gschemas,OK)
 
