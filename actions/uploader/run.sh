@@ -7,7 +7,7 @@ set -e
     exit 1
 }
 git config --global --add safe.directory /github/workspace
-make zip-file clean
+make zip-file
 export USERNAME
 export PASSWORD
 export ZIPBALL=./dist/system-monitor-next@paradoxxx.zero.gmail.com.zip
