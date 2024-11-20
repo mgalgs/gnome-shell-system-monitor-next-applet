@@ -102,7 +102,7 @@ install: remove build
 remove:
 	$(call msg,$@,$(SUDO) $(INSTALLBASE)/$(INSTALLNAME))
 ifeq ($(strip $(BUILD_FOR_RPM)),)
-	$(Q) gnome-extensions uninstall $(UUID)
+	$(Q) gnome-extensions uninstall --quiet $(UUID) || true
 endif
 	$(call msg,$@,OK)
 
