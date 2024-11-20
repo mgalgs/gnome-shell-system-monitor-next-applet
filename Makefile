@@ -103,6 +103,7 @@ remove:
 	$(call msg,$@,$(SUDO) $(INSTALLBASE)/$(INSTALLNAME))
 ifeq ($(strip $(BUILD_FOR_RPM)),)
 	$(Q) gnome-extensions uninstall --quiet $(UUID) || true
+	$(Q) rm -rf $(INSTALLBASE)/$(INSTALLNAME) 2>/dev/null || true
 endif
 	$(call msg,$@,OK)
 
