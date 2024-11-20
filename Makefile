@@ -115,7 +115,7 @@ zip-file: build.clean build
 	$(Q)mv _build/$(ZIPFILE) ./dist/$(ZIPFILE)
 	$(call msg,$@,OK)
 
-zip-install: zip-file
+zip-install: remove zip-file
 	$(Q)gnome-extensions install ./dist/$(ZIPFILE)
 	$(call msg,$@,OK)
 	$(call msg,$@,Please reload GNOME Shell)
