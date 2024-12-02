@@ -2,7 +2,7 @@
     "shell-version": ["45", "46", "47"],
     "uuid": "system-monitor-next@paradoxxx.zero.gmail.com",
     "name": "system-monitor-next",
-    "url": "https://github.com/mgalgs/gnome-shell-system-monitor-applet",
+    "url": "https://github.com/mgalgs/gnome-shell-system-monitor-next-applet",
     "description": "Display system information in GNOME Shell status bar, such as memory, CPU, disk and battery usages, network rates…\n\nIf you get an error after updating, try logging out and logging back in (this is a known issue that is being worked on).",
     "settings-schema": "org.gnome.shell.extensions.system-monitor-next-applet",
     "gettext-domain": "system-monitor",

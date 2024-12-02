@@ -1,7 +1,7 @@
 # GNOME Shell System Monitor NEXT Extension
 
-![Extension uploader](https://github.com/mgalgs/gnome-shell-system-monitor-applet/workflows/Extension%20uploader/badge.svg)
-![Repo syncer](https://github.com/mgalgs/gnome-shell-system-monitor-applet/workflows/Repo%20syncer/badge.svg)
+![Extension uploader](https://github.com/mgalgs/gnome-shell-system-monitor-next-applet/workflows/Extension%20uploader/badge.svg)
+![Repo syncer](https://github.com/mgalgs/gnome-shell-system-monitor-next-applet/workflows/Repo%20syncer/badge.svg)
 
 A GNOME Shell extension that displays system resource usage in the top panel.
 
@@ -97,7 +97,7 @@ After installation, the extension will be available for enabling in GNOME Extens
 
 1. Clone the repository:
    ```
-   git clone https://github.com/mgalgs/gnome-shell-system-monitor-applet.git
+   git clone https://github.com/mgalgs/gnome-shell-system-monitor-next-applet.git
    ```
 2. Create a symlink:
    ```
@@ -184,7 +184,7 @@ This process is automated by [the uploader Github Action](actions/uploader).
 - [paradoxxxzero](https://github.com/paradoxxxzero)
 - [yuyichao](https://github.com/yuyichao)
 - [darkxst](https://github.com/darkxst)
-- [And many contributors](https://github.com/mgalgs/gnome-shell-system-monitor-applet/contributors)
+- [And many contributors](https://github.com/mgalgs/gnome-shell-system-monitor-next-applet/contributors)
 
 ## License
 
