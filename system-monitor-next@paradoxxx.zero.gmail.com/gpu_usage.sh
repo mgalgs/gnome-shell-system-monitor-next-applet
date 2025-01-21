@@ -27,7 +27,7 @@ checkcommand()
 
 # This will print three lines. The first one is the the total vRAM available,
 # the second one is the used vRAM and the third on is the GPU usage in %.
-if checkcommand nvidia-smi; then
+if nvidia-smi --list-gpus > /dev/null 2>&1  ; then
 	nvidia-smi -i 0 --query-gpu=memory.total,memory.used,utilization.gpu --format=csv,noheader,nounits | while IFS=', ' read -r a b c; do echo "$a"; echo "$b"; echo "$c"; done
 
 elif lsmod | grep amdgpu > /dev/null; then
