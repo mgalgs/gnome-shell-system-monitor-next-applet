@@ -1,7 +1,6 @@
 # GNOME Shell System Monitor NEXT Extension
 
 ![Extension uploader](https://github.com/mgalgs/gnome-shell-system-monitor-next-applet/workflows/Extension%20uploader/badge.svg)
-![Repo syncer](https://github.com/mgalgs/gnome-shell-system-monitor-next-applet/workflows/Repo%20syncer/badge.svg)
 
 A GNOME Shell extension that displays system resource usage in the top panel.
 
