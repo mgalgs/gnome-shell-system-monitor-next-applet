@@ -111,6 +111,9 @@ After installation, the extension will be available for enabling in GNOME Extens
    gnome-extensions enable system-monitor-next@paradoxxx.zero.gmail.com
    ```
 
+Now you can hack away on the extension in your clone of the repo and test
+your changes by reloading GNOME Shell.
+
 ## Usage
 
 After installation, the system monitor will appear in your top panel. You can configure its appearance and behavior through the GNOME Extensions app or by clicking on the panel and selecting "Preferences".
