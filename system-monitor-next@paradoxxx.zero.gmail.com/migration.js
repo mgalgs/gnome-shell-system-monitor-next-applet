@@ -13,7 +13,6 @@ function migrateSettings(extension) {
 
     // Skip if we're already at the current version
     if (currentVersion === CURRENT_SCHEMA_VERSION) {
-        sm_log("No settings migration needed");
         return;
     }
 
