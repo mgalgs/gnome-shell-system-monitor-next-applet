@@ -3,7 +3,7 @@
     "uuid": "system-monitor-next@paradoxxx.zero.gmail.com",
     "name": "system-monitor-next",
     "url": "https://github.com/mgalgs/gnome-shell-system-monitor-next-applet",
-    "description": "Display system information in GNOME Shell status bar, such as memory, CPU, disk and battery usages, network rates…\n\nPlease see the extension homepage for prerequisite packages that must be installed first.\n\nIf you get an error after updating, try logging out and logging back in (this is a known issue that is being worked on).",
+    "description": "Display system information in GNOME Shell status bar, such as memory, CPU, disk and battery usages, network rates…\n\nPlease see the extension homepage for prerequisite packages that must be installed first.\n\nIf you get an error after updating, try restarting GNOME Shell or logging out and logging back in.",
     "settings-schema": "org.gnome.shell.extensions.system-monitor-next-applet",
     "gettext-domain": "system-monitor",
     "version": -1
