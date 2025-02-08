@@ -2470,6 +2470,9 @@ export default class SystemMonitorExtension extends Extension {
         if (this._Schema.get_boolean('center-display')) {
             panel = Main.panel._centerBox;
         }
+        else if (this._Schema.get_boolean('left-display')) {
+            panel = Main.panel._leftBox;
+        }
 
         this._MountsMonitor.connect();
 
