@@ -39,9 +39,9 @@ function color_to_hex(color) {
 const SMGeneralPrefsPage = GObject.registerClass({
     GTypeName: 'SMGeneralPrefsPage',
     Template: import.meta.url.replace('prefs.js', 'ui/prefsGeneralSettings.ui'),
-    InternalChildren: ['background', 'icon_display', 'show_tooltip', 'move_clock',
-        'compact_display', 'center_display', 'rotate_labels', 'tooltip_delay_ms',
-        'custom_monitor_switch', 'custom_monitor_command'],
+    InternalChildren: ['background', 'icon_display', 'show_tooltip', 'move_clock', 
+        'compact_display', 'center_display', 'left_display', 'rotate_labels', 
+        'tooltip_delay_ms', 'custom_monitor_switch', 'custom_monitor_command'],
 }, class SMGeneralPrefsPage extends Adw.PreferencesPage {
     constructor(settings, params = {}) {
         super(params);
@@ -78,9 +78,26 @@ const SMGeneralPrefsPage = GObject.registerClass({
         this._settings.bind('compact-display', this._compact_display,
             'active', Gio.SettingsBindFlags.DEFAULT
         );
+
         this._settings.bind('center-display', this._center_display,
             'active', Gio.SettingsBindFlags.DEFAULT
         );
+        this._settings.bind('left-display', this._left_display,
+            'active', Gio.SettingsBindFlags.DEFAULT
+        );
+
+        // to alternately disable positioning options
+        this._center_display.connect('notify::active', () => {
+            if (this._center_display.active) {
+                this._settings.set_boolean('left-display', false);
+            }
+        })
+        this._left_display.connect('notify::active', () => {
+            if (this._left_display.active) {
+                this._settings.set_boolean('center-display', false);
+            }
+        })
+
         this._settings.bind('rotate-labels', this._rotate_labels,
             'active', Gio.SettingsBindFlags.DEFAULT
         );

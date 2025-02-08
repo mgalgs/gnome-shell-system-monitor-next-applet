@@ -44,6 +44,11 @@
           </object>
         </child>
         <child>
+          <object class="AdwSwitchRow" id="left_display">
+            <property name="title" translatable="yes">Display on the Left</property>
+          </object>
+        </child>
+        <child>
           <object class="AdwSwitchRow" id="rotate_labels">
             <property name="title" translatable="yes">Rotate labels</property>
           </object>
