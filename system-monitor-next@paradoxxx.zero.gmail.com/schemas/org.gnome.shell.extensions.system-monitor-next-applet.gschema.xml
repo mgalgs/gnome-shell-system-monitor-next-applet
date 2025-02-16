@@ -318,6 +318,11 @@
       <summary>Display informations next to the clock</summary>
       <description>True: Set information at the center, False: Set information in status bar (at top right)</description>
     </key>
+    <key name="left-display" type="b">
+      <default>false</default>
+      <summary>Display informations on the left side of the clock</summary>
+      <description>True: Set information on the left, False: Set information in status bar (at top right)</description>
+    </key>
     <key name="move-clock" type="b">
       <default>false</default>
       <summary>Move the clock to the right when center-display is true</summary>
