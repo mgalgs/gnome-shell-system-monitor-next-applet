@@ -39,8 +39,8 @@ function color_to_hex(color) {
 const SMGeneralPrefsPage = GObject.registerClass({
     GTypeName: 'SMGeneralPrefsPage',
     Template: import.meta.url.replace('prefs.js', 'ui/prefsGeneralSettings.ui'),
-    InternalChildren: ['background', 'icon_display', 'show_tooltip', 'move_clock', 
-        'compact_display', 'center_display', 'left_display', 'rotate_labels', 
+    InternalChildren: ['background', 'icon_display', 'show_tooltip', 'move_clock',
+        'compact_display', 'center_display', 'left_display', 'rotate_labels',
         'tooltip_delay_ms', 'custom_monitor_switch', 'custom_monitor_command'],
 }, class SMGeneralPrefsPage extends Adw.PreferencesPage {
     constructor(settings, params = {}) {
