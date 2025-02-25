@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-// Author: Florian Mounier aka paradoxxxzero
+// OrigAuthor: Florian Mounier aka paradoxxxzero
 
 import { Extension, gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
 
@@ -320,6 +320,8 @@ const Chart = class SystemMonitor_Chart {
         } else {
             max = Math.max.apply(this, this.data[this.data.length - 1]);
             max = Math.max(1, Math.pow(2, Math.ceil(Math.log(max) / Math.log(2))));
+            if (max >= this.parentC.delayedmax) { this.parentC.delayedmax = max; }
+            max = this.parentC.delayedmax;
         }
         const range = max - min, top = 1 + min / range;
         sm_cairo_set_source_color(cr, this.extension._Background);
@@ -875,6 +877,7 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         super(extension);
         this.elt = '';
         this.elt_short = '';
+        this.delayedmax = 0;
         this.item_name = _('');
         this.color_name = [];
         this.text_items = [];
@@ -978,6 +981,12 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         change_style.call(this);
         Schema.connect('changed::' + this.elt + '-style', change_style.bind(this));
         this.menu_items = this.create_menu_items();
+
+        this.delayedmaxtimeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, this.extension._Schema.get_int('graph-delay-m') * 60, () => {
+                this.delayedmax = 0;
+                return GLib.SOURCE_CONTINUE;
+        });
+
     }
     restart_update_timer(interval = null) {
         interval = interval || this._lastInterval;
