@@ -343,6 +343,11 @@
       <summary>Tooltip delay</summary>
       <description>Milliseconds to wait before showing/hiding a tooltip</description>
     </key>
+    <key name="graph-delay-m" type="i">
+      <default>0</default>
+      <summary>Graph resetting delay</summary>
+      <description>Minutes to wait before resetting graph scale</description>
+    </key>
     <key name="compact-display" type="b">
       <default>false</default>
       <summary>Optimize view for small displays</summary>
