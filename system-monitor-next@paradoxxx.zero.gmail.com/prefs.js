@@ -41,7 +41,7 @@ const SMGeneralPrefsPage = GObject.registerClass({
     Template: import.meta.url.replace('prefs.js', 'ui/prefsGeneralSettings.ui'),
     InternalChildren: ['background', 'icon_display', 'show_tooltip', 'move_clock',
         'compact_display', 'center_display', 'left_display', 'rotate_labels',
-        'tooltip_delay_ms', 'custom_monitor_switch', 'custom_monitor_command'],
+        'tooltip_delay_ms', 'graph_delay_m', 'custom_monitor_switch', 'custom_monitor_command'],
 }, class SMGeneralPrefsPage extends Adw.PreferencesPage {
     constructor(settings, params = {}) {
         super(params);
@@ -102,6 +102,9 @@ const SMGeneralPrefsPage = GObject.registerClass({
             'active', Gio.SettingsBindFlags.DEFAULT
         );
         this._settings.bind('tooltip-delay-ms', this._tooltip_delay_ms,
+            'value', Gio.SettingsBindFlags.DEFAULT
+        );
+        this._settings.bind('graph-delay-m', this._graph_delay_m,
             'value', Gio.SettingsBindFlags.DEFAULT
         );
 
