@@ -70,6 +70,23 @@
           </object>
         </child>
         <child>
+          <object class="AdwSpinRow" id="graph_delay_m">
+            <property name="title" translatable="yes">Graph scale reset cooldown period</property>
+            <property name="subtitle" translatable="yes">Minutes to wait before downscaling graph scale (helps contextualize new data in terms of recent spikes)</property>
+            <property name="numeric">true</property>
+            <property name="update-policy">if-valid</property>
+            <property name="adjustment">
+              <object class="GtkAdjustment">
+                <property name="lower">0</property>
+                <property name="upper">100000</property>
+                <property name="value">0</property>
+                <property name="step_increment">1</property>
+                <property name="page-increment">60</property>
+              </object>
+            </property>
+          </object>
+        </child>
+        <child>
           <object class="AdwSwitchRow" id="custom_monitor_switch">
             <property name="title" translatable="yes">Custom System Monitor Command</property>
             <property name="subtitle" translatable="yes">Use a custom command instead of GNOME System Monitor</property>

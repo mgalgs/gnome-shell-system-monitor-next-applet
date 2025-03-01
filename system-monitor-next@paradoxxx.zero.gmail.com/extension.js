@@ -334,6 +334,16 @@ const Chart = class SystemMonitor_Chart {
         } else {
             max = Math.max.apply(this, this.data[this.data.length - 1]);
             max = Math.max(1, Math.pow(2, Math.ceil(Math.log(max) / Math.log(2))));
+            if (this.parentC.graph_scale_cooldown_delay_minutes !== 0) {
+                if (max > this.parentC.graph_scale_max_including_cooldown) {
+                    // Restart the cooldown period with this new max.
+                    const oldMax = this.parentC.graph_scale_max_including_cooldown;
+                    this.parentC.restart_cooldown_timer(max);
+                }
+                this.parentC.graph_scale_max_including_cooldown =
+                    Math.max(max, this.parentC.graph_scale_max_including_cooldown);
+                max = this.parentC.graph_scale_max_including_cooldown;
+            }
         }
         const range = max - min, top = 1 + min / range;
         sm_cairo_set_source_color(cr, this.extension._Background);
@@ -898,6 +908,11 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this.menu_visible = true;
         this.timeout = null;
 
+        // Maximum value preserved during cooldown period
+        this.graph_scale_max_including_cooldown = 0;
+        this.graph_scale_cooldown_timer_id = null;
+        this.graph_scale_cooldown_delay_minutes = 0;
+
         Object.assign(this, properties);
 
         //            TipBox.prototype._init.apply(this, arguments);
@@ -994,6 +1009,33 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         change_style.call(this);
         Schema.connect('changed::' + this.elt + '-style', change_style.bind(this));
         this.menu_items = this.create_menu_items();
+
+        this.restart_cooldown_timer();
+        Schema.connect('changed::graph-cooldown-delay-m', () => {
+            this.restart_cooldown_timer();
+        });
+    }
+    /**
+     * Initializes or restarts the graph scale cooldown timer. The graph
+     * scale won't downscale during the cooldown period.
+     *
+     * max - Maximum value to preserve during cooldown
+     */
+    restart_cooldown_timer(max = 0) {
+        if (this.graph_scale_cooldown_timer_id) {
+            GLib.Source.remove(this.graph_scale_cooldown_timer_id);
+        }
+        this.graph_scale_max_including_cooldown = max;
+        this.graph_scale_cooldown_delay_minutes = this.extension._Schema.get_int('graph-cooldown-delay-m');
+        if (this.graph_scale_cooldown_delay_minutes !== 0) {
+            this.graph_scale_cooldown_timer_id = GLib.timeout_add_seconds(
+                GLib.PRIORITY_DEFAULT,
+                this.graph_scale_cooldown_delay_minutes * 60,
+                () => {
+                    this.restart_cooldown_timer();
+                    return GLib.SOURCE_CONTINUE;
+                });
+        }
     }
     restart_update_timer(interval = null) {
         interval = interval || this._lastInterval;
@@ -1080,6 +1122,10 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         if (this.timeout) {
             GLib.Source.remove(this.timeout);
             this.timeout = null;
+        }
+        if (this.graph_scale_cooldown_timer_id) {
+            GLib.Source.remove(this.graph_scale_cooldown_timer_id);
+            this.graph_scale_cooldown_timer_id = null;
         }
     }
 }
