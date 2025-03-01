@@ -320,6 +320,12 @@ const Chart = class SystemMonitor_Chart {
         } else {
             max = Math.max.apply(this, this.data[this.data.length - 1]);
             max = Math.max(1, Math.pow(2, Math.ceil(Math.log(max) / Math.log(2))));
+            // log('timeout_delayed: ' + this.parentC.timeout_delayed);
+            if (this.parentC.timeout_delayed != 0) {
+                // log('delayedmax: ' + this.parentC.delayedmax);
+                if (max >= this.parentC.delayedmax) { this.parentC.delayedmax = max; }
+                max = this.parentC.delayedmax;
+            }
         }
         const range = max - min, top = 1 + min / range;
         sm_cairo_set_source_color(cr, this.extension._Background);
@@ -881,6 +887,9 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this.menu_items = [];
         this.menu_visible = true;
         this.timeout = null;
+        this.delayedmax = 0;
+        this.delayedmaxtimeout = null;
+        this.timeout_delayed = 0
 
         Object.assign(this, properties);
 
@@ -978,6 +987,25 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         change_style.call(this);
         Schema.connect('changed::' + this.elt + '-style', change_style.bind(this));
         this.menu_items = this.create_menu_items();
+
+        this.restart_graph_timer();
+        Schema.connect('changed::graph-delay-m', () => {
+            this.restart_graph_timer()
+        });
+    }
+    restart_graph_timer() {
+        if (this.delayedmaxtimeout) {
+            GLib.Source.remove(this.delayedmaxtimeout);
+        }
+        this.delayedmax = 0;
+        this.timeout_delayed = this.extension._Schema.get_int('graph-delay-m');
+        if (this.timeout_delayed != 0) {
+            this.delayedmaxtimeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, this.timeout_delayed * 60, () => {
+                // log('graph-delay-m: ' + this.timeout_delayed);
+                this.restart_graph_timer();
+                return GLib.SOURCE_CONTINUE;
+            });
+        }
     }
     restart_update_timer(interval = null) {
         interval = interval || this._lastInterval;
@@ -1064,6 +1092,10 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         if (this.timeout) {
             GLib.Source.remove(this.timeout);
             this.timeout = null;
+        }
+        if (this.delayedmaxtimeout) {
+            GLib.Source.remove(this.delayedmaxtimeout);
+            this.delayedmaxtimeout = null;
         }
     }
 }
