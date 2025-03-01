@@ -352,6 +352,11 @@
       <summary>Tooltip delay</summary>
       <description>Milliseconds to wait before showing/hiding a tooltip</description>
     </key>
+    <key name="graph-cooldown-delay-m" type="i">
+      <default>0</default>
+      <summary>Graph scale reset cooldown period</summary>
+      <description>Minutes to wait before resetting graph scale after a spike. This only affects "downscales" of the graph scale (the graph always scales up without delay as new data comes in). This allows you to contextualize new data in terms of recent spikes which may have already fallen off the graph, rather than always scaling the graph to fit the current data. Set to 0 to allow immediate downscales.</description>
+    </key>
     <key name="compact-display" type="b">
       <default>false</default>
       <summary>Optimize view for small displays</summary>
