@@ -1590,20 +1590,33 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
         });
         this.freq = 0;
         this.tip_format('MHz');
+
+        extension._Schema.connect('changed::freq-display-mode', this.update.bind(this));
+
         this.update();
     }
     refresh() {
         let total_frequency = 0;
+        let max_frequency = 0;
         let num_cpus = GTop.glibtop_get_sysinfo().ncpu;
         let i = 0;
         let file = Gio.file_new_for_path(`/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq`);
         let that = this;
+        let display_mode = this.extension._Schema.get_enum('freq-display-mode');
+
         file.load_contents_async(null, function cb(source, result) {
             let as_r = source.load_contents_finish(result);
-            total_frequency += parseInt(parse_bytearray(as_r[1]));
+            let current_freq = parseInt(parse_bytearray(as_r[1]));
+
+            total_frequency += current_freq;
+            max_frequency = Math.max(max_frequency, current_freq);
 
             if (++i >= num_cpus) {
-                that.freq = Math.round(total_frequency / num_cpus / 1000);
+                if (display_mode === 0) { // 'max' mode
+                    that.freq = Math.round(max_frequency / 1000);
+                } else { // 'average' mode
+                    that.freq = Math.round(total_frequency / num_cpus / 1000);
+                }
             } else {
                 file = Gio.file_new_for_path(`/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq`);
                 file.load_contents_async(null, cb.bind(that));

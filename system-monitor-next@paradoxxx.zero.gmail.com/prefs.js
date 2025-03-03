@@ -411,6 +411,22 @@ const SMExpanderRow = GObject.registerClass({
                 ];
 
                 this._addColorsItem(freqColors);
+
+                let stringListModel = new Gtk.StringList();
+                stringListModel.append(_('Max across all cores'));
+                stringListModel.append(_('Average across all cores'));
+
+                let displayModeRow = new Adw.ComboRow({
+                    title: _('Value'),
+                    model: stringListModel,
+                    selected: this._settings.get_enum('freq-display-mode')
+                });
+
+                displayModeRow.connect('notify::selected', widget => {
+                    this._settings.set_enum('freq-display-mode', widget.selected);
+                });
+
+                this.add_row(displayModeRow);
                 break;
             }
             case 'memory': {
