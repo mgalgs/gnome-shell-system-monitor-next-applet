@@ -9,6 +9,10 @@
     <value value="1" nick="bar"/>
     <value value="2" nick="none"/>
   </enum>
+  <enum id="org.gnome.shell.extensions.system-monitor-next-applet.freq-display-mode">
+    <value value="0" nick="max"/>
+    <value value="1" nick="average"/>
+  </enum>
   <schema id="org.gnome.shell.extensions.system-monitor-next-applet" path="/org/gnome/shell/extensions/system-monitor-next-applet/">
     <key name="settings-schema-version" type="i">
       <default>0</default>
@@ -169,6 +173,11 @@
     <key name="freq-style" enum="org.gnome.shell.extensions.system-monitor-next-applet.display-style">
       <default>'graph'</default>
       <summary>Choose the display style.</summary>
+    </key>
+    <key name="freq-display-mode" enum="org.gnome.shell.extensions.system-monitor-next-applet.freq-display-mode">
+      <default>'max'</default>
+      <summary>Display mode for CPU frequency</summary>
+      <description>Choose how to display CPU frequency: maximum across all cores or average of all cores</description>
     </key>
     <key name="net-display" type="b">
       <default>true</default>
