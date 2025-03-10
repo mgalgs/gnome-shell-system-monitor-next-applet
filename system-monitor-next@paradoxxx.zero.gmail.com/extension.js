@@ -189,6 +189,20 @@ function try_read_int_file(filename, callback) {
     }
 }
 
+// This is the algorithm used by the df utility. Returns an object with
+// used and total fields, computed from a given statfs structure.
+function calc_usage(statfs) {
+    // bfree represents the total amount of disk space remaining for the
+    // superuser and internal FS operations, while bavail represents the space
+    // remaining for an unprivileged user. The difference between bfree and
+    // bavail represents reserved blocks that should not be part of the total
+    // value, since users don't get to use those blocks. That is one way to
+    // explain why total here is blocks - (bfree - bavail). Alternate
+    // explanation: as bavail approaches 0, used and total should converge.
+    const used = statfs.blocks - statfs.bfree;
+    return {used, total: used + statfs.bavail};
+}
+
 const smStyleManager = class SystemMonitor_smStyleManager {
     constructor(extension) {
         this.extension = extension;
@@ -578,7 +592,8 @@ const Bar = class SystemMonitor_Bar extends Graph {
         cr.setFontSize(fontsize);
         for (let mount in this.mounts) {
             GTop.glibtop_get_fsusage(this.gtop, this.mounts[mount]);
-            let perc_full = (this.gtop.blocks - this.gtop.bfree) / this.gtop.blocks;
+            const {used, total} = calc_usage(this.gtop);
+            const perc_full = used / total;
             sm_cairo_set_source_color(cr, this.colors[mount % this.colors.length]);
 
             let text = this.mounts[mount];
@@ -646,7 +661,8 @@ const Pie = class SystemMonitor_Pie extends Graph {
         for (let mount in this.mounts) {
             GTop.glibtop_get_fsusage(this.gtop, this.mounts[mount]);
             sm_cairo_set_source_color(cr, this.colors[mount % this.colors.length]);
-            arc(r, this.gtop.blocks - this.gtop.bfree, this.gtop.blocks, -pi / 2);
+            const {used, total} = calc_usage(this.gtop);
+            arc(r, used, total, -pi / 2);
             cr.stroke();
             r -= ring_width;
         }
