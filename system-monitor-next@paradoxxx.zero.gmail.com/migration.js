@@ -37,33 +37,13 @@ function migrateSettings(extension) {
 
 function migrateFrom0(extension, newSettings) {
     // v0 -> v1
-    // Handle schema name change by copying over all settings from old schema
-    sm_log('Migrating settings: v0 -> v1');
-    const OLD_SCHEMA_ID = 'org.gnome.shell.extensions.system-monitor';
-    const oldSettings = extension.getSettings(OLD_SCHEMA_ID);
-
-    if (!oldSettings) {
-        sm_log('No old settings found, skipping migration');
-        // Migration is successful, but no settings were migrated
-        return true;
-    }
-
-    const keys = oldSettings.list_keys();
-
-    for (const key of keys) {
-        try {
-            const value = oldSettings.get_value(key);
-            if (value) {
-                const unpackedValue = value.unpack();
-                sm_log(`Migrating ${key}=${unpackedValue} from old schema`);
-                newSettings.set_value(key, value);
-            }
-        } catch (e) {
-            sm_log(`Error migrating key ${key}: ${e}`, 'error');
-        }
-    }
-
-    sm_log('Successfully migrated settings from old schema');
+    // Previously, this handled the schema name change by copying over all
+    // settings from old schema. But since the old schema filename was
+    // clashing with a standard gnome-shell extension
+    // (gnome-shell-extension-system-monitor) we had to get rid of
+    // it. Existing users have had ~6 months to update. Anyone who missed
+    // this update window will lose their customizations. Not a huge deal,
+    // resolving the filename conflict is the priority at this point.
     return true;
 }
 
