@@ -114,6 +114,7 @@ zip-file: build.clean build
 	$(Q)cd _build ; zip $(V) -qr $(ZIPFILE) .
 	$(Q)mkdir -p dist
 	$(Q)mv _build/$(ZIPFILE) ./dist/$(ZIPFILE)
+	$(call msg,$@,Zip file saved to ./dist/$(ZIPFILE))
 	$(call msg,$@,OK)
 
 zip-install: remove zip-file
@@ -158,6 +159,7 @@ build: translate
 	$(Q)cp $(VV) $(UUID)/schemas/*.xml _build/schemas/
 	$(Q)cp $(VV)  $(UUID)/schemas/gschemas.compiled _build/schemas/
 	$(Q)sed -i 's/"version": -1/"version": "$(VERSION)"/'  _build/metadata.json;
+	$(call msg,$@,Extension built, saved to: _build/)
 	$(call msg,$@,OK)
 
 clean:: build.clean
