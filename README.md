@@ -40,7 +40,7 @@ Before installing, ensure you have the necessary system packages (note that if y
 
 - Arch Linux:
   ```
-  sudo pacman -S libgtop networkmanager gnome-system-monitor clutter
+  sudo pacman -S libgtop gnome-system-monitor clutter
   ```
 
 - openSUSE (Leap 42.1):
