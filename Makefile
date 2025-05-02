@@ -25,15 +25,9 @@ GSCHEMA_COMPILED = $(UUID)/schemas/gschemas.compiled
 ifeq ($(strip $(DESTDIR)),)
   INSTALLBASE = $(HOME)/.local/share/gnome-shell/extensions
   SCHEMAINSTALLBASE = $(HOME)/.local/share/glib-2.0/schemas
-  SUDO=
 else
   INSTALLBASE = $(DESTDIR)usr/share/gnome-shell/extensions
   SCHEMAINSTALLBASE = $(DESTDIR)usr/share/glib-2.0/schemas
-ifeq ($(BUILD_FOR_RPM),1)
-  SUDO=
-else
-  SUDO=sudo
-endif
 endif
 
 ifdef VERSION
@@ -98,14 +92,14 @@ help:
 PHONY += install remove
 
 install: remove build gschemas-install
-	$(call msg,$@,$(SUDO) $(INSTALLBASE)/$(INSTALLNAME))
-	$(Q) $(SUDO) mkdir -p $(INSTALLBASE)/$(INSTALLNAME)
-	$(Q) $(SUDO) cp $(VV) -r ./_build/* $(INSTALLBASE)/$(INSTALLNAME)/
+	$(call msg,$@,Installing to $(INSTALLBASE)/$(INSTALLNAME))
+	$(Q) mkdir -p $(INSTALLBASE)/$(INSTALLNAME)
+	$(Q) cp $(VV) -r ./_build/* $(INSTALLBASE)/$(INSTALLNAME)/
 	$(call msg,$@,OK)
 	$(call msg,$@,Please reload GNOME Shell and enable the extension)
 
 remove:
-	$(call msg,$@,$(SUDO) $(INSTALLBASE)/$(INSTALLNAME))
+	$(call msg,$@,Removing $(INSTALLBASE)/$(INSTALLNAME))
 ifeq ($(strip $(BUILD_FOR_RPM)),)
 	$(Q) gnome-extensions uninstall --quiet $(UUID) || true
 	$(Q) rm -rf $(INSTALLBASE)/$(INSTALLNAME) 2>/dev/null || true
