@@ -91,7 +91,7 @@ help:
 
 PHONY += install remove
 
-install: remove build gschemas-install
+install: build gschemas-install
 	$(call msg,$@,Installing to $(INSTALLBASE)/$(INSTALLNAME))
 	$(Q) mkdir -p $(INSTALLBASE)/$(INSTALLNAME)
 	$(Q) cp $(VV) -r ./_build/* $(INSTALLBASE)/$(INSTALLNAME)/
