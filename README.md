@@ -98,10 +98,10 @@ After installation, the extension will be available for enabling in GNOME Extens
    ```
    git clone https://github.com/mgalgs/gnome-shell-system-monitor-next-applet.git
    ```
-2. Create a symlink:
+2. Install:
    ```
-   cd ~/.local/share/gnome-shell/extensions
-   ln -sv /path/to/gnome-shell-system-monitor-applet/system-monitor-next@paradoxxx.zero.gmail.com/
+   cd gnome-shell-system-monitor-next-applet
+   make install
    ```
 3. Reload GNOME Shell:
    - X11: Press `Alt+F2`, type `r`, and press Enter
@@ -112,7 +112,11 @@ After installation, the extension will be available for enabling in GNOME Extens
    ```
 
 Now you can hack away on the extension in your clone of the repo and test
-your changes by reloading GNOME Shell.
+your changes by running:
+
+    make uninstall install
+
+and reloading GNOME Shell.
 
 ## Usage
 
