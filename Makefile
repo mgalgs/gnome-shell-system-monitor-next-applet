@@ -81,7 +81,7 @@ help:
 	@echo  ''
 	@echo  '  zip-file  - build and zip ./$(UUID).zip'
 	@echo  '  clean     - remove most generated files'
-	@echo  '  extension - rebuild schemas/gschemas.compiled'
+	@echo  '  gschemas  - rebuild schemas/gschemas.compiled'
 	@echo  '  translate - generate translation from po/ files'
 	@echo  ''
 	@echo  'control verbosity:'
@@ -127,13 +127,13 @@ zip-file.clean:
 	$(call msg,$@,OK)
 
 
-PHONY += extension extension.clean _drop-gschemas
+PHONY += gschemas gschemas.clean _drop-gschemas
 
-extension: _drop-gschemas ./$(UUID)/schemas/gschemas.compiled
+gschemas: _drop-gschemas ./$(UUID)/schemas/gschemas.compiled
 	$(call msg,$@,OK)
 
-clean:: extension.clean
-extension.clean:
+clean:: gschemas.clean
+gschemas.clean:
 	$(Q)git checkout -f -- ./$(UUID)/schemas/gschemas.compiled
 	$(call msg,$@,OK)
 
@@ -166,7 +166,7 @@ build.clean:
 	$(call msg,$@,OK)
 
 PHONY += translate
-translate: extension
+translate: gschemas
 	$(Q)cd po;\
            ./compile.sh ../system-monitor-next@paradoxxx.zero.gmail.com/locale \
 	   | tr '\n' ' ' \
