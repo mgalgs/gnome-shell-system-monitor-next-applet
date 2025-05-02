@@ -15,15 +15,20 @@ BASE_MODULES = \
   $(UUID)/stylesheet.css \
   $(UUID)/gpu_usage.sh
 
+GSCHEMA_XML = $(UUID)/schemas/org.gnome.shell.extensions.system-monitor-next-applet.gschema.xml
+GSCHEMA_COMPILED = $(UUID)/schemas/gschemas.compiled
+
 # ---------
 # variables
 # ---------
 
 ifeq ($(strip $(DESTDIR)),)
   INSTALLBASE = $(HOME)/.local/share/gnome-shell/extensions
+  SCHEMAINSTALLBASE = $(HOME)/.local/share/glib-2.0/schemas
   SUDO=
 else
-  INSTALLBASE = $(DESTDIR)/usr/share/gnome-shell/extensions
+  INSTALLBASE = $(DESTDIR)usr/share/gnome-shell/extensions
+  SCHEMAINSTALLBASE = $(DESTDIR)usr/share/glib-2.0/schemas
 ifeq ($(BUILD_FOR_RPM),1)
   SUDO=
 else
@@ -92,7 +97,7 @@ help:
 
 PHONY += install remove
 
-install: remove build
+install: remove build gschemas-install
 	$(call msg,$@,$(SUDO) $(INSTALLBASE)/$(INSTALLNAME))
 	$(Q) $(SUDO) mkdir -p $(INSTALLBASE)/$(INSTALLNAME)
 	$(Q) $(SUDO) cp $(VV) -r ./_build/* $(INSTALLBASE)/$(INSTALLNAME)/
@@ -130,20 +135,27 @@ zip-file.clean:
 
 PHONY += gschemas gschemas.clean _drop-gschemas
 
-gschemas: _drop-gschemas ./$(UUID)/schemas/gschemas.compiled
+gschemas: _drop-gschemas $(GSCHEMA_COMPILED)
+	$(call msg,$@,OK)
+
+gschemas-install: $(GSCHEMA_XML)
+	$(Q)mkdir -p $(SCHEMAINSTALLBASE)
+	$(Q)cp $(VV) $(GSCHEMA_XML) $(SCHEMAINSTALLBASE)
+	$(Q)glib-compile-schemas $(SCHEMAINSTALLBASE)
+	$(call msg,$@,gschema installed to $(SCHEMAINSTALLBASE))
 	$(call msg,$@,OK)
 
 clean:: gschemas.clean
 gschemas.clean:
-	$(Q)git checkout -f -- ./$(UUID)/schemas/gschemas.compiled
+	$(Q)git checkout -f -- $(GSCHEMA_COMPILED)
 	$(call msg,$@,OK)
 
-./$(UUID)/schemas/gschemas.compiled: ./$(UUID)/schemas/org.gnome.shell.extensions.system-monitor-next-applet.gschema.xml
+$(GSCHEMA_COMPILED): $(GSCHEMA_XML)
 	$(Q)glib-compile-schemas ./$(UUID)/schemas/
 	$(call msg,gschemas,OK)
 
 _drop-gschemas:
-	$(Q)rm -f ./$(UUID)/schemas/gschemas.compiled
+	$(Q)rm -f $(GSCHEMA_COMPILED)
 
 
 PHONY += build build.clean
@@ -156,8 +168,8 @@ build: gschemas translate
 	$(Q)mkdir -p _build/locale
 	$(Q)cp $(VV) -r $(UUID)/locale/* _build/locale/
 	$(Q)mkdir -p _build/schemas
-	$(Q)cp $(VV) $(UUID)/schemas/*.xml _build/schemas/
-	$(Q)cp $(VV)  $(UUID)/schemas/gschemas.compiled _build/schemas/
+	$(Q)cp $(VV) $(GSCHEMA_XML) _build/schemas/
+	$(Q)cp $(VV) $(GSCHEMA_COMPILED) _build/schemas/
 	$(Q)sed -i 's/"version": -1/"version": "$(VERSION)"/'  _build/metadata.json;
 	$(call msg,$@,Extension built, saved to: _build/)
 	$(call msg,$@,OK)
