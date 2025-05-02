@@ -148,7 +148,7 @@ _drop-gschemas:
 
 PHONY += build build.clean
 
-build: translate
+build: gschemas translate
 	$(Q)mkdir -p _build
 	$(Q)cp $(VV) $(BASE_MODULES) _build
 	$(Q)mkdir -p _build/ui
