@@ -18,7 +18,7 @@ BASE_MODULES = \
 GSCHEMA_XML = $(UUID)/schemas/org.gnome.shell.extensions.system-monitor-next-applet.gschema.xml
 GSCHEMA_COMPILED = $(UUID)/schemas/gschemas.compiled
 
-VERSION = $(shell git rev-parse HEAD)
+VERSION ?= $(shell git rev-parse HEAD)
 ZIPFILE = $(UUID).zip
 
 INSTALLBASE = $(PREFIX)/share/gnome-shell/extensions
