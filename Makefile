@@ -76,7 +76,7 @@ install: clean build gschemas.install
 uninstall:
 	$(Q)gnome-extensions uninstall $(UUID)
 
-clean: zip-file.clean gschemas.clean build.clean
+clean: zip-file.clean build.clean
 
 zip-file: clean build
 	$(Q)cd _build ; zip $(V) -qr $(ZIPFILE) .
@@ -96,14 +96,6 @@ gschemas.install: $(GSCHEMA_XML)
 	$(Q)mkdir -p "$(SCHEMAINSTALLBASE)"
 	$(Q)cp $(VV) $(GSCHEMA_XML) "$(SCHEMAINSTALLBASE)"
 	$(call msg,$@,gschema installed to $(SCHEMAINSTALLBASE). You might need to run "glib-compile-schemas $(SCHEMAINSTALLBASE)")
-	$(call msg,$@,OK)
-
-gschemas.uninstall:
-	$(Q)rm -f "$(SCHEMAINSTALLBASE)/$(GSCHEMA_XML)"
-	$(Q)glib-compile-schemas "$(SCHEMAINSTALLBASE)"
-
-gschemas.clean:
-	$(Q)git checkout -f -- $(GSCHEMA_COMPILED)
 	$(call msg,$@,OK)
 
 $(GSCHEMA_COMPILED): $(GSCHEMA_XML)
@@ -137,7 +129,6 @@ translate:
 	zip-file \
 	zip-file.clean \
 	gschemas \
-	gschemas.clean \
 	gschemas.install \
 	build \
 	build.clean \
