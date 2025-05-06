@@ -1,4 +1,4 @@
-name: Arch Linux Build Test
+name: PR Checks
 
 on:
   pull_request:
@@ -6,7 +6,8 @@ on:
       - master
 
 jobs:
-  build:
+  # Make sure downstream packages still build and install
+  build-tests:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
