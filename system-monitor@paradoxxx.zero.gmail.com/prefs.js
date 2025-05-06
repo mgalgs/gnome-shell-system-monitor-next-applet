@@ -503,6 +503,11 @@ const App = class SystemMonitor_App {
                 this.items.push(item)
                 this.hbox1.add(item)
                 Schema.bind(key, item, 'active', Gio.SettingsBindFlags.DEFAULT);
+            } else if (key === 'left-display') {
+                let item = new Gtk.CheckButton({label: _('Display on the Left')})
+                this.items.push(item)
+                this.hbox1.add(item)
+                Schema.bind(key, item, 'active', Gio.SettingsBindFlags.DEFAULT);
             } else if (key === 'compact-display') {
                 let item = new Gtk.CheckButton({label: _('Compact Display')})
                 this.items.push(item)
