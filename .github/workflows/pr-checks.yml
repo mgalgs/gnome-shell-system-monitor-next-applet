@@ -7,10 +7,24 @@ on:
 
 jobs:
   # Make sure downstream packages still build and install
-  build-tests:
+  arch-build-tests:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
     - name: Arch Linux build test
       uses: ./actions/build-test-arch/
+  rpm-build-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        fedora-version: ['fc43', 'fc42', 'fc41']
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - name: RPM build test
+      run: |
+        SOURCES="$PWD"
+        cd ./actions/build-test-rpm/
+        make image-${{ matrix.fedora-version }}
+        docker run --rm -ti -v "$SOURCES":/source -e GSSMN_SOURCES=/source -e GSSMN_SHA1=${{ github.sha }} mgalgs/system-monitor-next-build-test-rpm:${{ matrix.fedora-version }}
