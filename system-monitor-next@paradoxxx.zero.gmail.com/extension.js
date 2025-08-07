@@ -2422,7 +2422,7 @@ export default class SystemMonitorExtension extends Extension {
 
         this.menuTimeout = null;
 
-        let panel = Main.panel._rightBox;
+        let panel = Main.panel._leftBox;
         if (this._Schema.get_boolean('center-display')) {
             panel = Main.panel._centerBox;
         }
