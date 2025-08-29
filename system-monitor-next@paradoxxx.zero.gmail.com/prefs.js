@@ -200,7 +200,7 @@ const SMGeneralPrefsPage = GObject.registerClass({
 const SMMonitorExpanderRow = GObject.registerClass({
     GTypeName: 'SMMonitorExpanderRow',
     Signals: {
-        'updated': { param_types: [GObject.TYPE_OBJECT] },
+        'updated': { param_types: [GObject.TYPE_JSOBJECT] },
     },
 }, class SMMonitorExpanderRow extends Adw.ExpanderRow {
     constructor(config, params = {}) {
@@ -514,7 +514,6 @@ const SMMonitorsPage = GObject.registerClass({
 
         typeRow.connect('notify::selected', () => {
             const type = types[typeRow.selected];
-            deviceModel.remove_all();
             let devices = [];
             switch (type) {
                 case 'cpu':
@@ -528,7 +527,7 @@ const SMMonitorsPage = GObject.registerClass({
                     devices = getAvailableDisks();
                     break;
                 case 'gpu':
-                    devices = ['0', '1', '2', '3'];
+                    devices = ['0', '1', '2', '3']; //TODO
                     break;
                 case 'thermal':
                     devices = Object.keys(check_sensors('temp'));
@@ -539,7 +538,7 @@ const SMMonitorsPage = GObject.registerClass({
                 default:
                     devices = ['default'];
             }
-            devices.forEach(d => deviceModel.append(d));
+            deviceModel.splice(0, deviceModel.get_n_items(), devices);
             deviceRow.selected = 0;
         });
         typeRow.notify('selected');
