@@ -16,9 +16,14 @@
   </enum>
   <schema id="org.gnome.shell.extensions.system-monitor-next-applet" path="/org/gnome/shell/extensions/system-monitor-next-applet/">
     <key name="settings-schema-version" type="i">
-      <default>0</default>
+      <default>1</default>
       <summary>Settings schema version</summary>
       <description>Internal flag to track the version of the settings schema. Checked during startup to see if migration is needed.</description>
+    </key>
+    <key name="monitors" type="as">
+      <default>[]</default>
+      <summary>List of configured monitors</summary>
+      <description>Each string is a JSON object defining a monitor instance and its settings.</description>
     </key>
     <key name="icon-display" type="b">
       <default>true</default>
