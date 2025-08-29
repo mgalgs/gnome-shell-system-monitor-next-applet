@@ -490,27 +490,42 @@ const SMMonitorsPage = GObject.registerClass({
     }
 
     _onAddMonitor() {
-        const dialog = new Gtk.Dialog({
+        const dialog = new Adw.Window({
             title: _('Add New Monitor'),
             transient_for: this.get_root(),
             modal: true,
-        });
-        dialog.add_button(_('Cancel'), Gtk.ResponseType.CANCEL);
-        dialog.add_button(_('Add'), Gtk.ResponseType.OK);
-        dialog.set_default_response(Gtk.ResponseType.OK);
+                width_request: 350,
+                height_request: 250,
+            });
 
-        const content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, margin_top: 10, margin_bottom: 10, margin_start: 10, margin_end: 10 });
-        dialog.get_content_area().append(content);
+        const mainVbox = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 12,
+        });
+
+        const toolbarView = new Adw.ToolbarView({
+            content: mainVbox,
+        });
+        toolbarView.add_top_bar(new Adw.HeaderBar());
+
+        dialog.set_content(toolbarView);
+
+        const prefsGroup = new Adw.PreferencesGroup({
+            margin_top: 10,
+            margin_start: 10,
+            margin_end: 10,
+        });
+        mainVbox.append(prefsGroup);
 
         const typeModel = new Gtk.StringList();
         const types = ['cpu', 'memory', 'swap', 'net', 'disk', 'gpu', 'thermal', 'fan', 'battery', 'freq'];
         types.forEach(t => typeModel.append(t.capitalize()));
         const typeRow = new Adw.ComboRow({ title: _('Type'), model: typeModel });
-        content.append(typeRow);
+        prefsGroup.add(typeRow);
 
         const deviceModel = new Gtk.StringList();
         const deviceRow = new Adw.ComboRow({ title: _('Device'), model: deviceModel });
-        content.append(deviceRow);
+        prefsGroup.add(deviceRow);
 
         typeRow.connect('notify::selected', () => {
             const type = types[typeRow.selected];
@@ -543,15 +558,33 @@ const SMMonitorsPage = GObject.registerClass({
         });
         typeRow.notify('selected');
 
-        dialog.connect('response', (dlg, response) => {
-            if (response === Gtk.ResponseType.OK) {
+        // Action buttons at the bottom
+        const actionBox = new Gtk.Box({
+            orientation: Gtk.Orientation.HORIZONTAL,
+            spacing: 12,
+            halign: Gtk.Align.END,
+            margin_bottom: 10,
+            margin_end: 10,
+        });
+        mainVbox.append(actionBox);
+
+        const cancelButton = new Gtk.Button({ label: _('Cancel') });
+        cancelButton.connect('clicked', () => dialog.close());
+        actionBox.append(cancelButton);
+
+        const addButton = new Gtk.Button({
+            label: _('Add'),
+            css_classes: ['suggested-action'],
+        });
+        addButton.connect('clicked', () => {
                 const type = types[typeRow.selected];
                 const device = deviceModel.get_string(deviceRow.selected);
                 this._createNewMonitor(type, device);
-            }
-            dialog.destroy();
+                dialog.close();
         });
-        dialog.show();
+        actionBox.append(addButton);
+
+        dialog.present();
     }
 
     _createNewMonitor(type, device) {
