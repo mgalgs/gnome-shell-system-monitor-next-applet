@@ -194,6 +194,9 @@ const SMMonitorExpanderRow = GObject.registerClass({
     GTypeName: 'SMMonitorExpanderRow',
     Template: import.meta.url.replace('prefs.js', 'ui/prefsExpanderRow.ui'),
     InternalChildren: ['display', 'show_menu', 'show_text', 'style', 'graph_width', 'refresh_time'],
+    Signals: {
+        'updated': { param_types: [GObject.TYPE_OBJECT] },
+    },
 }, class SMMonitorExpanderRow extends Adw.ExpanderRow {
     constructor(config, params = {}) {
         super(params);
@@ -295,8 +298,6 @@ const SMMonitorExpanderRow = GObject.registerClass({
     }
 });
 
-GObject.signal_new('updated', SMMonitorExpanderRow, GObject.SignalFlags.RUN_FIRST, GObject.TYPE_OBJECT, []);
-
 const SMMonitorsPage = GObject.registerClass({
     GTypeName: 'SMMonitorsPage',
     Template: import.meta.url.replace('prefs.js', 'ui/prefsWidgetSettings.ui'),
@@ -383,7 +384,7 @@ const SMMonitorsPage = GObject.registerClass({
 
         typeRow.connect('notify::selected', () => {
             const type = types[typeRow.selected];
-            deviceModel.splice(0, deviceModel.get_n_items());
+            deviceModel.remove_all();
             let devices = [];
             switch (type) {
                 case 'cpu':

@@ -94,6 +94,8 @@ function migrateFrom1(extension, settings) {
         freq: ['freq'],
     };
 
+    const singletonWidgets = ['memory', 'swap', 'battery'];
+
     function uuid() {
         return Gio.dbus_generate_guid();
     }
@@ -103,16 +105,19 @@ function migrateFrom1(extension, settings) {
             continue;
         }
 
-        let devices = settings.get_strv(`${type}-devices`);
-        if (devices.length === 0) {
-            if (['memory', 'swap', 'battery'].includes(type)) {
-                devices = ['default'];
-            } else if (type === 'thermal' || type === 'fan') {
-                const sensorType = type === 'thermal' ? 'temp' : 'fan';
-                devices = Object.keys(check_sensors(sensorType));
-                if (devices.length === 0) continue;
-            } else {
-                devices = ['all'];
+        let devices;
+        if (singletonWidgets.includes(type)) {
+            devices = ['default'];
+        } else {
+            devices = settings.get_strv(`${type}-devices`);
+            if (devices.length === 0) {
+                if (type === 'thermal' || type === 'fan') {
+                    const sensorType = type === 'thermal' ? 'temp' : 'fan';
+                    devices = Object.keys(check_sensors(sensorType));
+                    if (devices.length === 0) continue;
+                } else {
+                    devices = ['all'];
+                }
             }
         }
 

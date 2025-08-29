@@ -941,10 +941,6 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
 
         this.restart_update_timer(l_limit(this.config['refresh-time']));
 
-        if (this.elt === 'thermal') {
-            this.reset_style();
-        }
-
         this.label = new St.Label({text: _(this.elt_short || this.elt),
             style_class: Style.get('sm-status-label')});
         this.label.visible = this.config['show-text'];
@@ -978,6 +974,11 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         for (let item in this.text_items) {
             this.text_box.add_child(this.text_items[item]);
         }
+
+        if (this.elt === 'thermal') {
+            this.reset_style();
+        }
+
         this.actor.add_child(this.chart.actor);
         change_style.call(this);
 
@@ -2143,8 +2144,15 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
     }
     _apply() {
         this.text_items[0].text = this.menu_items[0].text = this.temperature_text();
-        this.temp_over_threshold = this.temperature > this.config.threshold;
-        this.vals = [this.temperature];
+
+        if (typeof this.temperature === 'number') {
+            this.temp_over_threshold = this.temperature > this.config.threshold;
+            this.vals = [this.temperature];
+        } else {
+            this.temp_over_threshold = false;
+            this.vals = [0]; // Default to 0 for the graph if data isn't ready
+        }
+
         this.tip_vals[0] = this.temperature_text();
         this.text_items[1].text = this.menu_items[1].text = this.temperature_symbol();
         this.tip_unit_labels[0].text = _(this.temperature_symbol());
@@ -2173,6 +2181,9 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
     }
     temperature_text() {
         let temperature = this.temperature;
+        if (typeof temperature !== 'number')
+            return temperature.toString();
+
         if (this.fahrenheit_unit) {
             temperature = Math.round(temperature * 1.8 + 32);
         }
