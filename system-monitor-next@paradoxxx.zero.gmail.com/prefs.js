@@ -35,6 +35,127 @@ function color_to_hex(color) {
     return output;
 }
 
+// Helper functions to get available devices
+function getAvailableCpus() {
+    let cpus = ['all'];
+    try {
+        const GTop = imports.gi.GTop;
+        let numCores = GTop.glibtop_get_sysinfo().ncpu;
+        for (let i = 0; i < numCores; i++) {
+            cpus.push(i.toString());
+        }
+    } catch (e) {
+        // Default to 4 cores if we can't detect
+        for (let i = 0; i < 4; i++) {
+            cpus.push(i.toString());
+        }
+    }
+    return cpus;
+}
+
+function getAvailableNetworkInterfaces() {
+    let interfaces = ['all'];
+    try {
+        let file = Gio.file_new_for_path('/proc/net/dev');
+        let [success, contents] = file.load_contents(null);
+        if (success) {
+            let lines = new TextDecoder('utf-8').decode(contents).split('\n');
+            for (let i = 2; i < lines.length; i++) {
+                let iface = lines[i].trim().split(':')[0];
+                if (iface && iface !== 'lo') {
+                    interfaces.push(iface);
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Error getting network interfaces: ' + e);
+    }
+    return interfaces;
+}
+
+function getAvailableDisks() {
+    let disks = ['all'];
+    try {
+        let file = Gio.file_new_for_path('/proc/diskstats');
+        let [success, contents] = file.load_contents(null);
+        if (success) {
+            let lines = new TextDecoder('utf-8').decode(contents).split('\n');
+            let seenDisks = new Set();
+            for (let line of lines) {
+                let parts = line.trim().split(/\s+/);
+                if (parts.length > 2) {
+                    let disk = parts[2];
+                    // Filter to main disk devices
+                    if (disk && /^(sd[a-z]|nvme\d+n\d+|mmcblk\d+)$/.test(disk)) {
+                        seenDisks.add(disk);
+                    }
+                }
+            }
+            disks.push(...Array.from(seenDisks));
+        }
+    } catch (e) {
+        console.error('Error getting disks: ' + e);
+    }
+    return disks;
+}
+
+// Device selection widget
+const DeviceSelector = GObject.registerClass({
+    GTypeName: 'DeviceSelector',
+}, class DeviceSelector extends Adw.PreferencesGroup {
+    constructor(settings, widgetType, availableDevices) {
+        super({
+            title: _(widgetType.capitalize() + ' Devices'),
+            description: _('Select which devices to monitor')
+        });
+
+        this._settings = settings;
+        this._widgetType = widgetType;
+        this._availableDevices = availableDevices;
+        this._checkboxes = new Map();
+
+        // Get current selected devices
+        let selectedDevices = this._settings.get_strv(`${widgetType}-devices`);
+
+        // Create checkbox for each available device
+        for (let device of availableDevices) {
+            let row = new Adw.ActionRow({
+                title: device === 'all' ? _('All (Combined)') : device
+            });
+
+            let checkbox = new Gtk.CheckButton({
+                active: selectedDevices.includes(device),
+                valign: Gtk.Align.CENTER
+            });
+
+            checkbox.connect('toggled', () => {
+                this._updateDeviceList();
+            });
+
+            this._checkboxes.set(device, checkbox);
+            row.add_suffix(checkbox);
+            this.add(row);
+        }
+    }
+
+    _updateDeviceList() {
+        let selectedDevices = [];
+        for (let [device, checkbox] of this._checkboxes) {
+            if (checkbox.active) {
+                selectedDevices.push(device);
+            }
+        }
+
+        // If nothing selected, default to 'all'
+        if (selectedDevices.length === 0) {
+            selectedDevices = ['all'];
+            this._checkboxes.get('all').active = true;
+        }
+
+        this._settings.set_strv(`${this._widgetType}-devices`, selectedDevices);
+    }
+});
+
 // ** General Preferences Page **
 const SMGeneralPrefsPage = GObject.registerClass({
     GTypeName: 'SMGeneralPrefsPage',
@@ -401,11 +522,10 @@ const SMExpanderRow = GObject.registerClass({
 
                 this._addColorsItem(cpuColors);
 
-                let item = new Adw.SwitchRow({title: _('Display Individual Cores')});
-                this._settings.bind('cpu-individual-cores', item,
-                    'active', Gio.SettingsBindFlags.DEFAULT
-                );
-                this.add_row(item);
+                // Add device selector
+                let deviceSelector = new DeviceSelector(this._settings, 'cpu', getAvailableCpus());
+                this.add_row(deviceSelector);
+
                 break;
             }
             case 'freq': {
@@ -418,6 +538,7 @@ const SMExpanderRow = GObject.registerClass({
                 let stringListModel = new Gtk.StringList();
                 stringListModel.append(_('Max across all cores'));
                 stringListModel.append(_('Average across all cores'));
+                stringListModel.append(_('Per core'));
 
                 let displayModeRow = new Adw.ComboRow({
                     title: _('Value'),
@@ -430,6 +551,10 @@ const SMExpanderRow = GObject.registerClass({
                 });
 
                 this.add_row(displayModeRow);
+
+                // Add device selector
+                let deviceSelector = new DeviceSelector(this._settings, 'freq', getAvailableCpus());
+                this.add_row(deviceSelector);
                 break;
             }
             case 'memory': {
@@ -466,6 +591,10 @@ const SMExpanderRow = GObject.registerClass({
                     'active', Gio.SettingsBindFlags.DEFAULT
                 );
                 this.add_row(item);
+
+                // Add device selector
+                let deviceSelector = new DeviceSelector(this._settings, 'net', getAvailableNetworkInterfaces());
+                this.add_row(deviceSelector);
                 break;
             }
             case 'disk': {
@@ -489,6 +618,10 @@ const SMExpanderRow = GObject.registerClass({
                     this._settings.set_enum('disk-usage-style', widget.selected);
                 });
                 this.add_row(item);
+
+                // Add device selector
+                let deviceSelector = new DeviceSelector(this._settings, 'disk', getAvailableDisks());
+                this.add_row(deviceSelector);
                 break;
             }
             case 'gpu': {
@@ -498,6 +631,11 @@ const SMExpanderRow = GObject.registerClass({
                 ];
 
                 this._addColorsItem(gpuColors);
+
+                // Add device selector for GPUs
+                let gpuDevices = ['0', '1', '2', '3']; // Support up to 4 GPUs
+                let deviceSelector = new DeviceSelector(this._settings, 'gpu', gpuDevices);
+                this.add_row(deviceSelector);
                 break;
             }
             case 'thermal': {
@@ -506,33 +644,19 @@ const SMExpanderRow = GObject.registerClass({
                 ];
 
                 const labels = Object.keys(check_sensors('temp'));
-                let stringListModel = new Gtk.StringList();
 
-                if (labels.length === 0)
-                    stringListModel.append(_('No temperature sensors found'));
-                else if (labels.length === 1)
-                    this._settings.set_string('thermal-sensor-label', labels[0]);
-
-                labels.forEach(str => {
-                    stringListModel.append(str);
-                });
-
-                let item = new Adw.ComboRow({title: _('Sensor:')});
-                item.set_model(stringListModel);
-
-                try {
-                    item.set_selected(labels.indexOf(this._settings.get_string('thermal-sensor-label')));
-                } catch (e) {
-                    item.set_selected(0);
+                if (labels.length > 0) {
+                    // Add device selector for thermal sensors
+                    let deviceSelector = new DeviceSelector(this._settings, 'thermal', labels);
+                    this.add_row(deviceSelector);
+                } else {
+                    let item = new Adw.ActionRow({ title: _('No temperature sensors found') });
+                    this.add_row(item);
                 }
 
-                item.connect('notify::selected', widget => {
-                    this._settings.set_string('thermal-sensor-label', labels[widget.selected]);
-                });
-                this.add_row(item);
                 this._addColorsItem(thermalColors);
 
-                item = new Adw.SpinRow({
+                let item = new Adw.SpinRow({
                     title: _('Temperature threshold (0 to disable)'),
                     adjustment: new Gtk.Adjustment({
                         value: 0,
@@ -564,30 +688,15 @@ const SMExpanderRow = GObject.registerClass({
                 this._addColorsItem(fanColors);
 
                 const labels = Object.keys(check_sensors('fan'));
-                let stringListModel = new Gtk.StringList();
 
-                if (labels.length === 0)
-                    stringListModel.append(_('No fan sensors found'));
-                else if (labels.length === 1)
-                    this._settings.set_string('fan-sensor-label', labels[0]);
-
-                labels.forEach(str => {
-                    stringListModel.append(str);
-                });
-
-                let item = new Adw.ComboRow({title: _('Sensor:')});
-                item.set_model(stringListModel);
-
-                try {
-                    item.set_selected(labels.indexOf(this._settings.get_string('fan-sensor-label')));
-                } catch (e) {
-                    item.set_selected(0);
+                if (labels.length > 0) {
+                    // Add device selector for fan sensors
+                    let deviceSelector = new DeviceSelector(this._settings, 'fan', labels);
+                    this.add_row(deviceSelector);
+                } else {
+                    let item = new Adw.ActionRow({ title: _('No fan sensors found') });
+                    this.add_row(item);
                 }
-
-                item.connect('notify::selected', widget => {
-                    this._settings.set_string('fan-sensor-label', labels[widget.selected]);
-                });
-                this.add_row(item);
                 break;
             }
             case 'battery': {

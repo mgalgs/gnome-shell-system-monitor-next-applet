@@ -907,6 +907,7 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this.menu_items = [];
         this.menu_visible = true;
         this.timeout = null;
+        this.device_id = '';
 
         // Maximum value preserved during cooldown period
         this.graph_scale_max_including_cooldown = 0;
@@ -1339,12 +1340,20 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
         this.max = 100;
 
         this.cpuid = cpuid;
+        if (cpuid === 'all') {
+            this.cpuid = -1;
+            this.device_id = 'all';
+        } else {
+            this.cpuid = parseInt(cpuid);
+            this.device_id = cpuid;
+        }
+
         this.gtop = new GTop.glibtop_cpu();
         this.last = [0, 0, 0, 0, 0];
         this.current = [0, 0, 0, 0, 0];
         try {
             this.total_cores = GTop.glibtop_get_sysinfo().ncpu;
-            if (cpuid === -1) {
+            if (this.cpuid === -1) {
                 this.max *= this.total_cores;
             }
         } catch (e) {
@@ -1354,9 +1363,19 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
         this.last_total = 0;
         this.usage = [0, 0, 0, 1, 0];
         this.item_name = _('Cpu');
-        if (cpuid !== -1) {
-            this.item_name += ' ' + (cpuid + 1);
-        } // append cpu number to cpu name in popup
+        if (this.cpuid !== -1) {
+            this.item_name += ' ' + (this.cpuid + 1);
+        } else {
+            this.item_name = _('CPU Total');
+        }
+        // Update label based on device
+        if (this.device_id !== 'all') {
+            let coreNum = parseInt(this.device_id) + 1;
+            this.label.text = _('CPU') + coreNum;
+            this.elt_short = 'cpu' + coreNum;
+        } else {
+            this.label.text = _('CPU');
+        }
         // ElementBase.prototype._init.call(this);
         this.tip_format();
         this.update();
@@ -1406,40 +1425,6 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
                 this.usage = [0, 0, 0, 1, 0];
             }
         }
-
-        // GTop.glibtop_get_cpu(this.gtop);
-        // // display global cpu usage on 1 graph
-        // if (this.cpuid == -1) {
-        //     this.current[0] = this.gtop.user;
-        //     this.current[1] = this.gtop.sys;
-        //     this.current[2] = this.gtop.nice;
-        //     this.current[3] = this.gtop.idle;
-        //     this.current[4] = this.gtop.iowait;
-        // } else {
-        //     // display cpu usage for given core
-        //     this.current[0] = this.gtop.xcpu_user[this.cpuid];
-        //     this.current[1] = this.gtop.xcpu_sys[this.cpuid];
-        //     this.current[2] = this.gtop.xcpu_nice[this.cpuid];
-        //     this.current[3] = this.gtop.xcpu_idle[this.cpuid];
-        //     this.current[4] = this.gtop.xcpu_iowait[this.cpuid];
-        // }
-        //
-        // let delta = 0;
-        // if (this.cpuid == -1)
-        //     delta = (this.gtop.total - this.last_total)/(100*this.total_cores);
-        // else
-        //     delta = (this.gtop.xcpu_total[this.cpuid] - this.last_total)/100;
-        //
-        // if (delta > 0) {
-        //     for (let i = 0;i < 5;i++) {
-        //         this.usage[i] = Math.round((this.current[i] - this.last[i])/delta);
-        //         this.last[i] = this.current[i];
-        //     }
-        //     if (this.cpuid == -1)
-        //         this.last_total = this.gtop.total;
-        //     else
-        //         this.last_total = this.gtop.xcpu_total[this.cpuid];
-        // }
     }
     _apply() {
         let percent = 0;
@@ -1499,50 +1484,45 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
     }
 }
 
-// Check if one graph per core must be displayed and create the
-//    appropriate number of cpu items
+// Create CPU instances based on device settings
 function createCpus(extension) {
     let array = [];
-    let numcores = 1;
+    let devices = extension._Schema.get_strv('cpu-devices');
 
-    if (extension._Schema.get_boolean('cpu-individual-cores')) {
-        // get number of cores
-        let gtop = new GTop.glibtop_cpu();
-        try {
-            numcores = GTop.glibtop_get_sysinfo().ncpu;
-        } catch (e) {
-            console.error(e);
-            numcores = 1;
-        }
-    }
-
-    // there are several cores to display,
-    // instantiate each cpu
-    if (numcores > 1) {
-        for (let i = 0; i < numcores; i++) {
-            array.push(new Cpu(extension, i));
-        }
+    if (devices.length === 0 || (devices.length === 1 && devices[0] === 'all')) {
+        // Default behavior - single combined CPU monitor
+        array.push(new Cpu(extension, 'all'));
     } else {
-        // individual cores option is not set or we failed to
-        // get the number of cores, create a global cpu item
-        array.push(new Cpu(extension, -1));
+        // Create individual CPU monitors for specified cores
+        for (let device of devices) {
+            array.push(new Cpu(extension, device));
+        }
     }
 
     return array;
 }
 
 const Disk = class SystemMonitor_Disk extends ElementBase {
-    constructor(extension) {
+    constructor(extension, device = 'all') {
         super(extension, {
             elt: 'disk',
             item_name: _('Disk'),
             color_name: ['read', 'write']
         });
+        this.device_filter = device;
+        this.device_id = device;
         this.mounts = extension._MountsMonitor.get_mounts();
         extension._MountsMonitor.add_listener(this.update_mounts.bind(this));
         this.last = [0, 0];
         this.usage = [0, 0];
         this.last_time = 0;
+
+        // Update label based on device
+        if (device !== 'all') {
+            this.label.text = device.split('/').pop();
+            this.item_name = _('Disk') + ' ' + device;
+        }
+
         this.tip_format(_('MiB/s'));
         this.update();
     }
@@ -1563,6 +1543,15 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
                 if (typeof (entry[1]) === 'undefined') {
                     break;
                 }
+
+                // Filter by device if specified
+                if (this.device_filter !== 'all') {
+                    let deviceName = entry[2];
+                    if (!this.device_filter.includes(deviceName)) {
+                        continue;
+                    }
+                }
+
                 accum[0] += parseInt(entry[5]);
                 accum[1] += parseInt(entry[9]);
             }
@@ -1644,13 +1633,23 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
 }
 
 const Freq = class SystemMonitor_Freq extends ElementBase {
-    constructor(extension) {
+    constructor(extension, device = 'all') {
         super(extension, {
             elt: 'freq',
             item_name: _('Freq'),
             color_name: ['freq']
         });
+        this.device_filter = device;
+        this.device_id = device;
         this.freq = 0;
+
+        // Update label based on device
+        if (device !== 'all') {
+            let coreNum = parseInt(device) + 1;
+            this.label.text = _('F') + coreNum;
+            this.item_name = _('Freq Core ') + coreNum;
+        }
+
         this.tip_format('MHz');
 
         extension._Schema.connect('changed::freq-display-mode', this.update.bind(this));
@@ -1661,29 +1660,41 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
         let total_frequency = 0;
         let max_frequency = 0;
         let num_cpus = GTop.glibtop_get_sysinfo().ncpu;
-        let i = 0;
-        let file = Gio.file_new_for_path(`/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq`);
-        let that = this;
         let display_mode = this.extension._Schema.get_enum('freq-display-mode');
 
-        file.load_contents_async(null, function cb(source, result) {
-            let as_r = source.load_contents_finish(result);
-            let current_freq = parseInt(parse_bytearray(as_r[1]));
+        if (this.device_filter !== 'all') {
+            // Single core frequency
+            let i = parseInt(this.device_filter);
+            let file = Gio.file_new_for_path(`/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq`);
+            file.load_contents_async(null, (source, result) => {
+                let as_r = source.load_contents_finish(result);
+                this.freq = Math.round(parseInt(parse_bytearray(as_r[1])) / 1000);
+            });
+        } else {
+        // All cores - use display mode
+            let i = 0;
+            let file = Gio.file_new_for_path(`/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq`);
+            let that = this;
 
-            total_frequency += current_freq;
-            max_frequency = Math.max(max_frequency, current_freq);
+            file.load_contents_async(null, function cb(source, result) {
+                let as_r = source.load_contents_finish(result);
+                let current_freq = parseInt(parse_bytearray(as_r[1]));
 
-            if (++i >= num_cpus) {
-                if (display_mode === 0) { // 'max' mode
-                    that.freq = Math.round(max_frequency / 1000);
-                } else { // 'average' mode
-                    that.freq = Math.round(total_frequency / num_cpus / 1000);
+                total_frequency += current_freq;
+                max_frequency = Math.max(max_frequency, current_freq);
+
+                if (++i >= num_cpus) {
+                    if (display_mode === 0) { // 'max' mode
+                        that.freq = Math.round(max_frequency / 1000);
+                    } else if (display_mode === 1) { // 'average' mode
+                        that.freq = Math.round(total_frequency / num_cpus / 1000);
+                    }
+                } else {
+                    file = Gio.file_new_for_path(`/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq`);
+                    file.load_contents_async(null, cb.bind(that));
                 }
-            } else {
-                file = Gio.file_new_for_path(`/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq`);
-                file.load_contents_async(null, cb.bind(that));
-            }
-        });
+            });
+        }
     }
     _apply() {
         let value = this.freq.toString();
@@ -1840,12 +1851,14 @@ const Mem = class SystemMonitor_Mem extends ElementBase {
 }
 
 const Net = class SystemMonitor_Net extends ElementBase {
-    constructor(extension) {
+    constructor(extension, device = 'all') {
         super(extension, {
             elt: 'net',
             item_name: _('Net'),
             color_name: ['down', 'downerrors', 'up', 'uperrors', 'collisions']
         });
+        this.device_filter = device;
+        this.device_id = device;
         this.speed_in_bits = false;
         this.ifs = [];
         this.client = NM.Client.new(null);
@@ -1859,10 +1872,19 @@ const Net = class SystemMonitor_Net extends ElementBase {
                     .replace(/\s/g, '') === 'up' &&
                     ifc.indexOf('br') < 0 &&
                     ifc.indexOf('lo') < 0) {
-                    this.ifs.push(ifc);
+                    if (device === 'all' || device === ifc) {
+                        this.ifs.push(ifc);
+                    }
                 }
             }
         }
+
+        // Update label based on device
+        if (device !== 'all') {
+            this.label.text = device;
+            this.item_name = _('Net') + ' ' + device;
+        }
+
         this.gtop = new GTop.glibtop_netload();
         this.last = [0, 0, 0, 0, 0];
         this.usage = [0, 0, 0, 0, 0];
@@ -1890,7 +1912,10 @@ const Net = class SystemMonitor_Net extends ElementBase {
             let iface_list = this.client.get_devices();
             for (let j = 0; j < iface_list.length; j++) {
                 if (iface_list[j].state === NetworkManager.DeviceState.ACTIVATED) {
-                    this.ifs.push(iface_list[j].get_ip_iface() || iface_list[j].get_iface());
+                    let iface = iface_list[j].get_ip_iface() || iface_list[j].get_iface();
+                    if (this.device_filter === 'all' || this.device_filter === iface) {
+                        this.ifs.push(iface);
+                    }
                 }
             }
         } catch (e) {
@@ -2152,7 +2177,7 @@ const Swap = class SystemMonitor_Swap extends ElementBase {
 }
 
 const Thermal = class SystemMonitor_Thermal extends ElementBase {
-    constructor(extension) {
+    constructor(extension, sensor_label) {
         super(extension, {
             elt: 'thermal',
             elt_short: 'thrm',
@@ -2160,25 +2185,35 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
             color_name: ['tz0']
         });
         this.max = 100;
+        this.sensor_label = sensor_label;
+        this.device_id = sensor_label;
         this.sensors = check_sensors("temp");
 
-        this.item_name = _('Thermal');
+        this.item_name = sensor_label ? sensor_label : _('Thermal');
         this.temperature = '-- ';
         this.fahrenheit_unit = extension._Schema.get_boolean(this.elt + '-fahrenheit-unit');
         this.display_error = true;
+
+        // Update label based on sensor
+        if (sensor_label) {
+            let shortLabel = sensor_label.split(' - ').pop();
+            if (shortLabel.length > 6) {
+                shortLabel = shortLabel.substring(0, 6);
+            }
+            this.label.text = shortLabel;
+        }
+
         this.tip_format(this.temperature_symbol());
-        extension._Schema.connect('changed::' + this.elt + '-sensor-label', this.refresh.bind(this));
         this.update();
     }
     refresh() {
         if (this.sensors === undefined || Object.keys(this.sensors).length === 0) {
             return;
         }
-        let label = this.extension._Schema.get_string(this.elt + '-sensor-label');
-        let sfile = this.sensors[label];
+        let sfile = this.sensors[this.sensor_label];
         if (sfile === undefined && this.display_error) {
             const validLabels = Object.keys(this.sensors).join(', ');
-            sm_log(`Invalid thermal sensor label: "${label}" (valid choices: ${validLabels})`, 'error');
+            sm_log(`Invalid thermal sensor label: "${this.sensor_label}" (valid choices: ${validLabels})`, 'error');
             this.display_error = false;
             return;
         }
@@ -2232,28 +2267,40 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
 }
 
 const Fan = class SystemMonitor_Fan extends ElementBase {
-    constructor(extension) {
+    constructor(extension, sensor_label) {
         super(extension, {
             elt: 'fan',
             item_name: _('Fan'),
             color_name: ['fan0']
         });
+        this.sensor_label = sensor_label;
+        this.device_id = sensor_label;
         this.sensors = check_sensors("fan");
         this.rpm = 0;
         this.display_error = true;
+
+        this.item_name = sensor_label ? sensor_label : _('Fan');
+
+        // Update label based on sensor
+        if (sensor_label) {
+            let shortLabel = sensor_label.split(' - ').pop();
+            if (shortLabel.length > 6) {
+                shortLabel = shortLabel.substring(0, 6);
+            }
+            this.label.text = shortLabel;
+        }
+
         this.tip_format(_('rpm'));
-        extension._Schema.connect('changed::' + this.elt + '-sensor-label', this.refresh.bind(this));
         this.update();
     }
     refresh() {
         if (this.sensors === undefined || Object.keys(this.sensors).length === 0) {
             return;
         }
-        let label = this.extension._Schema.get_string(this.elt + '-sensor-label');
-        let sfile = this.sensors[label];
+        let sfile = this.sensors[this.sensor_label];
         if (sfile === undefined && this.display_error) {
             const validLabels = Object.keys(this.sensors).join(', ');
-            sm_log(`Invalid fan sensor label: "${label}" (valid choices: ${validLabels})`, 'error');
+            sm_log(`Invalid fan sensor label: "${this.sensor_label}" (valid choices: ${validLabels})`, 'error');
             this.display_error = false;
             return;
         }
@@ -2296,17 +2343,25 @@ const Fan = class SystemMonitor_Fan extends ElementBase {
 }
 
 const Gpu = class SystemMonitor_Gpu extends ElementBase {
-    constructor(extension) {
+    constructor(extension, gpu_index = '0') {
         super(extension, {
             elt: 'gpu',
             item_name: _('GPU'),
             color_name: ['used', 'memory']
         });
         this.max = 100;
+        this.gpu_index = gpu_index;
+        this.device_id = gpu_index;
 
-        this.item_name = _('GPU');
+        this.item_name = _('GPU') + (gpu_index !== '0' ? ' ' + gpu_index : '');
         this.mem = 0;
         this.total = 0;
+
+        // Update label based on GPU index
+        if (gpu_index !== '0') {
+            this.label.text = _('GPU') + gpu_index;
+        }
+
         this.tip_format();
         this.update();
     }
@@ -2325,7 +2380,7 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
         // Run asynchronously, to avoid shell freeze
         try {
             let path = this.extension.path;
-            let script = ['/usr/bin/env', 'bash', path + '/gpu_usage.sh'];
+            let script = ['/usr/bin/env', 'bash', path + '/gpu_usage.sh', this.gpu_index];
 
             // Create subprocess and capture STDOUT
             let proc = new Gio.Subprocess({argv: script, flags: Gio.SubprocessFlags.STDOUT_PIPE});
@@ -2471,6 +2526,39 @@ const Icon = class SystemMonitor_Icon {
     }
 }
 
+// Helper functions to create widget instances based on device settings
+function createWidgets(extension, widgetType, WidgetClass) {
+    let array = [];
+    let devices = extension._Schema.get_strv(`${widgetType}-devices`);
+
+    if (devices.length === 0) {
+        // No devices specified - create default instance
+        if (widgetType === 'thermal' || widgetType === 'fan') {
+            // These need sensor labels
+            let sensors = check_sensors(widgetType === 'thermal' ? 'temp' : 'fan');
+            let labels = Object.keys(sensors);
+            if (labels.length > 0) {
+                array.push(new WidgetClass(extension, labels[0]));
+            }
+        } else {
+            array.push(new WidgetClass(extension));
+        }
+    } else {
+        // Create instances for each device
+        for (let device of devices) {
+            if (widgetType === 'thermal' || widgetType === 'fan') {
+                array.push(new WidgetClass(extension, device));
+            } else if (widgetType === 'gpu') {
+                array.push(new WidgetClass(extension, device));
+            } else {
+                array.push(new WidgetClass(extension, device));
+            }
+        }
+    }
+
+    return array;
+}
+
 export default class SystemMonitorExtension extends Extension {
     openSystemMonitor() {
         let _appSys = Shell.AppSystem.get_default();
@@ -2565,17 +2653,17 @@ export default class SystemMonitorExtension extends Extension {
 
         // Load the preferred position of the displays and insert them in said order.
         const positionList = {};
-        // CPUs are inserted differently, so cpu-position is stored apart
-        const cpuPosition = this._Schema.get_int('cpu-position');
-        positionList[cpuPosition] = createCpus(this);
-        positionList[this._Schema.get_int('freq-position')] = new Freq(this);
+
+        // Create widgets based on device settings
+        positionList[this._Schema.get_int('cpu-position')] = createCpus(this);
+        positionList[this._Schema.get_int('freq-position')] = createWidgets(this, 'freq', Freq);
         positionList[this._Schema.get_int('memory-position')] = new Mem(this);
         positionList[this._Schema.get_int('swap-position')] = new Swap(this);
-        positionList[this._Schema.get_int('net-position')] = new Net(this);
-        positionList[this._Schema.get_int('disk-position')] = new Disk(this);
-        positionList[this._Schema.get_int('gpu-position')] = new Gpu(this);
-        positionList[this._Schema.get_int('thermal-position')] = new Thermal(this);
-        positionList[this._Schema.get_int('fan-position')] = new Fan(this);
+        positionList[this._Schema.get_int('net-position')] = createWidgets(this, 'net', Net);
+        positionList[this._Schema.get_int('disk-position')] = createWidgets(this, 'disk', Disk);
+        positionList[this._Schema.get_int('gpu-position')] = createWidgets(this, 'gpu', Gpu);
+        positionList[this._Schema.get_int('thermal-position')] = createWidgets(this, 'thermal', Thermal);
+        positionList[this._Schema.get_int('fan-position')] = createWidgets(this, 'fan', Fan);
         // See TODO inside Battery
         // positionList[this._Schema.get_int('battery-position')] = new Battery(this);
 
@@ -2598,7 +2686,7 @@ export default class SystemMonitorExtension extends Extension {
         box.add_child(this.__sm.icon.actor);
 
         // Need to convert the positionList object into an array
-        // (sorted by object key) and then expand out the CPUs list
+        // (sorted by object key) and then expand out the lists
         const sortedPLEntries = Object.entries(positionList).sort((a, b) => a[0] - b[0]);
         const sortedPLValues = sortedPLEntries.map(([key, value]) => value);
         this.__sm.elts = sortedPLValues.flat();

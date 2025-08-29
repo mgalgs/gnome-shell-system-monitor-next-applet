@@ -25,10 +25,13 @@ checkcommand()
 	command -v "$1" > /dev/null 2>&1
 }
 
+# GPU index argument (default to 0)
+GPU_INDEX=${1:-0}
+
 # This will print three lines. The first one is the the total vRAM available,
 # the second one is the used vRAM and the third on is the GPU usage in %.
 if nvidia-smi --list-gpus > /dev/null 2>&1  ; then
-	nvidia-smi -i 0 --query-gpu=memory.total,memory.used,utilization.gpu --format=csv,noheader,nounits | while IFS=', ' read -r a b c; do echo "$a"; echo "$b"; echo "$c"; done
+	nvidia-smi -i "$GPU_INDEX" --query-gpu=memory.total,memory.used,utilization.gpu --format=csv,noheader,nounits | while IFS=', ' read -r a b c; do echo "$a"; echo "$b"; echo "$c"; done
 
 elif lsmod | grep amdgpu > /dev/null; then
 	# Set `card0` or `card1` here. For some reason `card1` might be used instead.
