@@ -208,9 +208,30 @@ const SMMonitorExpanderRow = GObject.registerClass({
 
         this._config = config;
         this.title = `${this._config.type.capitalize()} - ${this._config.device}`;
+        this._drag_starting_point_x = 0;
+        this._drag_starting_point_y = 0;
+
+        // --- Add Drag Handle and DND Controllers ---
+        const dragHandle = new Gtk.Image({
+            icon_name: 'list-drag-handle-symbolic',
+            css_classes: ['drag-handle'],
+            valign: Gtk.Align.CENTER,
+        });
+        this.add_prefix(dragHandle);
+
+        const dragSource = new Gtk.DragSource({
+            actions: Gdk.DragAction.MOVE,
+        });
+        dragSource.connect('prepare', this._onDragPrepare.bind(this));
+        dragSource.connect('drag-begin', this._onDragBegin.bind(this));
+        this.add_controller(dragSource);
+
+        const dropTarget = Gtk.DropTarget.new(SMMonitorExpanderRow.$gtype, Gdk.DragAction.MOVE);
+        dropTarget.connect('drop', this._onDrop.bind(this));
+        this.add_controller(dropTarget);
+
 
         // --- Create UI Programmatically ---
-
         const displaySwitch = new Adw.SwitchRow({ title: _('Display') });
         this.add_row(displaySwitch);
 
@@ -234,7 +255,7 @@ const SMMonitorExpanderRow = GObject.registerClass({
             title: _('Graph Width'),
             adjustment: new Gtk.Adjustment({ lower: 1, upper: 1000, value: 0, step_increment: 1, page_increment: 10 }),
             numeric: true,
-            update_policy: 1,
+            update_policy: 1, // Gtk.SpinButtonUpdatePolicy.IF_VALID
         });
         this.add_row(graphWidthSpin);
 
@@ -242,7 +263,7 @@ const SMMonitorExpanderRow = GObject.registerClass({
             title: _('Refresh Time (ms)'),
             adjustment: new Gtk.Adjustment({ lower: 0, upper: 100000, value: 0, step_increment: 1000, page_increment: 5000 }),
             numeric: true,
-            update_policy: 1,
+            update_policy: 1, // Gtk.SpinButtonUpdatePolicy.IF_VALID
         });
         this.add_row(refreshTimeSpin);
 
@@ -266,6 +287,57 @@ const SMMonitorExpanderRow = GObject.registerClass({
 
         this._addColorsItems();
         this._addTypeSpecificItems();
+    }
+
+    // --- Drag and Drop Handlers ---
+
+    _onDragPrepare(_source, x, y) {
+        this._drag_starting_point_x = x;
+        this._drag_starting_point_y = y;
+        const value = new GObject.Value();
+        value.init(SMMonitorExpanderRow);
+        value.set_object(this);
+        return Gdk.ContentProvider.new_for_value(value);
+    }
+
+    _onDragBegin(_source, drag) {
+        const dragWidget = new Gtk.ListBox();
+        dragWidget.set_size_request(this.get_width(), this.get_height());
+
+        const dragRow = new SMMonitorExpanderRow(this._config, {});
+        dragWidget.append(dragRow);
+        dragWidget.drag_highlight_row(dragRow);
+
+        const currentDragIcon = Gtk.DragIcon.get_for_drag(drag);
+        currentDragIcon.set_child(dragWidget);
+        drag.set_hotspot(this._drag_starting_point_x, this._drag_starting_point_y);
+    }
+
+    _onDrop(_target, value, _x, _y) {
+        // If `this` got dropped onto itself, do nothing.
+        if (value === this)
+            return true;
+
+        const listBox = this.get_parent();
+        const ownPosition = this.get_index();
+        const valuePosition = value.get_index();
+
+        // Remove the drop value from its list box.
+        listBox.remove(value);
+
+        // Since drop value was removed get the position of `this` again.
+        const updatedOwnPosition = this.get_index();
+
+        if (valuePosition < ownPosition) {
+            // If the drop value was before `this`, add the drop value after `this`.
+            listBox.insert(value, updatedOwnPosition + 1);
+        } else {
+            // Otherwise, add the drop value where `this` currently is.
+            listBox.insert(value, updatedOwnPosition);
+        }
+
+        listBox.saveOrder();
+        return true;
     }
 
     _update(key, value) {
@@ -357,6 +429,18 @@ const SMMonitorsPage = GObject.registerClass({
         this._listBox = new Gtk.ListBox({ selection_mode: Gtk.SelectionMode.NONE });
         this._listBox.add_css_class('boxed-list');
         this._widget_prefs_group.add(this._listBox);
+
+        // Attach the saveOrder method directly to the listbox instance
+        this._listBox.saveOrder = () => {
+            const newOrder = [];
+            for (let child = this._listBox.get_first_child(); child != null; child = child.get_next_sibling()) {
+                if (child instanceof SMMonitorExpanderRow) {
+                    newOrder.push(child._config);
+                }
+            }
+            this._monitors = newOrder;
+            this._saveMonitors();
+        };
 
         const addButton = new Gtk.Button({ label: _('Add Monitor...'), halign: Gtk.Align.CENTER, margin_top: 10 });
         addButton.connect('clicked', this._onAddMonitor.bind(this));
