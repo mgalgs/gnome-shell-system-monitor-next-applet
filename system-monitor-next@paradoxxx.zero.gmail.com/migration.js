@@ -108,16 +108,24 @@ function migrateFrom1(extension, settings) {
         let devices;
         if (singletonWidgets.includes(type)) {
             devices = ['default'];
+        } else if (type === 'thermal' || type === 'fan') {
+            const selectedSensor = settings.get_string(`${type}-sensor-label`);
+            if (selectedSensor) {
+                devices = [selectedSensor];
+            } else {
+                // Fallback: use the first available sensor if none was selected
+                const sensorType = type === 'thermal' ? 'temp' : 'fan';
+                const allSensors = Object.keys(check_sensors(sensorType));
+                if (allSensors.length > 0) {
+                    devices = [allSensors[0]];
+                } else {
+                    devices = []; // No sensors, create no monitors
+                }
+            }
         } else {
             devices = settings.get_strv(`${type}-devices`);
             if (devices.length === 0) {
-                if (type === 'thermal' || type === 'fan') {
-                    const sensorType = type === 'thermal' ? 'temp' : 'fan';
-                    devices = Object.keys(check_sensors(sensorType));
-                    if (devices.length === 0) continue;
-                } else {
-                    devices = ['all'];
-                }
+                devices = ['all'];
             }
         }
 

@@ -35,6 +35,13 @@ function color_to_hex(color) {
     return output;
 }
 
+function loadTemplate(fileName) {
+    const file = Gio.File.new_for_uri(import.meta.url);
+    const templateFile = file.get_parent().resolve_relative_path(fileName);
+    const [, templateBytes] = templateFile.load_contents(null);
+    return templateBytes;
+}
+
 // Helper functions to get available devices
 function getAvailableCpus() {
     let cpus = ['all'];
@@ -102,7 +109,7 @@ function getAvailableDisks() {
 // ** General Preferences Page **
 const SMGeneralPrefsPage = GObject.registerClass({
     GTypeName: 'SMGeneralPrefsPage',
-    Template: import.meta.url.replace('prefs.js', 'ui/prefsGeneralSettings.ui'),
+    Template: loadTemplate('ui/prefsGeneralSettings.ui'),
     InternalChildren: ['background', 'icon_display', 'show_tooltip', 'move_clock',
         'compact_display', 'center_display', 'left_display', 'rotate_labels',
         'tooltip_delay_ms', 'graph_delay_m', 'custom_monitor_switch', 'custom_monitor_command'],
@@ -192,7 +199,7 @@ const SMGeneralPrefsPage = GObject.registerClass({
 // ** Widget Preferences Page **
 const SMMonitorExpanderRow = GObject.registerClass({
     GTypeName: 'SMMonitorExpanderRow',
-    Template: import.meta.url.replace('prefs.js', 'ui/prefsExpanderRow.ui'),
+    Template: loadTemplate('ui/prefsExpanderRow.ui'),
     InternalChildren: ['display', 'show_menu', 'show_text', 'style', 'graph_width', 'refresh_time'],
     Signals: {
         'updated': { param_types: [GObject.TYPE_OBJECT] },
@@ -300,7 +307,7 @@ const SMMonitorExpanderRow = GObject.registerClass({
 
 const SMMonitorsPage = GObject.registerClass({
     GTypeName: 'SMMonitorsPage',
-    Template: import.meta.url.replace('prefs.js', 'ui/prefsWidgetSettings.ui'),
+    Template: loadTemplate('ui/prefsWidgetSettings.ui'),
     InternalChildren: ['widget_prefs_group'],
 }, class SMMonitorsPage extends Adw.PreferencesPage {
     constructor(settings, params = {}) {
