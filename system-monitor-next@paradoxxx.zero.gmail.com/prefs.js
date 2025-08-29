@@ -199,8 +199,6 @@ const SMGeneralPrefsPage = GObject.registerClass({
 // ** Widget Preferences Page **
 const SMMonitorExpanderRow = GObject.registerClass({
     GTypeName: 'SMMonitorExpanderRow',
-    Template: loadTemplate('ui/prefsExpanderRow.ui'),
-    InternalChildren: ['display', 'show_menu', 'show_text', 'style', 'graph_width', 'refresh_time'],
     Signals: {
         'updated': { param_types: [GObject.TYPE_OBJECT] },
     },
@@ -209,27 +207,62 @@ const SMMonitorExpanderRow = GObject.registerClass({
         super(params);
 
         this._config = config;
-
         this.title = `${this._config.type.capitalize()} - ${this._config.device}`;
 
-        this._colorDialog = new Gtk.ColorDialog({
-            modal: true,
-            with_alpha: true,
+        // --- Create UI Programmatically ---
+
+        const displaySwitch = new Adw.SwitchRow({ title: _('Display') });
+        this.add_row(displaySwitch);
+
+        const showMenuSwitch = new Adw.SwitchRow({ title: _('Show in Menu') });
+        this.add_row(showMenuSwitch);
+
+        const showTextSwitch = new Adw.SwitchRow({ title: _('Show Text') });
+        this.add_row(showTextSwitch);
+
+        const styleModel = new Gtk.StringList();
+        styleModel.append(_('Digit'));
+        styleModel.append(_('Graph'));
+        styleModel.append(_('Both'));
+        const styleRow = new Adw.ComboRow({
+            title: _('Display Style'),
+            model: styleModel,
         });
+        this.add_row(styleRow);
 
-        this._display.active = this._config.display;
-        this._show_menu.active = this._config['show-menu'];
-        this._show_text.active = this._config['show-text'];
-        this._style.set_selected(this._config.style === 'digit' ? 0 : this._config.style === 'graph' ? 1 : 2);
-        this._graph_width.set_value(this._config['graph-width']);
-        this._refresh_time.set_value(this._config['refresh-time']);
+        const graphWidthSpin = new Adw.SpinRow({
+            title: _('Graph Width'),
+            adjustment: new Gtk.Adjustment({ lower: 1, upper: 1000, value: 0, step_increment: 1, page_increment: 10 }),
+            numeric: true,
+            update_policy: 1,
+        });
+        this.add_row(graphWidthSpin);
 
-        this._display.connect('notify::active', () => this._update('display', this._display.active));
-        this._show_menu.connect('notify::active', () => this._update('show-menu', this._show_menu.active));
-        this._show_text.connect('notify::active', () => this._update('show-text', this._show_text.active));
-        this._style.connect('notify::selected', () => this._update('style', ['digit', 'graph', 'both'][this._style.selected]));
-        this._graph_width.connect('notify::value', () => this._update('graph-width', this._graph_width.value));
-        this._refresh_time.connect('notify::value', () => this._update('refresh-time', this._refresh_time.value));
+        const refreshTimeSpin = new Adw.SpinRow({
+            title: _('Refresh Time (ms)'),
+            adjustment: new Gtk.Adjustment({ lower: 0, upper: 100000, value: 0, step_increment: 1000, page_increment: 5000 }),
+            numeric: true,
+            update_policy: 1,
+        });
+        this.add_row(refreshTimeSpin);
+
+        // --- Set Initial Values ---
+
+        displaySwitch.active = this._config.display;
+        showMenuSwitch.active = this._config['show-menu'];
+        showTextSwitch.active = this._config['show-text'];
+        styleRow.selected = ['digit', 'graph', 'both'].indexOf(this._config.style);
+        graphWidthSpin.value = this._config['graph-width'];
+        refreshTimeSpin.value = this._config['refresh-time'];
+
+        // --- Connect Signals ---
+
+        displaySwitch.connect('notify::active', () => this._update('display', displaySwitch.active));
+        showMenuSwitch.connect('notify::active', () => this._update('show-menu', showMenuSwitch.active));
+        showTextSwitch.connect('notify::active', () => this._update('show-text', showTextSwitch.active));
+        styleRow.connect('notify::selected', () => this._update('style', ['digit', 'graph', 'both'][styleRow.selected]));
+        graphWidthSpin.connect('notify::value', () => this._update('graph-width', graphWidthSpin.value));
+        refreshTimeSpin.connect('notify::value', () => this._update('refresh-time', refreshTimeSpin.value));
 
         this._addColorsItems();
         this._addTypeSpecificItems();
@@ -242,6 +275,12 @@ const SMMonitorExpanderRow = GObject.registerClass({
 
     _addColorsItems() {
         if (!this._config.colors) return;
+
+        const colorDialog = new Gtk.ColorDialog({
+            modal: true,
+            with_alpha: true,
+        });
+
         for (const colorName in this._config.colors) {
             let actionRow = new Adw.ActionRow({ title: colorName.capitalize() });
             let colorItem = new Gtk.ColorDialogButton({ valign: Gtk.Align.CENTER });
@@ -249,7 +288,7 @@ const SMMonitorExpanderRow = GObject.registerClass({
             let color = new Gdk.RGBA();
             color.parse(this._config.colors[colorName]);
             colorItem.set_rgba(color);
-            colorItem.set_dialog(this._colorDialog);
+            colorItem.set_dialog(colorDialog);
 
             colorItem.connect('notify::rgba', (button) => {
                 this._config.colors[colorName] = color_to_hex(button.get_rgba());
