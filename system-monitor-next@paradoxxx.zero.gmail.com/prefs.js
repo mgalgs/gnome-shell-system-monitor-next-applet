@@ -7,6 +7,7 @@ import Gtk from "gi://Gtk";
 import Gio from "gi://Gio";
 import Gdk from "gi://Gdk";
 import Adw from "gi://Adw";
+import GLib from "gi://GLib";
 
 import { ExtensionPreferences, gettext as _ } from "resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js";
 
@@ -104,6 +105,55 @@ function getAvailableDisks() {
         console.error('Error getting disks: ' + e);
     }
     return disks;
+}
+
+function getAvailableGpus() {
+    // Try nvidia-smi first for proprietary drivers, as it's the most reliable source.
+    try {
+        // We use `--query-gpu=count` which is a very fast and simple query.
+        const [success, stdoutBytes] = GLib.spawn_command_line_sync('nvidia-smi --query-gpu=count --format=csv,noheader');
+        if (success) {
+            const countStr = new TextDecoder().decode(stdoutBytes).trim();
+            const count = parseInt(countStr, 10);
+            if (!isNaN(count) && count > 0) {
+                // Generate an array of indices: ['0', '1', ..., 'N-1']
+                return Array.from({ length: count }, (_, i) => i.toString());
+            }
+        }
+    } catch (e) {
+        // nvidia-smi not found or failed, which is normal on non-NVIDIA systems.
+        // We'll just fall through to the next method.
+    }
+
+    //todo maybe only use this, and correctly filter out ports
+
+    // Fallback to /sys/class/drm for open-source/AMD/Intel drivers
+    try {
+        const drmDir = Gio.File.new_for_path('/sys/class/drm/');
+        const enumerator = drmDir.enumerate_children('standard::name', Gio.FileQueryInfoFlags.NONE, null);
+
+        let gpuCount = 0;
+        let fileInfo;
+        while ((fileInfo = enumerator.next_file(null)) !== null) {
+            const name = fileInfo.get_name();
+            // Match 'card0', 'card1', etc.
+            if (name.startsWith('card') && !isNaN(parseInt(name.substring(4), 10))) {
+                gpuCount++;
+            }
+        }
+        enumerator.close(null);
+
+        if (gpuCount > 0) {
+            return Array.from({ length: gpuCount }, (_, i) => i.toString());
+        }
+    } catch (e) {
+        // Directory might not exist or other permission errors.
+        sm_log(`DRM check for GPUs failed: ${e.message}`);
+    }
+
+    // Final fallback if all detection methods fail, to maintain functionality.
+    sm_log('GPU detection failed, falling back to a default list of 4.');
+    return ['0', '1', '2', '3'];
 }
 
 // ** General Preferences Page **
@@ -494,9 +544,9 @@ const SMMonitorsPage = GObject.registerClass({
             title: _('Add New Monitor'),
             transient_for: this.get_root(),
             modal: true,
-                width_request: 350,
-                height_request: 250,
-            });
+            width_request: 350,
+            height_request: 250,
+        });
 
         const mainVbox = new Gtk.Box({
             orientation: Gtk.Orientation.VERTICAL,
@@ -542,7 +592,7 @@ const SMMonitorsPage = GObject.registerClass({
                     devices = getAvailableDisks();
                     break;
                 case 'gpu':
-                    devices = ['0', '1', '2', '3']; //TODO
+                    devices = getAvailableGpus();
                     break;
                 case 'thermal':
                     devices = Object.keys(check_sensors('temp'));
@@ -577,10 +627,10 @@ const SMMonitorsPage = GObject.registerClass({
             css_classes: ['suggested-action'],
         });
         addButton.connect('clicked', () => {
-                const type = types[typeRow.selected];
-                const device = deviceModel.get_string(deviceRow.selected);
-                this._createNewMonitor(type, device);
-                dialog.close();
+            const type = types[typeRow.selected];
+            const device = deviceModel.get_string(deviceRow.selected);
+            this._createNewMonitor(type, device);
+            dialog.close();
         });
         actionBox.append(addButton);
 
