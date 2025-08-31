@@ -989,6 +989,61 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
             this.restart_cooldown_timer();
         });
     }
+
+    onSettingsChanged(newConfig) {
+        const oldConfig = this.config;
+        this.config = newConfig;
+
+        // Visibility
+        if (oldConfig.display !== newConfig.display) {
+            this.actor.visible = newConfig.display;
+        }
+
+        // Refresh Time
+        if (oldConfig['refresh-time'] !== newConfig['refresh-time']) {
+            this.restart_update_timer(l_limit(newConfig['refresh-time']));
+        }
+
+        // Graph Width
+        if (oldConfig['graph-width'] !== newConfig['graph-width']) {
+            this.resize(newConfig['graph-width']);
+        }
+
+        // Colors
+        this.colors = [];
+        for (let color of this.color_name) {
+            let clutterColor = color_from_string(this.config.colors[color] || '#ff0000');
+            this.colors.push(clutterColor);
+        }
+        this.chart.actor.queue_repaint();
+
+        // Text Label
+        if (oldConfig['show-text'] !== newConfig['show-text']) {
+            this.label.visible = newConfig['show-text'];
+        }
+
+        // Display Style (digit/graph/both)
+        if (oldConfig.style !== newConfig.style) {
+            change_style.call(this);
+        }
+
+        // Menu Visibility
+        if (oldConfig['show-menu'] !== newConfig['show-menu']) {
+            this.menu_visible = newConfig['show-menu'];
+            build_menu_info(this.extension);
+        }
+
+        // Type-specific updates
+        if (this.elt === 'battery' && oldConfig.time !== newConfig.time) {
+            this.update_tips();
+        }
+        if (this.elt === 'thermal') {
+            this.reset_style(); // Re-evaluate threshold coloring
+        }
+
+        // Trigger an immediate refresh to apply text/value changes
+        this.update();
+    }
     /**
      * Initializes or restarts the graph scale cooldown timer. The graph
      * scale won't downscale during the cooldown period.
@@ -2500,36 +2555,57 @@ export default class SystemMonitorExtension extends Extension {
         }
     }
 
-    _reloadMonitors() {
-        if (this.__sm.elts) {
-            this.__sm.elts.forEach(elt => elt.destroy());
-        }
-        this.__sm.elts = [];
+    _syncMonitors() {
+        const newConfigs = this._Schema.get_strv('monitors').map(c => JSON.parse(c));
+        const oldUUIDs = new Set(this.__sm.elts.map(elt => elt.config.uuid));
+        const newUUIDs = new Set(newConfigs.map(c => c.uuid));
 
-        if (this.__sm.box) {
-            this.__sm.box.destroy();
+        // 1. Remove widgets that are no longer in the config
+        const removedUUIDs = [...oldUUIDs].filter(uuid => !newUUIDs.has(uuid));
+        for (const uuid of removedUUIDs) {
+            const widget = this.__sm.widgetMap.get(uuid);
+            if (widget) {
+                sm_log(`Removing monitor ${uuid}`);
+                widget.destroy();
+                this.__sm.widgetMap.delete(uuid);
+            }
         }
 
-        let spacing = this._Schema.get_boolean('compact-display') ? '1' : '4';
-        this.__sm.box = new St.BoxLayout({ style: 'spacing: ' + spacing + 'px;' });
-        this.__sm.tray.add_child(this.__sm.box);
+        // 2. Update existing widgets and add new ones
+        const newEltArray = [];
+        for (const config of newConfigs) {
+            let widget = this.__sm.widgetMap.get(config.uuid);
+
+            if (widget) {
+                // It exists, update it
+                widget.onSettingsChanged(config);
+                newEltArray.push(widget);
+            } else {
+                // It's new, create it
+                sm_log(`Adding new monitor ${config.uuid}`);
+                const WidgetClass = WIDGET_CLASSES[config.type];
+                if (WidgetClass) {
+                    const newWidget = new WidgetClass(this, config);
+                    this.__sm.widgetMap.set(config.uuid, newWidget);
+                    newEltArray.push(newWidget);
+                }
+            }
+        }
+
+        // 3. Re-parent and re-order all widgets in the panel box
+        this.__sm.elts = newEltArray;
+        const activeWidgets = this.__sm.elts.filter(elt => elt.config.display);
+
+        // Remove all children except the icon
+        this.__sm.box.remove_all_children();
         this.__sm.box.add_child(this.__sm.icon.actor);
 
-        const monitorConfigs = this._Schema.get_strv('monitors').map(c => JSON.parse(c));
-
-        for (const config of monitorConfigs) {
-            if (!config.display) {
-                continue;
-            }
-            const WidgetClass = WIDGET_CLASSES[config.type];
-            if (WidgetClass) {
-                const widget = new WidgetClass(this, config);
-                this.__sm.elts.push(widget);
-                this.__sm.box.add_child(widget.actor);
-            } else {
-                sm_log(`Unknown widget type: ${config.type}`, 'error');
-            }
+        // Add them back in the correct order
+        for (const widget of activeWidgets) {
+            this.__sm.box.add_child(widget.actor);
         }
+
+        // 4. Update the popup menu
         build_menu_info(this);
     }
 
@@ -2580,6 +2656,7 @@ export default class SystemMonitorExtension extends Extension {
             pie: new Pie(this),
             bar: new Bar(this),
             elts: [],
+            widgetMap: new Map(),
             box: null,
         };
         let tray = this.__sm.tray;
@@ -2596,8 +2673,27 @@ export default class SystemMonitorExtension extends Extension {
         });
         Main.panel._addToPanelBox('system-monitor', tray, 1, panel);
 
-        this._reloadMonitors();
-        this._settingsConnection = this._Schema.connect('changed::monitors', () => this._reloadMonitors());
+        let spacing = this._Schema.get_boolean('compact-display') ? '1' : '4';
+        this.__sm.box = new St.BoxLayout({ style: 'spacing: ' + spacing + 'px;' });
+        tray.add_child(this.__sm.box);
+        this.__sm.box.add_child(this.__sm.icon.actor);
+
+        // Initial creation of all monitors
+        const monitorConfigs = this._Schema.get_strv('monitors').map(c => JSON.parse(c));
+        for (const config of monitorConfigs) {
+            const WidgetClass = WIDGET_CLASSES[config.type];
+            if (WidgetClass) {
+                const widget = new WidgetClass(this, config);
+                this.__sm.elts.push(widget);
+                this.__sm.widgetMap.set(config.uuid, widget);
+                if (config.display) {
+                    this.__sm.box.add_child(widget.actor);
+                }
+            }
+        }
+
+        // Handle property updates
+        this._settingsConnection = this._Schema.connect('changed::monitors', () => this._syncMonitors());
 
         let menu_info = new PopupMenu.PopupBaseMenuItem({reactive: false});
         let menu_info_box = new St.BoxLayout();
@@ -2680,7 +2776,7 @@ export default class SystemMonitorExtension extends Extension {
             this._Style = null;
         }
 
-        for (let elt of this.__sm.elts) {
+        for (let elt of this.__sm.widgetMap.values()) {
             elt.destroy();
         }
         this.__sm.tray.destroy();
