@@ -3,6 +3,23 @@ import Gio from "gi://Gio";
 import { sm_log } from './utils.js';
 import { check_sensors } from './common.js';
 
+function getCpuCoreCount() {
+    try {
+        const file = Gio.File.new_for_path('/proc/cpuinfo');
+        const [success, contents] = file.load_contents(null);
+        if (success) {
+            const contentStr = new TextDecoder().decode(contents);
+            // Count lines that start with "processor"
+            const matches = contentStr.match(/^processor/gm);
+            return matches ? matches.length : 1;
+        }
+    } catch (e) {
+        sm_log(`Could not read /proc/cpuinfo to get core count: ${e.message}`, 'warn');
+        return 1;
+    }
+}
+
+
 function migrateSettings(extension) {
     const SCHEMA_VERSION_KEY = 'settings-schema-version';
     const CURRENT_SCHEMA_VERSION = 2;  // Increment this when adding new migrations
@@ -106,20 +123,23 @@ function migrateFrom1(extension, settings) {
         }
 
         let devices;
-        if (singletonWidgets.includes(type)) {
+        if ((type === 'cpu' || type === 'freq') && settings.get_boolean('cpu-individual-cores')) {
+            const coreCount = getCpuCoreCount();
+            devices = Array.from({ length: coreCount }, (_, i) => i.toString());
+            sm_log(`Migrating multi-core view for ${type} for ${coreCount} cores.`);
+        } else if (singletonWidgets.includes(type)) {
             devices = ['default'];
         } else if (type === 'thermal' || type === 'fan') {
             const selectedSensor = settings.get_string(`${type}-sensor-label`);
             if (selectedSensor) {
                 devices = [selectedSensor];
             } else {
-                // Fallback: use the first available sensor if none was selected
                 const sensorType = type === 'thermal' ? 'temp' : 'fan';
                 const allSensors = Object.keys(check_sensors(sensorType));
                 if (allSensors.length > 0) {
                     devices = [allSensors[0]];
                 } else {
-                    devices = []; // No sensors, create no monitors
+                    devices = [];
                 }
             }
         } else {
