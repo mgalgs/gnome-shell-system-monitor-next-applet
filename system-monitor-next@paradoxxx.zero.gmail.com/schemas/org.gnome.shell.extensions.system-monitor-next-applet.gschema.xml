@@ -122,11 +122,6 @@
       <summary>Display one graph per cpu core</summary>
       <description>Set to true to display one graph per cpu core</description>
     </key>
-    <key name="cpu-devices" type="as">
-      <default>['all']</default>
-      <summary>CPU devices to monitor</summary>
-      <description>List of CPU cores to monitor. Use 'all' for all cores combined, or core numbers like '0', '1', etc.</description>
-    </key>
     <key name="gpu-display" type="b">
       <default>false</default>
       <summary>Display GPU usage</summary>
@@ -155,11 +150,6 @@
     <key name="gpu-style" enum="org.gnome.shell.extensions.system-monitor-next-applet.display-style">
       <default>'graph'</default>
       <summary>Choose the display style.</summary>
-    </key>
-    <key name="gpu-devices" type="as">
-      <default>['0']</default>
-      <summary>GPU devices to monitor</summary>
-      <description>List of GPU indices to monitor</description>
     </key>
     <key name="freq-display" type="b">
       <default>false</default>
@@ -195,11 +185,6 @@
       <summary>Display mode for CPU frequency</summary>
       <description>Choose how to display CPU frequency: maximum across all cores, average of all cores, or per-core</description>
     </key>
-    <key name="freq-devices" type="as">
-      <default>['all']</default>
-      <summary>Frequency devices to monitor</summary>
-      <description>List of CPU cores to monitor frequency. Use 'all' for aggregate, or core numbers like '0', '1', etc.</description>
-    </key>
     <key name="net-display" type="b">
       <default>true</default>
       <summary>Display net</summary>
@@ -233,11 +218,6 @@
       <default>false</default>
       <summary>Show network speed in bits/sec</summary>
     </key>
-    <key name="net-devices" type="as">
-      <default>['all']</default>
-      <summary>Network devices to monitor</summary>
-      <description>List of network interfaces to monitor. Use 'all' for all interfaces combined.</description>
-    </key>
     <key name="disk-display" type="b">
       <default>false</default>
       <summary>Display disk io speed</summary>
@@ -270,11 +250,6 @@
     <key name="disk-usage-style" enum="org.gnome.shell.extensions.system-monitor-next-applet.disk-usage-style">
       <default>'pie'</default>
       <summary>Choose the disk usage display style.</summary>
-    </key>
-    <key name="disk-devices" type="as">
-      <default>['all']</default>
-      <summary>Disk devices to monitor</summary>
-      <description>List of disk devices to monitor. Use 'all' for all disks combined.</description>
     </key>
     <key name="thermal-display" type="b">
       <default>false</default>
@@ -315,11 +290,6 @@
       <summary>Thermal threshold</summary>
       <description>When the temprature passes the threshold, the text is set to red as an alert.</description>
     </key>
-    <key name="thermal-devices" type="as">
-      <default>[]</default>
-      <summary>Thermal sensors to monitor</summary>
-      <description>List of thermal sensor labels to monitor</description>
-    </key>
     <key name="fan-display" type="b">
       <default>false</default>
       <summary>Display fan</summary>
@@ -357,11 +327,6 @@
     <key name="fan-fan0-color" type="s">
       <default>'#f2002e'</default>
       <summary>Color of fan in the chart</summary>
-    </key>
-    <key name="fan-devices" type="as">
-      <default>[]</default>
-      <summary>Fan sensors to monitor</summary>
-      <description>List of fan sensor labels to monitor</description>
     </key>
     <key name="center-display" type="b">
       <default>false</default>

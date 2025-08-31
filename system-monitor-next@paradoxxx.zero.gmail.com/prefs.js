@@ -108,7 +108,7 @@ function getAvailableDisks() {
 }
 
 function getAvailableGpus() {
-    // Try nvidia-smi first for proprietary drivers, as it's the most reliable source.
+    // Try nvidia-smi first since gpu_usage.sh uses it by default
     try {
         // We use `--query-gpu=count` which is a very fast and simple query.
         const [success, stdoutBytes] = GLib.spawn_command_line_sync('nvidia-smi --query-gpu=count --format=csv,noheader');
@@ -125,8 +125,6 @@ function getAvailableGpus() {
         // We'll just fall through to the next method.
     }
 
-    //todo maybe only use this, and correctly filter out ports
-
     // Fallback to /sys/class/drm for open-source/AMD/Intel drivers
     try {
         const drmDir = Gio.File.new_for_path('/sys/class/drm/');
@@ -136,8 +134,7 @@ function getAvailableGpus() {
         let fileInfo;
         while ((fileInfo = enumerator.next_file(null)) !== null) {
             const name = fileInfo.get_name();
-            // Match 'card0', 'card1', etc.
-            if (name.startsWith('card') && !isNaN(parseInt(name.substring(4), 10))) {
+            if (name.match('^card[0-9]+$')) {
                 gpuCount++;
             }
         }
