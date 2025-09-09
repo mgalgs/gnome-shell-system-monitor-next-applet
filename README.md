@@ -179,7 +179,13 @@ To create a ZIP file for upload to GNOME Shell Extensions:
 make zip-file VERSION=<version>
 ```
 
-This process is automated by [the uploader Github Action](actions/uploader).
+This process used to be automated by [the uploader Github Action](actions/uploader)
+but has since been disabled since it required user credentials to be saved in the
+repo secrets. The `gnome-extensions` tool [has recently gained an `upload`
+subcommand](https://gjs.guide/extensions/upgrading/gnome-shell-49.html#extension-tools)
+(which could be used in place of the upload.py Python script), but it still requires
+username and password to be present in the repo secrets, so is likely still not a
+good option for a CI-based solution (more research on this is required).
 
 ## Authors
 
