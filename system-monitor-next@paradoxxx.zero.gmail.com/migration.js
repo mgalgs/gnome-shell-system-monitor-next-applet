@@ -1,38 +1,52 @@
 import Gio from "gi://Gio";
 
 import { sm_log } from './utils.js';
+import { check_sensors } from './common.js';
+
+function getCpuCoreCount() {
+    try {
+        const file = Gio.File.new_for_path('/proc/cpuinfo');
+        const [success, contents] = file.load_contents(null);
+        if (success) {
+            const contentStr = new TextDecoder().decode(contents);
+            // Count lines that start with "processor"
+            const matches = contentStr.match(/^processor/gm);
+            return matches ? matches.length : 1;
+        }
+    } catch (e) {
+        sm_log(`Could not read /proc/cpuinfo to get core count: ${e.message}`, 'warn');
+        return 1;
+    }
+}
+
 
 function migrateSettings(extension) {
     const SCHEMA_VERSION_KEY = 'settings-schema-version';
-    const CURRENT_SCHEMA_VERSION = 1;  // Increment this when adding new migrations
+    const CURRENT_SCHEMA_VERSION = 2;  // Increment this when adding new migrations
 
     const settings = extension.getSettings();
 
     // Get current version, defaults to 0 if not set
-    const currentVersion = settings.get_int(SCHEMA_VERSION_KEY);
+    let currentVersion = settings.get_int(SCHEMA_VERSION_KEY);
 
     // Skip if we're already at the current version
     if (currentVersion === CURRENT_SCHEMA_VERSION) {
         return;
     }
 
-    let didMigration = false;
+    sm_log(`Migrating settings from version ${currentVersion} to ${CURRENT_SCHEMA_VERSION}`);
 
-    switch (currentVersion) {
-        case 0:
-            didMigration = migrateFrom0(extension, settings);
-            break;
-        default:
-            sm_log(`Unknown schema version ${currentVersion}`);
-            break;
+    if (currentVersion < 1) {
+        migrateFrom0(extension, settings);
+        currentVersion = 1;
     }
 
-    if (!didMigration) {
-        const msg = `BOGUS schema migration! No migration was performed, but current version is ${currentVersion} and desired version is ${CURRENT_SCHEMA_VERSION}.`;
-        sm_log(msg, 'error');
-    } else {
-        settings.set_int(SCHEMA_VERSION_KEY, CURRENT_SCHEMA_VERSION);
+    if (currentVersion < 2) {
+        migrateFrom1(extension, settings);
+        currentVersion = 2;
     }
+
+    settings.set_int(SCHEMA_VERSION_KEY, CURRENT_SCHEMA_VERSION);
 }
 
 function migrateFrom0(extension, newSettings) {
@@ -43,9 +57,8 @@ function migrateFrom0(extension, newSettings) {
     const oldSettings = extension.getSettings(OLD_SCHEMA_ID);
 
     if (!oldSettings) {
-        sm_log('No old settings found, skipping migration');
-        // Migration is successful, but no settings were migrated
-        return true;
+        sm_log('No old settings found, skipping migration from v0');
+        return;
     }
 
     const keys = oldSettings.list_keys();
@@ -64,7 +77,122 @@ function migrateFrom0(extension, newSettings) {
     }
 
     sm_log('Successfully migrated settings from old schema');
+}
+
+function migrateFrom1(extension, settings) {
+    sm_log('Migrating settings: v1 -> v2');
+
+    const monitors = [];
+    const widgetTypes = [
+        { type: 'cpu', pos: settings.get_int('cpu-position') },
+        { type: 'freq', pos: settings.get_int('freq-position') },
+        { type: 'memory', pos: settings.get_int('memory-position') },
+        { type: 'swap', pos: settings.get_int('swap-position') },
+        { type: 'net', pos: settings.get_int('net-position') },
+        { type: 'disk', pos: settings.get_int('disk-position') },
+        { type: 'gpu', pos: settings.get_int('gpu-position') },
+        { type: 'thermal', pos: settings.get_int('thermal-position') },
+        { type: 'fan', pos: settings.get_int('fan-position') },
+        { type: 'battery', pos: settings.get_int('battery-position') },
+    ];
+
+    widgetTypes.sort((a, b) => a.pos - b.pos);
+
+    const colorMap = {
+        cpu: ['user', 'system', 'nice', 'iowait', 'other'],
+        memory: ['program', 'buffer', 'cache'],
+        swap: ['used'],
+        net: ['down', 'downerrors', 'up', 'uperrors', 'collisions'],
+        disk: ['read', 'write'],
+        gpu: ['used', 'memory'],
+        thermal: ['tz0'],
+        fan: ['fan0'],
+        battery: ['batt0'],
+        freq: ['freq'],
+    };
+
+    const singletonWidgets = ['memory', 'swap', 'battery'];
+
+    function uuid() {
+        return Gio.dbus_generate_guid();
+    }
+
+    for (const { type } of widgetTypes) {
+        if (!settings.get_boolean(`${type}-display`)) {
+            continue;
+        }
+
+        let devices;
+        if ((type === 'cpu' || type === 'freq') && settings.get_boolean('cpu-individual-cores')) {
+            const coreCount = getCpuCoreCount();
+            devices = Array.from({ length: coreCount }, (_, i) => i.toString());
+            sm_log(`Migrating multi-core view for ${type} for ${coreCount} cores.`);
+        } else if (singletonWidgets.includes(type)) {
+            devices = ['default'];
+        } else if (type === 'thermal' || type === 'fan') {
+            const selectedSensor = settings.get_string(`${type}-sensor-label`);
+            if (selectedSensor) {
+                devices = [selectedSensor];
+            } else {
+                const sensorType = type === 'thermal' ? 'temp' : 'fan';
+                const allSensors = Object.keys(check_sensors(sensorType));
+                if (allSensors.length > 0) {
+                    devices = [allSensors[0]];
+                } else {
+                    devices = [];
+                }
+            }
+        } else {
+            devices = settings.get_strv(`${type}-devices`);
+            if (devices.length === 0) {
+                devices = ['all'];
+            }
+        }
+
+        for (const device of devices) {
+            const monitor = {
+                uuid: uuid(),
+                type: type,
+                device: device,
+                display: true,
+                style: settings.get_string(`${type}-style`),
+                'graph-width': settings.get_int(`${type}-graph-width`),
+                'refresh-time': settings.get_int(`${type}-refresh-time`),
+                'show-text': settings.get_boolean(`${type}-show-text`),
+                'show-menu': settings.get_boolean(`${type}-show-menu`),
+                colors: {},
+            };
+
+            if (colorMap[type]) {
+                for (const colorName of colorMap[type]) {
+                    monitor.colors[colorName] = settings.get_string(`${type}-${colorName}-color`);
+                }
+            }
+
+            // Type-specific settings
+            if (type === 'thermal') {
+                monitor['fahrenheit-unit'] = settings.get_boolean('thermal-fahrenheit-unit');
+                monitor['threshold'] = settings.get_int('thermal-threshold');
+            }
+            if (type === 'net') {
+                monitor['speed-in-bits'] = settings.get_boolean('net-speed-in-bits');
+            }
+            if (type === 'battery') {
+                monitor['time'] = settings.get_boolean('battery-time');
+                monitor['hidesystem'] = settings.get_boolean('battery-hidesystem');
+            }
+            if (type === 'freq') {
+                monitor['display-mode'] = settings.get_string('freq-display-mode');
+            }
+
+            monitors.push(JSON.stringify(monitor));
+        }
+    }
+
+    settings.set_strv('monitors', monitors);
+    sm_log(`Successfully migrated ${monitors.length} monitors to new settings format.`);
     return true;
 }
+
 
 export { migrateSettings };

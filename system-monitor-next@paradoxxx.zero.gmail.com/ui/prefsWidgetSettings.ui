@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <interface domain="system-monitor">
-  <template class="SMWidgetPrefsPage" parent="AdwPreferencesPage">
-    <property name="name">widget-preferences_page</property>
-    <property name="title" translatable="yes">Widget Appearance</property>
-    <property name="icon-name">folder-symbolic</property>
+  <template class="SMMonitorsPage" parent="AdwPreferencesPage">
+    <property name="name">monitors-page</property>
+    <property name="title" translatable="yes">Monitors</property>
+    <property name="icon-name">preferences-system-symbolic</property>
     <child>
       <object class="AdwPreferencesGroup" id="widget_prefs_group">
-        <property name="title" translatable="yes">Configure the widget appearance</property>
+        <property name="title" translatable="yes">Configure Monitor Widgets</property>
+        <property name="description" translatable="yes">Add, remove, and configure individual monitor widgets.</property>
      </object>
     </child>
   </template>
