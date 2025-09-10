@@ -18,7 +18,7 @@ BASE_MODULES = \
 GSCHEMA_XML = $(UUID)/schemas/org.gnome.shell.extensions.system-monitor-next-applet.gschema.xml
 GSCHEMA_COMPILED = $(UUID)/schemas/gschemas.compiled
 
-VERSION ?= $(shell git rev-parse HEAD)
+VERSION ?= 0
 ZIPFILE = $(UUID).zip
 
 INSTALLBASE = $(PREFIX)/share/gnome-shell/extensions
@@ -109,7 +109,7 @@ build: gschemas translate
 	$(Q)cp $(VV) -r $(UUID)/ui/* _build/ui/
 	$(Q)mkdir -p _build/locale
 	$(Q)cp $(VV) -r $(UUID)/locale/* _build/locale/
-	$(Q)sed -i 's/"version": -1/"version": "$(VERSION)"/'  _build/metadata.json;
+	$(Q)sed -i 's/"version": -1/"version": $(VERSION)/'  _build/metadata.json;
 	$(call msg,$@,Extension built, saved to: _build/)
 	$(call msg,$@,OK)
 
