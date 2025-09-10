@@ -58,7 +58,8 @@ echo "SHA512 ($SOURCE_TARBALL_NAME) = ${SOURCE_SHA512}" > sources
 
 # Build and install!
 rpmbuild -bb ./gnome-shell-extension-system-monitor-applet.spec
-sudo dnf -y install ~/rpmbuild/RPMS/noarch/*.rpm
+# Install the freshly built RPM without enabling network repos; fail if hard deps are missing
+sudo dnf -y --disablerepo='*' --setopt=install_weak_deps=False install ~/rpmbuild/RPMS/noarch/*.rpm
 
 if [[ $? -eq 0 ]]; then
     echo "RPM build test successful"
