@@ -18,7 +18,7 @@ set -e
     exit 1
 }
 
-GSSMN_SOURCES=$(realpath $GSSMN_SOURCES)
+GSSMN_SOURCES=$(realpath "$GSSMN_SOURCES")
 GSSMN_SHA1_SHORT=$(c=${GSSMN_SHA1}; echo ${c:0:7})
 
 # Ensure HOME is set to a directory the builder user owns.
@@ -42,13 +42,11 @@ SOURCE_TARBALL_PATH=~/rpmbuild/SOURCES/$SOURCE_TARBALL_NAME
 # Generate a new source tarball for the RPM
 mkdir -pv ~/rpmbuild/SOURCES/
 
-sudo chown -R builder:builder "$GSSMN_SOURCES"
-cd "$GSSMN_SOURCES"
-git checkout $GSSMN_SHA1
-git archive \
+# Create a source archive directly from the mounted repository without modifying it
+git -C "$GSSMN_SOURCES" archive \
     --format=tar.gz \
     --prefix=gnome-shell-system-monitor-next-applet-${GSSMN_SHA1}/ \
-    HEAD > "$SOURCE_TARBALL_PATH"
+    "$GSSMN_SHA1" > "$SOURCE_TARBALL_PATH"
 SOURCE_SHA512=$(sha512sum "$SOURCE_TARBALL_PATH" | awk '{print $1}')
 
 # Patch the spec and source files to use our freshly archived source tarball
