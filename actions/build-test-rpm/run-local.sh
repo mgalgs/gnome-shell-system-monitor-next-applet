@@ -12,7 +12,12 @@ set -euo pipefail
 #   FEDORA_VERSIONS="fc43 fc42" ./run-local.sh
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-REPO_ROOT=$(cd "${SCRIPT_DIR}/../.." && pwd)
+ORIG_REPO_ROOT=$(cd "${SCRIPT_DIR}/../.." && pwd)
+TMPROOT=$(mktemp -d)
+trap 'rm -rf "${TMPROOT}"' EXIT
+cd "$TMPROOT"
+git clone --no-local "$ORIG_REPO_ROOT" gssmn
+REPO_ROOT="$TMPROOT/gssmn"
 
 FEDORA_VERSIONS=${FEDORA_VERSIONS:-"fc43 fc42 fc41"}
 GSSMN_SHA1=${GSSMN_SHA1:-$(cd "${REPO_ROOT}" && git rev-parse HEAD)}
