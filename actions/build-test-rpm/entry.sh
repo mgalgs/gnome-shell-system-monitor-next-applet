@@ -42,6 +42,11 @@ SOURCE_TARBALL_PATH=~/rpmbuild/SOURCES/$SOURCE_TARBALL_NAME
 # Generate a new source tarball for the RPM
 mkdir -pv ~/rpmbuild/SOURCES/
 
+# Allow git to operate on the bind-mounted sources even if ownership differs from the
+# current user inside the container (GitHub runner mounts as root). This avoids
+# "detected dubious ownership" errors.
+git config --global --add safe.directory "$GSSMN_SOURCES"
+
 # Create a source archive directly from the mounted repository without modifying it
 git -C "$GSSMN_SOURCES" archive \
     --format=tar.gz \
