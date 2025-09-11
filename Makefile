@@ -1,8 +1,8 @@
 # -*- coding: utf-8; mode: makefile-gmake -*-
-# Basic Makefile
 
 UUID = system-monitor-next@paradoxxx.zero.gmail.com
 INSTALLNAME = $(UUID)
+PREFIX ?= $(HOME)/.local
 
 BASE_MODULES = \
   $(UUID)/extension.js \
@@ -15,28 +15,15 @@ BASE_MODULES = \
   $(UUID)/stylesheet.css \
   $(UUID)/gpu_usage.sh
 
-# ---------
-# variables
-# ---------
+GSCHEMA_XML = $(UUID)/schemas/org.gnome.shell.extensions.system-monitor-next-applet.gschema.xml
+GSCHEMA_COMPILED = $(UUID)/schemas/gschemas.compiled
 
-ifeq ($(strip $(DESTDIR)),)
-  INSTALLBASE = $(HOME)/.local/share/gnome-shell/extensions
-  SUDO=
-else
-  INSTALLBASE = $(DESTDIR)/usr/share/gnome-shell/extensions
-ifeq ($(BUILD_FOR_RPM),1)
-  SUDO=
-else
-  SUDO=sudo
-endif
-endif
+VERSION ?= 0
+ZIPFILE = $(UUID).zip
 
-ifdef VERSION
-  VSTRING = _v$(VERSION)
-else
-  VERSION = $(shell git rev-parse HEAD)
-  VSTRING =
-endif
+INSTALLBASE = $(PREFIX)/share/gnome-shell/extensions
+SCHEMAINSTALLBASE = $(PREFIX)/share/glib-2.0/schemas
+INSTALLDIR = $(INSTALLBASE)/$(INSTALLNAME)
 
 # VERBOSE level
 
@@ -55,126 +42,94 @@ endif
 # usage: $(call msg,INFO,'lorem ipsum')
 msg = @printf '  [%-12s] %s\n' '$(1)' '$(2)'
 
-
 # -------
 # targets
 # -------
 
-# is there anymore use of the (old) 'all' target?
-# PHONY += all
-# all: extension
-
-PHONY += help
 help:
-	@echo  'Install or remove the extension, for the local user'
-	@echo  'or as admin for all users:'
+	@echo  'Install the extension to ~/.local/share/ (for the local user):'
 	@echo  ''
-	@echo  '  make [install|remove]                        # for the local user'
-	@echo  '  make DESTDIR=/ [install|remove] clean        # as admin for all users'
+	@echo  '  make install'
 	@echo  ''
-	@echo  'Use environment VERSION=n.m to set verison string in the metadata and in'
-	@echo  'the generated zip-file explicit.  If no VERSION is passed, the current'
-	@echo  'commit SHA1 is used as version number in the metadata while the generated'
-	@echo  'zip file has no string attached.'
+	@echo  'Install the extension to $${PREFIX}/share/ (for system-wide install/packaging):'
 	@echo  ''
-	@echo  'Other targets are:'
+	@echo  '  sudo make PREFIX=/usr install       # as admin for all users'
+	@echo  '  make PREFIX=$${pkgdir}/usr install   # to another directory (for packaging)'
 	@echo  ''
-	@echo  '  zip-file  - build and zip ./$(UUID).zip'
+	@echo  'Other targets:'
+	@echo  ''
+	@echo  '  zip-file  - build $(ZIPFILE)'
+	@echo  '              (which can be uploaded to extensions.gnome.org or installed'
+	@echo  '               with gnome-extensions install)'
 	@echo  '  clean     - remove most generated files'
-	@echo  '  extension - rebuild schemas/gschemas.compiled'
-	@echo  '  translate - generate translation from po/ files'
 	@echo  ''
-	@echo  'control verbosity:'
-	@echo  ''
-	@echo  '  make V=0 [targets] -> quiet build (default)'
-	@echo  '  make V=1 [targets] -> verbose build'
+	@echo  'Note that most users should install the extension via extensions.gnome.org'
+	@echo  'or their distro package manager.'
 
-
-PHONY += install remove
-
-install: remove build
-	$(call msg,$@,$(SUDO) $(INSTALLBASE)/$(INSTALLNAME))
-	$(Q) $(SUDO) mkdir -p $(INSTALLBASE)/$(INSTALLNAME)
-	$(Q) $(SUDO) cp $(VV) -r ./_build/* $(INSTALLBASE)/$(INSTALLNAME)/
+install: clean build gschemas.install
+	$(call msg,$@,Installing to $(INSTALLDIR))
+	$(Q) mkdir -p "$(INSTALLDIR)"
+	$(Q) cp $(VV) -r ./_build/* "$(INSTALLDIR)/"
 	$(call msg,$@,OK)
 	$(call msg,$@,Please reload GNOME Shell and enable the extension)
 
-remove:
-	$(call msg,$@,$(SUDO) $(INSTALLBASE)/$(INSTALLNAME))
-ifeq ($(strip $(BUILD_FOR_RPM)),)
-	$(Q) gnome-extensions uninstall --quiet $(UUID) || true
-	$(Q) rm -rf $(INSTALLBASE)/$(INSTALLNAME) 2>/dev/null || true
-endif
-	$(call msg,$@,OK)
+uninstall:
+	$(Q)gnome-extensions uninstall $(UUID)
 
-PHONY += zip-file zip-file.clean
-ZIPFILE=$(UUID)$(VSTRING).zip
+clean: zip-file.clean build.clean
 
-zip-file: build.clean build
+zip-file: clean build
 	$(Q)cd _build ; zip $(V) -qr $(ZIPFILE) .
 	$(Q)mkdir -p dist
 	$(Q)mv _build/$(ZIPFILE) ./dist/$(ZIPFILE)
+	$(call msg,$@,Zip file saved to ./dist/$(ZIPFILE))
 	$(call msg,$@,OK)
 
-zip-install: remove zip-file
-	$(Q)gnome-extensions install ./dist/$(ZIPFILE)
-	$(call msg,$@,OK)
-	$(call msg,$@,Please reload GNOME Shell)
-
-clean:: zip-file.clean
 zip-file.clean:
 	$(Q)rm $(VV) -vf ./dist/$(ZIPFILE)
 	$(call msg,$@,OK)
 
-
-PHONY += extension extension.clean _drop-gschemas
-
-extension: _drop-gschemas ./$(UUID)/schemas/gschemas.compiled
+gschemas: $(GSCHEMA_COMPILED)
 	$(call msg,$@,OK)
 
-clean:: extension.clean
-extension.clean:
-	$(Q)git checkout -f -- ./$(UUID)/schemas/gschemas.compiled
+gschemas.install: $(GSCHEMA_XML)
+	$(Q)mkdir -p "$(SCHEMAINSTALLBASE)"
+	$(Q)cp $(VV) $(GSCHEMA_XML) "$(SCHEMAINSTALLBASE)"
+	$(call msg,$@,gschema installed to $(SCHEMAINSTALLBASE). You might need to run "glib-compile-schemas $(SCHEMAINSTALLBASE)")
 	$(call msg,$@,OK)
 
-./$(UUID)/schemas/gschemas.compiled: ./$(UUID)/schemas/org.gnome.shell.extensions.system-monitor.gschema.xml  ./$(UUID)/schemas/org.gnome.shell.extensions.system-monitor-next-applet.gschema.xml
+$(GSCHEMA_COMPILED): $(GSCHEMA_XML)
 	$(Q)glib-compile-schemas ./$(UUID)/schemas/
 	$(call msg,gschemas,OK)
 
-_drop-gschemas:
-	$(Q)rm -f ./$(UUID)/schemas/gschemas.compiled
-
-
-PHONY += build build.clean
-
-build: translate
+build: gschemas translate
 	$(Q)mkdir -p _build
 	$(Q)cp $(VV) $(BASE_MODULES) _build
 	$(Q)mkdir -p _build/ui
 	$(Q)cp $(VV) -r $(UUID)/ui/* _build/ui/
 	$(Q)mkdir -p _build/locale
 	$(Q)cp $(VV) -r $(UUID)/locale/* _build/locale/
-	$(Q)mkdir -p _build/schemas
-	$(Q)cp $(VV) $(UUID)/schemas/*.xml _build/schemas/
-	$(Q)cp $(VV)  $(UUID)/schemas/gschemas.compiled _build/schemas/
-	$(Q)sed -i 's/"version": -1/"version": "$(VERSION)"/'  _build/metadata.json;
+	$(Q)sed -i 's/"version": -1/"version": $(VERSION)/'  _build/metadata.json;
+	$(call msg,$@,Extension built, saved to: _build/)
 	$(call msg,$@,OK)
 
-clean:: build.clean
 build.clean:
-	$(Q)rm -fR ./_build
+	$(Q)rm -rf ./_build
 	$(call msg,$@,OK)
 
-PHONY += translate
-translate: extension
+translate:
 	$(Q)cd po;\
            ./compile.sh ../system-monitor-next@paradoxxx.zero.gmail.com/locale \
 	   | tr '\n' ' ' \
 	   | sed -e 's/^/  [$@   ] /;'; echo
 	$(call msg,$@,OK)
 
-clean:: translation.clean
-translation.clean:
-	$(Q)git checkout -f -- system-monitor-next@paradoxxx.zero.gmail.com/locale
-
-.PHONY: $(PHONY)
+.PHONY: help \
+	install \
+	zip-file \
+	zip-file.clean \
+	gschemas \
+	gschemas.install \
+	build \
+	build.clean \
+	translate
