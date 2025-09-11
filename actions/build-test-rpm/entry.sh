@@ -54,6 +54,21 @@ cd ~/gnome-shell-extension-system-monitor-applet/
 sed -i \
     "s/%global gitcommit [0-9a-f]\{40\}/%global gitcommit ${GSSMN_SHA1}/" \
     gnome-shell-extension-system-monitor-applet.spec
+
+# Simulate downstream RPM maintainer snapshot steps: set gitsnapinfo
+# (.YYYYMMDDgit%{gitshortcommit}), bump Release, and rewrite the top %changelog
+# header (preserving maintainer and Epoch)
+DATE_REAL=$(LANG=C date "+%a %b %d %Y")
+DATE_ABBR=$(LANG=C date "+%Y%m%d")
+RPMRELEASE=$(grep -woE '^Release: *[0-9]+' ./gnome-shell-extension-system-monitor-applet.spec | awk '{print $2}')
+RPMRELEASE=$((${RPMRELEASE}+1))
+
+sed -i \
+    -e "s/^%global gitsnapinfo.*/%global gitsnapinfo .${DATE_ABBR}git%{gitshortcommit}/" \
+    -e "s/^\(Release:\s*\)[0-9]\+/\1${RPMRELEASE}/" \
+    -e "/^%changelog/{n;s/\(^\* .*[0-9]\{4\} \)\(.* [0-9]:\)\(.*\)/\* ${DATE_REAL} \2${RPMVERSION}-${RPMRELEASE}\.${DATE_ABBR}git${GSSMN_SHA1_SHORT}/}" \
+    ./gnome-shell-extension-system-monitor-applet.spec
+
 echo "SHA512 ($SOURCE_TARBALL_NAME) = ${SOURCE_SHA512}" > sources
 
 # Build and install!
