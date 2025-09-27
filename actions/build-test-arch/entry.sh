@@ -11,7 +11,7 @@ mkdir -p /home/builder/build
 cd /home/builder/build
 
 # Clone the AUR build files
-git clone https://github.com/mgalgs/gnome-shell-extension-system-monitor-next-git.git
+git clone https://aur.archlinux.org/gnome-shell-extension-system-monitor-next-git.git
 cd gnome-shell-extension-system-monitor-next-git
 makepkg --install --noconfirm
 
