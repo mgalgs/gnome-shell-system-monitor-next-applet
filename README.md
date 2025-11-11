@@ -147,11 +147,15 @@ This will restart GNOME Shell, allowing you to see your changes immediately.
 
 ### Developing under Wayland
 
+On Gnome Shell 49 and later, you need to install `mutter-devkit` (`mutter-devkit` on
+Arch, `mutter-devel` on Fedora).
+
 Wayland currently doesn't have a way to reload GNOME Shell, so you'll need to log out and log back in. This is a bit of a pain, so you can use Wayland's "nested sessions" feature to avoid constant logging out and in:
 
-1. Start a nested session:
+1. Start a nested session (depending on your Gnome Shell version):
    ```
-   dbus-run-session -- gnome-shell --nested --wayland
+   dbus-run-session -- gnome-shell --devkit  # Gnome Shell 49+
+   dbus-run-session -- gnome-shell --nested --wayland  # pre-Gnome-Shell 49
    ```
 2. Start a new terminal *inside* the nested session. Don't panic if the terminal appears outside the nested window - the dbus session address will be configured to point at the nested session.
 3. In this new terminal, enable the extension:
