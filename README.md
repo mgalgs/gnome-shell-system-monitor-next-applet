@@ -134,7 +134,7 @@ After installation, the system monitor will appear in your top panel. You can co
 
 ### Manual Installation for Development
 
-To work on the extension, you'll need to clone and symlink the repository as described in the [Manual Installation](#manual-installation) section above.
+To work on the extension, you'll need to clone and locally install it from your cloned repository as described in the [Manual Installation](#manual-installation) section above.
 
 ### Developing under X11
 
