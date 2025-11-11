@@ -98,6 +98,11 @@ gschemas.install: $(GSCHEMA_XML)
 	$(call msg,$@,gschema installed to $(SCHEMAINSTALLBASE). You might need to run "glib-compile-schemas $(SCHEMAINSTALLBASE)")
 	$(call msg,$@,OK)
 
+# Not part of regular install since this is usually done by package manager hooks
+gschemas.install-and-compile: gschemas.install
+	$(Q)glib-compile-schemas "$(SCHEMAINSTALLBASE)"
+	$(call msg,$@,OK)
+
 $(GSCHEMA_COMPILED): $(GSCHEMA_XML)
 	$(Q)glib-compile-schemas ./$(UUID)/schemas/
 	$(call msg,gschemas,OK)
