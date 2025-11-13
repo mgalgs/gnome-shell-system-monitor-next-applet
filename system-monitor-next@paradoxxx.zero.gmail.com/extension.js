@@ -1134,6 +1134,7 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
     constructor(extension) {
         super(extension, {
             elt: 'battery',
+            elt_short: 'batt',
             item_name: _('Battery'),
             color_name: ['batt0'],
             icon: '. GThemedIcon battery-good-symbolic battery-good'
