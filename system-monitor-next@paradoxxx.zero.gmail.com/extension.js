@@ -1134,6 +1134,7 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
     constructor(extension) {
         super(extension, {
             elt: 'battery',
+            elt_short: 'batt',
             item_name: _('Battery'),
             color_name: ['batt0'],
             icon: '. GThemedIcon battery-good-symbolic battery-good'
@@ -1143,27 +1144,78 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
         this.icon_hidden = false;
         this.percentage = 0;
         this.timeString = '-- ';
-        // TODO: Figure out when Main.panel.statusArea.quickSettings._system becomes available
-        // It's defined while poking around in Looking Glass, but not here during enable when
-        // starting a new GS session.
-        this._proxy = Main.panel.statusArea.quickSettings._system._systemItem._powerToggle._proxy;
-        this.powerSigID = this._proxy.connect('g-properties-changed', this.update_battery.bind(this));
+
+        // Battery updates are event driven, and require the following _proxy value to exist.
+        //   this._proxy = Main.panel.statusArea.quickSettings._system._systemItem._powerToggle._proxy;
+        // This does not exist at launch time, so start a GLib handler to poll for it
+        this._poll_attempts = 0;
+        this._max_poll_attempts = 9;
+        this._poll_handler_id = GLib.timeout_add_seconds(
+            GLib.PRIORITY_DEFAULT, 1, this._poll_quickSettings.bind(this)
+        );
 
         // need to specify a default icon, since the contructor completes before UPower callback
         this.gicon = Gio.icon_new_for_string(this.icon);
 
         this.tip_format('%');
 
-        this.update_battery();
         this.update_tips();
         // this.hide_system_icon();
-        this.update();
 
         // Schema.connect('changed::' + this.elt + '-hidesystem', this.hide_system_icon.bind(this));
         extension._Schema.connect('changed::' + this.elt + '-time', this.update_tips.bind(this));
     }
     refresh() {
         // do nothing here?
+    }
+    _poll_quickSettings() {
+        // check if the quickSettings proxy value is defined
+        // once it is, set this._proxy and remove the handler
+
+        if (this._proxy) {
+            return GLib.SOURCE_REMOVE;
+        }
+
+        try {
+            const proxy = (
+                Main.panel
+                ?.statusArea
+                ?.quickSettings
+                ?._system
+                ?._systemItem
+                ?._powerToggle
+                ?._proxy
+            );
+
+            sm_log(`Looking for battery proxy (attempt ${this._poll_attempts})`);
+            if (proxy) {
+                // set this._proxy, bind update_battery(), and stop polling
+                sm_log("Battery proxy found!");
+                this._proxy = proxy;
+                this.powerSigID = this._proxy.connect(
+                    'g-properties-changed',
+                    this.update_battery.bind(this),
+                );
+                this._poll_handler_id = undefined;
+                this._poll_attempts = 0;
+                return GLib.SOURCE_REMOVE;
+            }
+        } catch (error) {
+            sm_log(`Error accessing quickSettings proxy: ${error.message}`, 'warn');
+        }
+
+        // Check if we've exceeded maximum attempts
+        this._poll_attempts++;
+        if (this._poll_attempts >= this._max_poll_attempts) {
+            sm_log(`Battery proxy not found after ${this._poll_attempts}, giving up`);
+            this._poll_handler_id = undefined;
+            return GLib.SOURCE_REMOVE;
+        }
+
+        // Exponential backoff
+        const next_delay = Math.pow(2, this._poll_attempts - 1);
+        this._poll_handler_id = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, next_delay, this._poll_quickSettings.bind(this));
+        return GLib.SOURCE_REMOVE;
     }
     update_battery() {
         // callback function for when battery stats updated.
@@ -1324,7 +1376,15 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
     }
     destroy() {
         ElementBase.prototype.destroy.call(this);
-        this._proxy.disconnect(this.powerSigID);
+
+        if (this._proxy) {
+            this._proxy.disconnect(this.powerSigID);
+        }
+
+        if (this._poll_handler_id) {
+            GLib.source_remove(this._poll_handler_id);
+            this._poll_handler_id = undefined;
+        }
     }
 }
 
@@ -2577,7 +2637,7 @@ export default class SystemMonitorExtension extends Extension {
         positionList[this._Schema.get_int('thermal-position')] = new Thermal(this);
         positionList[this._Schema.get_int('fan-position')] = new Fan(this);
         // See TODO inside Battery
-        // positionList[this._Schema.get_int('battery-position')] = new Battery(this);
+        positionList[this._Schema.get_int('battery-position')] = new Battery(this);
 
         if (this._Schema.get_boolean('move-clock')) {
             let dateMenu = Main.panel.statusArea.dateMenu;
