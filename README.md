@@ -87,6 +87,7 @@ If the installation was successful, the toggle button should now show "ON". If i
 This extension is available in the repositories of several distributions for any users who prefer to leave extension updates to their package manager:
 
 - **Fedora**: `dnf install gnome-shell-extension-system-monitor-applet`
+- **Arch (AUR)**: `yay gnome-shell-extension-system-monitor-next-git`
 
 After installation, the extension will be available for enabling in GNOME Extensions app.
 
