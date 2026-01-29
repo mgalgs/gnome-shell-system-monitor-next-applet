@@ -2,99 +2,94 @@
 
 Status key: [NOT STARTED] / [IN PROGRESS] / [DONE]
 
-## Completed
+This plan is prioritized by risk (runtime breakage/parity regressions first), then DevEx improvements (lint/test tooling) while keeping changes scoped to the widget system + migrated widgets only.
 
-- [DONE] Widget System Foundation
-  - All core modules exist in `system-monitor-next@paradoxxx.zero.gmail.com/widget-system/`
-  - Extension works with zero new widgets registered
+## Current State (Validated in Working Tree)
 
-- [DONE] Memory Widget Migration
-  - Memory widget migrated to new architecture
-  - Integration complete via `_createMemoryWidget()` in extension.js
-  - All other widgets remain legacy and unaffected
+- [DONE] Core widget-system modules exist under `system-monitor-next@paradoxxx.zero.gmail.com/widget-system/`.
+- [DONE] Memory widget exists under `system-monitor-next@paradoxxx.zero.gmail.com/widgets/memory-widget.js` and is wired via `SystemMonitorExtension._createMemoryWidget()`.
+- [NOT STARTED] Build packaging includes widget-system + widgets in `_build/` (Makefile currently omits these paths).
 
-## Code Review Feedback Addressed
+## Highest Priority Remaining Work
 
-- [NOT STARTED] Track which code review feedback items have been resolved
+### P0: Correctness / Runtime Safety (Must Fix For Parity)
 
-## Remaining Work
+- [NOT STARTED] Fix menu rebuild compatibility for bridged widgets
+  - `build_menu_info()` destroys menu actors and expects `create_menu_items()` to return fresh actors; LegacyBridge currently returns persistent actors that may already be destroyed.
+  - Ensure `{id}-show-menu` changes trigger the same rebuild behavior as legacy `change_menu()`.
 
-### Critical Bugs
+- [NOT STARTED] Fix settings signal lifecycle leaks for widget-system
+  - LegacyBridge connects directly to `extension._Schema` in multiple places but does not store/disconnect signal IDs on destroy.
+  - WidgetRenderer also connects to schema changes without a corresponding disconnect/destroy path.
 
-- [NOT STARTED] Fix `imports.gi.Cogl` usage in WidgetRenderer breaking ES module semantics (WidgetRenderer.js:~60)
-- [NOT STARTED] Fix Tooltip creation duplication between LegacyBridge.tip_format and WidgetRenderer.tip_format
-- [NOT STARTED] Fix LegacyBridge.update not calling scheduler; collect() frequency differs from legacy Mem (LegacyBridge.js:~680)
-- [NOT STARTED] Fix chart scale cooldown logic duplication between ElementBase and LegacyBridge branches
+- [NOT STARTED] Fix async `collect()` handling and failure containment
+  - LegacyBridge calls `widget.collect()` synchronously and does not await promises; rejected promises can become unhandled.
+  - Ensure `collect()` errors (throw/reject) are logged and updates continue.
 
-### Correctness & Edge Cases
+- [NOT STARTED] Fix tooltip implementation duplication / broken renderer tooltip path
+  - Tooltip UI classes exist in both `extension.js` and `widget-system/LegacyBridge.js`.
+  - `WidgetRenderer._importTipMenu()` is effectively a placeholder and will break if used.
+  - Decide a single owner for tooltip creation and content updates (Bridge vs Renderer) and remove the duplicate path.
 
-- [NOT STARTED] Determine and implement correct GiB rounding for MemoryWidget parity with legacy Mem (memory-widget.js:~50-85)
-- [NOT STARTED] Resolve Memory total normalization differences for >4GiB systems
-- [NOT STARTED] Fix menu rebuilding for modern widgets not triggered by show-menu changes
-- [NOT STARTED] Fix setChart not updating chart colors or hooking repaint signals after schema change
-- [NOT STARTED] Fix WidgetRenderer._importExtension using global imports path instead of extension scope
-- [NOT STARTED] Fix Scheduler instantiated but never used in _createMemoryWidget (dead code)
-- [NOT STARTED] Fix Renderer.apply and LegacyBridge._updateMenuItems duplicating logic with differing rules
+### P0: Memory Parity Gaps (Visible Output Differences)
 
-### Performance
+- [NOT STARTED] Fix Memory menu “used / total” semantics
+  - Legacy Mem shows `program / total` (user only); widget-system currently sums program+buffer+cache.
 
-- [NOT STARTED] Optimize LegacyBridge.update to batch processing instead of running all per-frame
+- [NOT STARTED] Fix unit label localization in widget-system menu output
+  - Legacy Mem uses `_('MiB')` / `_('GiB')`; widget-system currently hardcodes `'MiB'/'GiB'`.
 
-### Architecture & Maintainability
+- [NOT STARTED] Align Memory normalization/percentage math with legacy rounding
+  - Legacy computes percentages from already-rounded MiB/GiB values; current MemoryWidget normalizes from raw bytes.
 
-- [NOT STARTED] Extract helper functions from LegacyBridge (>800 lines):
-  - Tooltip helper
-  - Color parsing helper
-  - Chart adapter
-- [NOT STARTED] Consider unifying data pipeline between WidgetRenderer and LegacyBridge to avoid parity drift (40-60% code duplication)
-- [NOT STARTED] Use extension-provided color parsing instead of ad-hoc Cogl imports
-- [NOT STARTED] Remove dead parameters renderer/scheduler in WidgetRegistry.create or wire scheduler through LegacyBridge
+### P0: Build/Install Safety
 
-### Testing (Incremental)
+- [NOT STARTED] Update build packaging to include new code
+  - Ensure `make build`, `make install`, and `make zip-file` include:
+    - `system-monitor-next@paradoxxx.zero.gmail.com/widget-system/**`
+    - `system-monitor-next@paradoxxx.zero.gmail.com/widgets/**`
 
-- [NOT STARTED] Set up testing infrastructure starting with widget system
-- [NOT STARTED] Unit tests for MemoryWidget.collect to ensure legacy parity:
-  - MiB/GiB boundaries
-  - rounding
-  - buffer/cache semantics
-- [NOT STARTED] Test LegacyBridge.update to ensure identical text/menu outputs to legacy Mem for same sample data
-- [NOT STARTED] Test tooltip content parity between legacy and modern implementations
+## DevEx Improvements (Scoped To New Code)
 
-### Foundation Improvements
+### Linting
 
-- [NOT STARTED] Documentation & Specs
-  - Establish specs as single source of truth under `ai/specs/`
-  - Define minimal runtime integration contract
-  - Document widget API, data flow, and lifecycle
-  - Document LegacyBridge contract
-  - Document settings compatibility rules
-  - Create verification checklist with step-by-step checks
+- [NOT STARTED] Scope ESLint to widget-system + widgets only
+  - Update `make check.lint` and `checkjs.sh` to lint only:
+    - `system-monitor-next@paradoxxx.zero.gmail.com/widget-system/`
+    - `system-monitor-next@paradoxxx.zero.gmail.com/widgets/`
+  - Do not reformat or fix lint in legacy `extension.js` as part of this project.
 
-- [NOT STARTED] Terminology Cleanup
-  - Remove "modern" terminology from all code and comments
-  - Use consistent naming ("new" widget system, "legacy" widgets)
+### Testing (Incremental, New Code Only)
 
-- [NOT STARTED] ESLint Configuration Migration
-  - Migrate `.eslintrc` to `eslint.config.js` (ESLint v9 format)
-  - Fix all eslint violations in codebase
+- [NOT STARTED] Add a minimal GJS unit-test harness for widget-system
+  - Start with tests that avoid requiring a full GNOME Shell session (registry/settings/small pure helpers).
 
-- [NOT STARTED] Build System Improvements
-  - Add `make check` target combining whitespace + eslint checks
-  - Update existing `checkjs.sh` or integrate into Makefile
+- [NOT STARTED] Add MemoryWidget parity tests (fixture-based)
+  - Encode boundary/rounding cases (MiB/GiB threshold, rounding, buffer/cache semantics).
+  - Prefer injecting a stats provider so tests don’t depend on host libgtop values.
 
-- [NOT STARTED] Future Widget Migrations (Post-Memory)
-  - CPU widget migration
-  - Disk widget migration
-  - Network widget migration
-  - GPU widget migration
-  - Battery widget migration
-  - Temperature widget migration
+### Data Model / API Cleanup (DevEx)
 
-## Migration Priority
+- [NOT STARTED] Update widget-system data contract so widget authors don’t implement normalization/unit selection
+  - Replace the “widget must return `_normalized`” expectation with framework-owned normalization.
+  - Add a framework-owned value formatting layer (bytes/bytes-per-second/percent/etc.) so `collect()` can return base units and the framework humanizes for display.
 
-1. Critical bugs (Cogl imports, tooltip duplication, scheduler issues, chart scaling)
-2. Correctness & edge cases (rounding parity, normalization, menu rebuilding, setChart colors, imports scope, dead code)
-3. Architecture & maintainability (extract helpers, unify data pipeline, color parsing, remove dead params)
-4. Foundation improvements (docs, terminology cleanup, ESLint config, build system)
-5. Testing infrastructure and specific parity tests
-6. Future widget migrations (one at a time)
+## Maintainability (After Parity)
+
+- [NOT STARTED] Reduce duplication between LegacyBridge and WidgetRenderer
+  - Consolidate: normalization, tooltip content update, percent + used/total formatting, and color parsing into shared helpers.
+  - Pick a single pipeline for text/menu/tooltip updates to avoid drift.
+
+- [NOT STARTED] Decide scheduler ownership and simplify
+  - Either (a) wire WidgetScheduler through LegacyBridge, or (b) remove WidgetScheduler for now and make LegacyBridge fully handle async+error rules.
+
+## Documentation (Planning / Source of Truth)
+
+- [DONE] `ai/specs/*` exist and define core contracts and verification checklist.
+- [NOT STARTED] Add a spec for framework-owned units/humanization + normalization contract.
+
+## Out of Scope (For This Project)
+
+- Migrating additional widgets beyond Memory.
+- Refactoring `prefs.js`.
+- Mass refactors of legacy `extension.js` beyond the minimal integration hook(s).

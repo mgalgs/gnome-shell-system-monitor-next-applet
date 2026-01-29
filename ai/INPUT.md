@@ -1,6 +1,6 @@
 # Human input
 
-- Don't refer to the new widget system as "modern" in the code, comments, or messages. The word "modern" should not be used. It needs to be removed.
+- Don't refer to the new widget system as "modern" in the code, comments, or messages. The word "modern" should not be used. It needs to be removed. Exception: it's okay to leave in design/planning documents (anything under `ai/`).
 
 - We need to add checks for whitespace issues (no trailing whitespace, etc). Perhaps a `make check` target that also does the eslint step and whatever else you recommend?
 
