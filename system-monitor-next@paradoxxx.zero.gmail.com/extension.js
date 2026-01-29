@@ -44,6 +44,10 @@ import { sm_log } from './utils.js';
 import { parse_bytearray, check_sensors } from './common.js';
 import { migrateSettings } from './migration.js';
 
+// Widget System imports
+import { WidgetRegistry, WidgetSettingsAdapter, WidgetRenderer, LegacyBridge } from './widget-system/index.js';
+import registerAllWidgets from './widgets/index.js';
+
 const NetworkManager = NM;
 const UPower = UPowerGlib;
 // Copied as of https://gitlab.gnome.org/GNOME/gnome-shell/-/blob/5fa08fe53376f5dca755360bd005a4a51ca78917/js/ui/panel.js#L45
@@ -2570,6 +2574,61 @@ export default class SystemMonitorExtension extends Extension {
         }
     }
 
+    /**
+     * Create Memory widget using widget system if available.
+     * Falls back to legacy Mem widget on failure.
+     */
+    _createMemoryWidget() {
+        // Initialize widget registry if not already done
+        if (!this._widgetRegistry) {
+            this._widgetRegistry = new WidgetRegistry();
+            registerAllWidgets(this._widgetRegistry);
+        }
+
+        // Check if Memory widget is available in registry
+        if (this._widgetRegistry.isAvailable('memory')) {
+            try {
+                sm_log('Creating Memory widget');
+
+                // Create settings adapter
+                const config = new WidgetSettingsAdapter(this._Schema, 'memory');
+
+                // Create renderer and scheduler (will be set up by LegacyBridge)
+                const renderer = null;
+                const scheduler = null;
+
+                // Create widget instance
+                const widget = this._widgetRegistry.create('memory', this, config, renderer, scheduler);
+
+                // Create renderer for the widget
+                widget.renderer = new WidgetRenderer(this, widget);
+
+                // Create LegacyBridge to wrap the widget
+                const bridgedWidget = LegacyBridge.wrap(widget, this);
+
+                // Transfer Chart from LegacyBridge to use extension's Chart class
+                // The LegacyBridge creates a stub chart, we need to replace it with real one
+                const elementWidth = this._Schema.get_int('memory-graph-width');
+                let chartWidth = elementWidth;
+                if (this._Style.get('') === '-compact') {
+                    chartWidth = Math.round(chartWidth / 1.5);
+                }
+                const realChart = new Chart(this, chartWidth, this._IconSize, bridgedWidget);
+                bridgedWidget.setChart(realChart);
+
+                sm_log('Memory widget created successfully');
+                return bridgedWidget;
+            } catch (e) {
+                sm_log(`Failed to create Memory widget: ${e.message}`, 'error');
+                sm_log('Falling back to legacy Memory widget', 'warn');
+            }
+        }
+
+        // Fallback to legacy widget
+        sm_log('Using legacy Memory widget');
+        return new Mem(this);
+    }
+
     enable() {
         sm_log('applet enable from ' + this.path);
 
@@ -2629,7 +2688,8 @@ export default class SystemMonitorExtension extends Extension {
         const cpuPosition = this._Schema.get_int('cpu-position');
         positionList[cpuPosition] = createCpus(this);
         positionList[this._Schema.get_int('freq-position')] = new Freq(this);
-        positionList[this._Schema.get_int('memory-position')] = new Mem(this);
+        // Use widget system for Memory (with fallback to legacy)
+        positionList[this._Schema.get_int('memory-position')] = this._createMemoryWidget();
         positionList[this._Schema.get_int('swap-position')] = new Swap(this);
         positionList[this._Schema.get_int('net-position')] = new Net(this);
         positionList[this._Schema.get_int('disk-position')] = new Disk(this);
@@ -2760,6 +2820,12 @@ export default class SystemMonitorExtension extends Extension {
         }
         this.__sm.tray.destroy();
         this.__sm = null;
+
+        // Clean up widget registry
+        if (this._widgetRegistry) {
+            this._widgetRegistry.clear();
+            this._widgetRegistry = null;
+        }
 
         sm_log('applet disable');
     }
