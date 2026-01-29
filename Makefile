@@ -61,6 +61,7 @@ help:
 	@echo  '  zip-file  - build $(ZIPFILE)'
 	@echo  '              (which can be uploaded to extensions.gnome.org or installed'
 	@echo  '               with gnome-extensions install)'
+	@echo  '  check     - run code quality checks (whitespace, lint)'
 	@echo  '  clean     - remove most generated files'
 	@echo  ''
 	@echo  'Note that most users should install the extension via extensions.gnome.org'
@@ -129,6 +130,26 @@ translate:
 	   | sed -e 's/^/  [$@   ] /;'; echo
 	$(call msg,$@,OK)
 
+check: check.whitespace check.lint
+	$(call msg,$@,All checks passed)
+
+check.whitespace:
+	$(call msg,$@,Checking for whitespace issues...)
+	$(Q)if git rev-parse --git-dir > /dev/null 2>&1; then \
+		git diff --check HEAD 2>/dev/null || (echo '  [whitespace  ] Changes have whitespace issues' && exit 1); \
+		git diff --cached --check 2>/dev/null || (echo '  [whitespace  ] Staged changes have whitespace issues' && exit 1); \
+	fi
+	$(call msg,$@,OK)
+
+check.lint:
+	$(call msg,$@,Running ESLint...)
+	$(Q)if command -v eslint >/dev/null 2>&1; then \
+		eslint $(UUID); \
+	else \
+		echo "  [lint        ] WARNING: eslint not found, skipping"; \
+	fi
+	$(call msg,$@,OK)
+
 .PHONY: help \
 	install \
 	zip-file \
@@ -137,4 +158,7 @@ translate:
 	gschemas.install \
 	build \
 	build.clean \
-	translate
+	translate \
+	check \
+	check.whitespace \
+	check.lint
