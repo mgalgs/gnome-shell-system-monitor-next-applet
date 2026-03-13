@@ -406,6 +406,13 @@ const SMExpanderRow = GObject.registerClass({
                     'active', Gio.SettingsBindFlags.DEFAULT
                 );
                 this.add_row(item);
+
+                item = new Adw.SwitchRow({title: _('Graph Average Digit')});
+                this._settings.bind('cpu-graph-average-digit', item,
+                    'active', Gio.SettingsBindFlags.DEFAULT
+                );
+                this.add_row(item);
+
                 break;
             }
             case 'freq': {
