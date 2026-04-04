@@ -738,16 +738,10 @@ const TipMenu = class SystemMonitor_TipMenu extends PopupMenu.PopupMenuBase {
 
         let sourceTopLeftX = 0;
         let sourceTopLeftY = 0;
-        if (typeof this.sourceActor.get_transformed_extents === 'function') {
-            let extents = this.sourceActor.get_transformed_extents();
-            let sourceTopLeft = extents.get_top_left();
-            sourceTopLeftY = sourceTopLeft.y;
-            sourceTopLeftX = sourceTopLeft.x;
-        } else {
-            let allocation = Shell.util_get_transformed_allocation(this.sourceActor);
-            sourceTopLeftY = allocation.y1;
-            sourceTopLeftX = allocation.x1;
-        }
+        let extents = this.sourceActor.get_transformed_extents();
+        let sourceTopLeft = extents.get_top_left();
+        sourceTopLeftY = sourceTopLeft.y;
+        sourceTopLeftX = sourceTopLeft.x;
         let monitor = Main.layoutManager.findMonitorForActor(this.sourceActor);
         let [x, y] = [sourceTopLeftX + contentbox.x1,
             sourceTopLeftY + contentbox.y1];
@@ -1912,16 +1906,22 @@ const Net = class SystemMonitor_Net extends ElementBase {
         this.update_iface_list();
 
         if (!this.ifs.length) {
-            let net_lines = Shell.get_file_contents_utf8_sync('/proc/net/dev').split('\n');
-            for (let i = 2; i < net_lines.length - 1; i++) {
-                let ifc = net_lines[i].replace(/^\s+/g, '').split(':')[0];
-                if (Shell.get_file_contents_utf8_sync('/sys/class/net/' + ifc + '/operstate')
-                    .replace(/\s/g, '') === 'up' &&
-                    ifc.indexOf('br') < 0 &&
-                    ifc.indexOf('lo') < 0) {
-                    this.ifs.push(ifc);
+            try {
+                let [, net_contents] = Gio.File.new_for_path('/proc/net/dev').load_contents(null);
+                let net_lines = new TextDecoder().decode(net_contents).split('\n');
+                for (let i = 2; i < net_lines.length - 1; i++) {
+                    let ifc = net_lines[i].replace(/^\s+/g, '').split(':')[0];
+                    try {
+                        let [, op_contents] = Gio.File.new_for_path(
+                            '/sys/class/net/' + ifc + '/operstate').load_contents(null);
+                        if (new TextDecoder().decode(op_contents).replace(/\s/g, '') === 'up' &&
+                            ifc.indexOf('br') < 0 &&
+                            ifc.indexOf('lo') < 0) {
+                            this.ifs.push(ifc);
+                        }
+                    } catch (_e) { /* operstate file may not exist */ }
                 }
-            }
+            } catch (_e) { /* /proc/net/dev unavailable */ }
         }
         this.gtop = new GTop.glibtop_netload();
         this.last = [0, 0, 0, 0, 0];
