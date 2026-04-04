@@ -2532,13 +2532,30 @@ const Icon = class SystemMonitor_Icon {
 }
 
 export default class SystemMonitorExtension extends Extension {
-    openSystemMonitor() {
+    _lookupMonitorApp() {
+        const monitorAppIds = [
+            'org.gnome.SystemMonitor.desktop',
+            'gnome-system-monitor.desktop',
+            'net.nokyan.Resources.desktop',
+        ];
         let _appSys = Shell.AppSystem.get_default();
-        let _gsmApp = _appSys.lookup_app('org.gnome.SystemMonitor.desktop') || _appSys.lookup_app('gnome-system-monitor.desktop');
+        for (const id of monitorAppIds) {
+            let app = _appSys.lookup_app(id);
+            if (app)
+                return app;
+        }
+        return null;
+    }
+
+    openSystemMonitor() {
+        let _gsmApp = this._lookupMonitorApp();
         let customCmd = this._Schema.get_string('custom-monitor-command');
 
         if (!customCmd || customCmd.trim() === '') {
-            _gsmApp.activate();
+            if (_gsmApp)
+                _gsmApp.activate();
+            else
+                sm_log('No system monitor application found', 'warn');
             return;
         }
 
@@ -2547,7 +2564,8 @@ export default class SystemMonitorExtension extends Extension {
             let [success, argv] = GLib.shell_parse_argv(customCmd);
             if (!success) {
                 sm_log('Failed to parse custom monitor command: ' + customCmd, 'error');
-                _gsmApp.activate();
+                if (_gsmApp)
+                    _gsmApp.activate();
                 return;
             }
 
@@ -2566,7 +2584,8 @@ export default class SystemMonitorExtension extends Extension {
             });
         } catch (e) {
             sm_log('Failed to execute custom monitor command: ' + e.message, 'error');
-            _gsmApp.activate();
+            if (_gsmApp)
+                _gsmApp.activate();
         }
     }
 
@@ -2711,11 +2730,14 @@ export default class SystemMonitorExtension extends Extension {
         );
 
         let item;
-        item = new PopupMenu.PopupMenuItem(_('System Monitor...'));
-        item.connect('activate', () => {
-            this.openSystemMonitor();
-        });
-        tray.menu.addMenuItem(item);
+        let customCmd = this._Schema.get_string('custom-monitor-command');
+        if (this._lookupMonitorApp() || (customCmd && customCmd.trim() !== '')) {
+            item = new PopupMenu.PopupMenuItem(_('System Monitor...'));
+            item.connect('activate', () => {
+                this.openSystemMonitor();
+            });
+            tray.menu.addMenuItem(item);
+        }
 
         item = new PopupMenu.PopupMenuItem(_('Preferences...'));
         item.connect('activate', () => {
