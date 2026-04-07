@@ -22,40 +22,47 @@
 
 checkcommand()
 {
-	command -v "$1" > /dev/null 2>&1
+  command -v "$1" > /dev/null 2>&1
 }
 
-# This will print three lines. The first one is the the total vRAM available,
-# the second one is the used vRAM and the third on is the GPU usage in %.
+# This will print three lines. The first one is the total vRAM available,
+# the second one is the used vRAM and the third one is the GPU usage in %.
 if nvidia-smi --list-gpus > /dev/null 2>&1  ; then
-	nvidia-smi -i 0 --query-gpu=memory.total,memory.used,utilization.gpu --format=csv,noheader,nounits | while IFS=', ' read -r a b c; do echo "$a"; echo "$b"; echo "$c"; done
+  nvidia-smi -i 0 --query-gpu=memory.total,memory.used,utilization.gpu --format=csv,noheader,nounits | while IFS=', ' read -r a b c; do echo "$a"; echo "$b"; echo "$c"; done
 
-elif lsmod | grep amdgpu > /dev/null; then
-	# Set `card0` or `card1` here. For some reason `card1` might be used instead.
- 	# This could have something to do with Ryzen integrated GPUs.
- 	# There could be a drop down selector in the UI.
- 	if [ -e /sys/class/drm/card0 ]; then
-  		card=card0
-    	else
-     		card=card1
-       	fi
-	total=$(cat /sys/class/drm/$card/device/mem_info_vram_total)
-	echo $(($total / 1024 / 1024))
+elif lsmod | grep -q amdgpu; then
+  # Dynamic detection of AMD GPU path
+  gpu_path=""
+  for c in /sys/class/drm/card*; do
+    if [ -f "$c/device/mem_info_vram_total" ]; then
+      gpu_path="$c/device"
+      break
+    fi
+  done
 
-	used=$(cat /sys/class/drm/$card/device/mem_info_vram_used)
-	echo $(($used / 1024 / 1024))
+  if [ -n "$gpu_path" ]; then
+    total=$(cat "$gpu_path/mem_info_vram_total")
+    echo $(($total / 1024 / 1024))
 
-	cat /sys/class/drm/$card/device/gpu_busy_percent
+    used=$(cat "$gpu_path/mem_info_vram_used")
+    echo $(($used / 1024 / 1024))
+
+    if [ -f "$gpu_path/gpu_busy_percent" ]; then
+      cat "$gpu_path/gpu_busy_percent"
+    else
+      echo 0
+    fi
+  fi
 
 elif checkcommand glxinfo; then
-	TOTALVRAM=$(glxinfo | grep -A2 -i GL_NVX_gpu_memory_info | grep -E -i 'dedicated')
-	TOTALVRAM=${TOTALVRAM##*:[[:blank:]]}
-	TOTALVRAM=${TOTALVRAM%%[[:blank:]]MB*}
-	AVAILVRAM=$(glxinfo | grep -A4 -i GL_NVX_gpu_memory_info | grep -E -i 'available dedicated')
-	AVAILVRAM=${AVAILVRAM##*:[[:blank:]]}
-	AVAILVRAM=${AVAILVRAM%%[[:blank:]]MB*}
-	let FREEVRAM=TOTALVRAM-AVAILVRAM
-	echo "$TOTALVRAM"
-	echo "$FREEVRAM"
-
+  # ... (mantener lógica de glxinfo original) ...
+  TOTALVRAM=$(glxinfo | grep -A2 -i GL_NVX_gpu_memory_info | grep -E -i 'dedicated')
+  TOTALVRAM=${TOTALVRAM##*:[[:blank:]]}
+  TOTALVRAM=${TOTALVRAM%%[[:blank:]]MB*}
+  AVAILVRAM=$(glxinfo | grep -A4 -i GL_NVX_gpu_memory_info | grep -E -i 'available dedicated')
+  AVAILVRAM=${AVAILVRAM##*:[[:blank:]]}
+  AVAILVRAM=${AVAILVRAM%%[[:blank:]]MB*}
+  # Usar $(( )) para aritmética estándar en lugar de 'let' para mayor compatibilidad
+  echo "$TOTALVRAM"
+  echo $((TOTALVRAM - AVAILVRAM))
 fi
