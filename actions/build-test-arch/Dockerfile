@@ -1,6 +1,6 @@
 FROM archlinux:base-devel-20250427.0.341977
 
-RUN pacman -Sy --noconfirm archlinux-keyring && pacman -Syu --noconfirm \
+RUN pacman-key --init && pacman -Sy --noconfirm archlinux-keyring && pacman -Syu --noconfirm \
     git \
     gnome-shell \
     libgtop \
