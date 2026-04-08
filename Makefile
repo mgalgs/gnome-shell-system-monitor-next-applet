@@ -64,6 +64,19 @@ help:
 	@echo  '  check     - run code quality checks (whitespace, lint)'
 	@echo  '  clean     - remove most generated files'
 	@echo  ''
+	@echo  'VM Testing (requires libvirt + virt-install + passt):'
+	@echo  ''
+	@echo  '  vm-create       - create a test VM from cloud image'
+	@echo  '  vm-create-all   - create all test VMs in the matrix'
+	@echo  '  vm-test         - deploy extension to VM and run smoke test'
+	@echo  '  vm-test-all     - run tests across full GNOME version matrix'
+	@echo  '  vm-viewer       - open interactive graphical session'
+	@echo  '  vm-ssh          - open SSH session to VM'
+	@echo  '  vm-destroy      - tear down test VM(s)'
+	@echo  ''
+	@echo  '  Use VM= to target a specific VM (default: first in vms.conf):'
+	@echo  '    make vm-test VM=gssmn-fedora42'
+	@echo  ''
 	@echo  'Note that most users should install the extension via extensions.gnome.org'
 	@echo  'or their distro package manager.'
 
@@ -150,6 +163,41 @@ check.lint:
 	fi
 	$(call msg,$@,OK)
 
+# VM variable: target a specific VM (default: first in vms.conf)
+# Usage: make vm-test VM=gssmn-fedora42
+VM_ARGS = $(if $(VM),--vm $(VM),)
+
+vm-create:
+	$(call msg,$@,Creating test VM...)
+	$(Q)./testing/vm/vm-create.sh $(VM_ARGS)
+	$(call msg,$@,OK)
+
+vm-create-all:
+	$(call msg,$@,Creating all test VMs...)
+	$(Q)./testing/vm/vm-create.sh --all
+	$(call msg,$@,OK)
+
+vm-test:
+	$(call msg,$@,Running VM test...)
+	$(Q)./testing/vm/vm-test.sh $(VM_ARGS)
+	$(call msg,$@,OK)
+
+vm-test-all:
+	$(call msg,$@,Running VM test matrix...)
+	$(Q)./testing/vm/vm-test-matrix.sh $(if $(LABEL),--label $(LABEL),) $(if $(BASELINE),--baseline $(BASELINE),)
+	$(call msg,$@,OK)
+
+vm-viewer:
+	$(Q)./testing/vm/vm-viewer.sh $(VM_ARGS)
+
+vm-ssh:
+	$(Q)./testing/vm/vm-ssh.sh $(VM_ARGS)
+
+vm-destroy:
+	$(call msg,$@,Destroying test VM...)
+	$(Q)./testing/vm/vm-destroy.sh $(if $(VM),--vm $(VM),--all)
+	$(call msg,$@,OK)
+
 .PHONY: help \
 	install \
 	zip-file \
@@ -161,4 +209,11 @@ check.lint:
 	translate \
 	check \
 	check.whitespace \
-	check.lint
+	check.lint \
+	vm-create \
+	vm-create-all \
+	vm-test \
+	vm-test-all \
+	vm-viewer \
+	vm-ssh \
+	vm-destroy

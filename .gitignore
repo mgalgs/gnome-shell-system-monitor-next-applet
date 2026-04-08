@@ -8,3 +8,9 @@ tmp
 *.out
 /_build
 /dist
+/notes.org
+/.claude/settings.local.json
+
+# VM test results (screenshots, logs)
+/testing/vm/results/*
+!/testing/vm/results/.gitkeep

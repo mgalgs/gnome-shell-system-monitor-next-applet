@@ -85,7 +85,34 @@ G_MESSAGES_DEBUG=all MUTTER_DEBUG_DUMMY_MODE_SPECS=1366x768 dbus-run-session -- 
 eslint system-monitor-next@paradoxxx.zero.gmail.com
 ```
 
-ESLint configuration is in `.eslintrc` (uses ES6, 4-space indent, single quotes, max line length 160).
+ESLint configuration is in `eslint.config.js` (flat config format, ES2022, 4-space indent, single quotes, max line length 160).
+
+### VM-Based Functional Testing
+
+Automated testing in an isolated VM with a real GNOME Shell session. Requires `libvirt`, `virt-install`, `qemu-img`, `genisoimage`, and `ImageMagick`.
+
+```bash
+# First time: create a test VM from a Fedora cloud image (~10-15 min)
+make vm-create
+# Or: ./testing/vm/vm-create.sh --vm gssmn-fedora42
+
+# Run a full test cycle (deploy, screenshot, logs, health check)
+make vm-test
+# Or: ./testing/vm/vm-test.sh --vm gssmn-fedora42 --label my-change
+
+# Fast iteration (skip snapshot restore, reuse current VM state)
+./testing/vm/vm-test.sh --no-restore --label quick-fix
+
+# Just take a screenshot of the current VM state
+./testing/vm/vm-test.sh --screenshot-only --label check-ui
+
+# Tear down test VMs (preserves cached cloud images)
+make vm-destroy
+```
+
+**Output:** Screenshots (PNG) and logs are saved to `testing/vm/results/`. The test script prints absolute file paths for easy inspection.
+
+**For AI agents (Claude Code):** Run `vm-test.sh` with `run_in_background=true`, then `Read` the screenshot PNG and log file from the results.
 
 ### Translation
 

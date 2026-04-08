@@ -172,6 +172,31 @@ To capture debug logs and set a custom screen size for the nested session:
 G_MESSAGES_DEBUG=all MUTTER_DEBUG_DUMMY_MODE_SPECS=1366x768 dbus-run-session -- gnome-shell --nested --wayland |& tee /tmp/logs.txt
 ```
 
+### VM-Based Functional Testing
+
+For automated testing across multiple GNOME Shell versions, the project includes a VM test harness that creates isolated Fedora/Ubuntu VMs from cloud images, deploys the extension, and captures screenshots and logs.
+
+**Prerequisites:** `libvirt`, `qemu`, `virt-install`, `passt`, `genisoimage`, `imagemagick`
+
+```bash
+make vm-create                    # Create test VM (~10 min first time, cached after)
+make vm-test                      # Deploy + smoke test on default VM
+make vm-viewer                    # Open interactive graphical session
+make vm-ssh                       # SSH into the VM
+make vm-destroy                   # Tear down
+
+# Target a specific GNOME version:
+make vm-create VM=gssmn-fedora42
+make vm-test VM=gssmn-fedora42
+make vm-viewer VM=gssmn-fedora42
+
+# Full matrix test with before/after comparison:
+make vm-test-all LABEL=master-baseline
+make vm-test-all LABEL=my-feature BASELINE=master-baseline
+```
+
+See [`testing/vm/README.md`](testing/vm/README.md) for detailed usage, architecture, and available options.
+
 ## Translation
 
 To contribute a translation:

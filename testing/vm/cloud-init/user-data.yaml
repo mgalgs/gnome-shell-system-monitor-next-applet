@@ -1,0 +1,20 @@
+#cloud-config
+
+users:
+  - name: testuser
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    lock_passwd: false
+    # Password: "testpass" (for emergency console access only; SSH uses keys)
+    passwd: $6$rounds=4096$saltsalt$ZzT5MnVvqmHBZmMH0MEmjC5TSzYkfMDBiPaJB/E7mCIRR7MdKJfUxPboFfKhbGO.jV7R3wILsXqPxPkVm8VbZ0
+    ssh_authorized_keys:
+      - SSH_PUBKEY_PLACEHOLDER
+
+package_update: true
+packages:
+  - rsync
+  - qemu-guest-agent
+
+runcmd:
+  # Enable guest agent for virsh domifaddr
+  - systemctl enable --now qemu-guest-agent
