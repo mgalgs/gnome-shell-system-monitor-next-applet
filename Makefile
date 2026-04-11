@@ -72,6 +72,7 @@ help:
 	@echo  '  vm-test-all     - run tests across full GNOME version matrix'
 	@echo  '  vm-viewer       - open interactive graphical session'
 	@echo  '  vm-ssh          - open SSH session to VM'
+	@echo  '  vm-list         - list configured VMs and their status'
 	@echo  '  vm-destroy      - tear down test VM(s)'
 	@echo  ''
 	@echo  '  Use VM= to target a specific VM (default: first in vms.conf):'
@@ -193,6 +194,9 @@ vm-viewer:
 vm-ssh:
 	$(Q)./testing/vm/vm-ssh.sh $(VM_ARGS)
 
+vm-list:
+	$(Q)./testing/vm/vm-list.sh
+
 vm-destroy:
 	$(call msg,$@,Destroying test VM...)
 	$(Q)./testing/vm/vm-destroy.sh $(if $(VM),--vm $(VM),--all)
@@ -216,4 +220,5 @@ vm-destroy:
 	vm-test-all \
 	vm-viewer \
 	vm-ssh \
+	vm-list \
 	vm-destroy
