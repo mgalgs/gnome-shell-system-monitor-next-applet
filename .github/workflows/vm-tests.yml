@@ -1,0 +1,75 @@
+name: VM Integration Tests
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  vm-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        vm:
+          - gssmn-fedora39
+          - gssmn-fedora40
+          - gssmn-fedora41
+          - gssmn-fedora42
+          - gssmn-fedora43
+          - gssmn-ubuntu2404
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Enable KVM
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+
+    - name: Install virtualization dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          qemu-kvm \
+          libvirt-daemon-system \
+          libvirt-clients \
+          virtinst \
+          genisoimage \
+          imagemagick \
+          passt \
+          openssh-client \
+          rsync
+
+    - name: Configure libvirt for session access
+      run: |
+        # Ensure the runner user can use qemu:///session
+        sudo usermod -aG kvm,libvirt $USER
+        mkdir -p ~/.config/libvirt
+        echo 'uri_default = "qemu:///session"' > ~/.config/libvirt/libvirt.conf
+
+        # Start user session socket
+        systemctl --user start libvirtd.socket 2>/dev/null || true
+        # Fallback: if user session doesn't work, ensure system daemon is up
+        sudo systemctl start libvirtd
+
+    - name: Create and test VM
+      run: |
+        ./testing/vm/vm-test.sh --create --vm ${{ matrix.vm }} --label ci-${{ github.run_number }}
+
+    - name: Upload test artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: vm-test-${{ matrix.vm }}
+        path: |
+          testing/vm/results/*.png
+          testing/vm/results/*.log
+        retention-days: 30
