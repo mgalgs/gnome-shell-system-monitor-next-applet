@@ -210,7 +210,7 @@ To contribute a translation:
 To create a ZIP file for upload to GNOME Shell Extensions:
 
 ```
-make zip-file VERSION=<version>
+make zip-file
 ```
 
 This process used to be automated by [the uploader Github Action](actions/uploader)
