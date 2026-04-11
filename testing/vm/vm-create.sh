@@ -146,6 +146,20 @@ for vm_name in $VM_NAMES; do
     log_info "Taking clean snapshot..."
     snapshot_create "$vm_name" "$SNAPSHOT_NAME" "Clean GNOME session for $vm_name (GNOME $VM_GNOME_VERSION)"
 
+    # Shut down the VM after snapshotting — avoids memory pressure when creating
+    # multiple VMs in sequence (each uses 4 GB RAM).
+    log_info "Shutting down VM '$vm_name'..."
+    $VIRSH shutdown "$vm_name" >/dev/null 2>&1 || true
+    # Wait briefly for clean shutdown, then force if needed
+    for _i in $(seq 1 15); do
+        vm_is_running "$vm_name" || break
+        sleep 2
+    done
+    if vm_is_running "$vm_name"; then
+        $VIRSH destroy "$vm_name" >/dev/null 2>&1 || true
+    fi
+    log_ok "VM '$vm_name' shut down"
+
     log_ok "=========================================="
     log_ok "VM '$vm_name' is ready for testing!"
     log_ok "  GNOME Shell version: $VM_GNOME_VERSION"
