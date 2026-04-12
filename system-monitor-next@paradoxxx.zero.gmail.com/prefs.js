@@ -39,7 +39,8 @@ function color_to_hex(color) {
 const SMGeneralPrefsPage = GObject.registerClass({
     GTypeName: 'SMGeneralPrefsPage',
     Template: import.meta.url.replace('prefs.js', 'ui/prefsGeneralSettings.ui'),
-    InternalChildren: ['background', 'icon_display', 'show_tooltip', 'move_clock',
+    InternalChildren: ['background', 'label_color', 'widgets_color', 'disk_usage_color',
+        'icon_display', 'show_tooltip', 'move_clock',
         'compact_display', 'center_display', 'left_display', 'rotate_labels',
         'tooltip_delay_ms', 'graph_delay_m', 'custom_monitor_switch', 'custom_monitor_command'],
 }, class SMGeneralPrefsPage extends Adw.PreferencesPage {
@@ -64,6 +65,62 @@ const SMGeneralPrefsPage = GObject.registerClass({
         this._settings.connect('changed::background', () => {
             color.parse(this._settings.get_string('background'));
             this._background.set_rgba(color);
+        });
+
+        let labelColor = new Gdk.RGBA();
+        labelColor.parse(this._settings.get_string('label-color'));
+        this._label_color.set_rgba(labelColor);
+
+        let labelColorDialog = new Gtk.ColorDialog({
+            modal: true,
+            with_alpha: true,
+        });
+        this._label_color.set_dialog(labelColorDialog);
+
+        this._label_color.connect('notify::rgba', colorButton => {
+            this._settings.set_string('label-color', color_to_hex(colorButton.get_rgba()));
+        });
+        this._settings.connect('changed::label-color', () => {
+            labelColor.parse(this._settings.get_string('label-color'));
+            this._label_color.set_rgba(labelColor);
+        });
+
+        // Widgets color
+        let widgetsColor = new Gdk.RGBA();
+        widgetsColor.parse(this._settings.get_string('widgets-color'));
+        this._widgets_color.set_rgba(widgetsColor);
+
+        let widgetsColorDialog = new Gtk.ColorDialog({
+            modal: true,
+            with_alpha: true,
+        });
+        this._widgets_color.set_dialog(widgetsColorDialog);
+
+        this._widgets_color.connect('notify::rgba', colorButton => {
+            this._settings.set_string('widgets-color', color_to_hex(colorButton.get_rgba()));
+        });
+        this._settings.connect('changed::widgets-color', () => {
+            widgetsColor.parse(this._settings.get_string('widgets-color'));
+            this._widgets_color.set_rgba(widgetsColor);
+        });
+
+        // Disk usage color
+        let diskUsageColor = new Gdk.RGBA();
+        diskUsageColor.parse(this._settings.get_string('disk-usage-color'));
+        this._disk_usage_color.set_rgba(diskUsageColor);
+
+        let diskUsageColorDialog = new Gtk.ColorDialog({
+            modal: true,
+            with_alpha: true,
+        });
+        this._disk_usage_color.set_dialog(diskUsageColorDialog);
+
+        this._disk_usage_color.connect('notify::rgba', colorButton => {
+            this._settings.set_string('disk-usage-color', color_to_hex(colorButton.get_rgba()));
+        });
+        this._settings.connect('changed::disk-usage-color', () => {
+            diskUsageColor.parse(this._settings.get_string('disk-usage-color'));
+            this._disk_usage_color.set_rgba(diskUsageColor);
         });
 
         this._settings.bind('icon-display', this._icon_display,

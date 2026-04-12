@@ -109,19 +109,25 @@ function build_menu_info(extension) {
         }
 
         // Add item name to table
-        menu_info_box_table_layout.attach(
-            new St.Label({
-                text: elts[elt].item_name,
-                style_class: extension._Style.get('sm-title'),
-                x_align: Clutter.ActorAlign.START,
-                y_align: Clutter.ActorAlign.CENTER
-            }), 0, row_index, 1, 1);
+        let color = extension._Schema.get_string('widgets-color');
+        if (color.length === 9) color = color.substring(0, 7);
+        let titleLabel = new St.Label({
+            text: elts[elt].item_name,
+            style_class: extension._Style.get('sm-title'),
+            style: 'color: ' + color,
+            x_align: Clutter.ActorAlign.START,
+            y_align: Clutter.ActorAlign.CENTER
+        });
+        menu_info_box_table_layout.attach(titleLabel, 0, row_index, 1, 1);
 
         // Add item data to table
         let col_index = 1;
         for (let item in elts[elt].menu_items) {
-            menu_info_box_table_layout.attach(
-                elts[elt].menu_items[item], col_index, row_index, 1, 1);
+            let menuItem = elts[elt].menu_items[item];
+            if (menuItem instanceof St.Label) {
+                menuItem.set_style('color: ' + color);
+            }
+            menu_info_box_table_layout.attach(menuItem, col_index, row_index, 1, 1);
 
             col_index++;
         }
@@ -535,10 +541,8 @@ const Graph = class SystemMonitor_Graph {
         this.width = width;
         this.height = height;
         this.gtop = new GTop.glibtop_fsusage();
-        this.colors = ['#888', '#aaa', '#ccc'];
-        for (let color in this.colors) {
-            this.colors[color] = color_from_string(this.colors[color]);
-        }
+        this._updateColors();
+        this.extension._Schema.connect('changed::disk-usage-color', this._updateColors.bind(this));
 
         let themeContext = St.ThemeContext.get_for_stage(global.stage);
         themeContext.connect('notify::scale-factor', this.set_scale.bind(this));
@@ -576,6 +580,16 @@ const Graph = class SystemMonitor_Graph {
         this.text_scaling = interfaceSettings.get_double(key);
         this.actor.set_width(this.width * this.scale_factor * this.text_scaling);
         this.actor.set_height(this.height * this.scale_factor * this.text_scaling);
+    }
+    _updateColors() {
+        let color = this.extension._Schema.get_string('disk-usage-color');
+        if (color.length === 9) color = color.substring(0, 7);
+        this.colorStrings = [color, color, color];
+        this.colors = [];
+        for (let i in this.colorStrings) {
+            this.colors[i] = color_from_string(this.colorStrings[i]);
+        }
+        this.actor.queue_repaint();
     }
 }
 
@@ -967,6 +981,16 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
 
         this.label = new St.Label({text: _(this.elt_short || this.elt),
             style_class: Style.get('sm-status-label')});
+        const apply_label_color = () => {
+            let color = Schema.get_string('label-color');
+            // Convert #RRGGBBAA to #RRGGBB (strip alpha) for CSS compatibility
+            if (color.length === 9) {
+                color = color.substring(0, 7);
+            }
+            this.label.set_style('color: ' + color);
+        };
+        apply_label_color();
+        Schema.connect('changed::label-color', apply_label_color);
         change_text.call(this);
         Schema.connect('changed::' + this.elt + '-show-text', change_text.bind(this));
 
@@ -2707,6 +2731,9 @@ export default class SystemMonitorExtension extends Extension {
 
         change_usage(this);
         this._Schema.connect('changed::disk-usage-style', change_usage);
+
+        // Rebuild menu when menu color settings change
+        this._Schema.connect('changed::widgets-color', () => build_menu_info(this));
 
         tray.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 

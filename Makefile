@@ -129,6 +129,8 @@ build: gschemas translate
 	$(Q)cp $(VV) -r $(UUID)/ui/* _build/ui/
 	$(Q)mkdir -p _build/locale
 	$(Q)cp $(VV) -r $(UUID)/locale/* _build/locale/
+	$(Q)mkdir -p _build/schemas
+	$(Q)cp $(VV) -r $(UUID)/schemas/* _build/schemas/
 	$(Q)sed -i 's/"version": -1/"version": $(VERSION)/'  _build/metadata.json;
 	$(call msg,$@,Extension built, saved to: _build/)
 	$(call msg,$@,OK)
