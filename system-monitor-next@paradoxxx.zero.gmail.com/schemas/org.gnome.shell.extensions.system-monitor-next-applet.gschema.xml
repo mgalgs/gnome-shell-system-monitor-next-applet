@@ -116,6 +116,11 @@
       <summary>Display one graph per cpu core</summary>
       <description>Set to true to display one graph per cpu core</description>
     </key>
+    <key name="cpu-graph-average-digit" type="b">
+      <default>false</default>
+      <summary>Display CPU graph average digit</summary>
+      <description>Show the average CPU usage digit next to the CPU graph</description>
+    </key>
     <key name="gpu-display" type="b">
       <default>false</default>
       <summary>Display GPU usage</summary>

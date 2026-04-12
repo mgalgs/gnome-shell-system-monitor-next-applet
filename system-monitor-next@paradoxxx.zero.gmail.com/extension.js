@@ -79,6 +79,9 @@ function change_style() {
     let style = this.extension._Schema.get_string(this.elt + '-style');
     this.text_box.visible = style === 'digit' || style === 'both';
     this.chart.actor.visible = style === 'graph' || style === 'both';
+    if (this.text_box_chart) {
+        this.text_box_chart.visible = this.extension._Schema.get_boolean('cpu-graph-average-digit') ? this.chart.actor.visible : false;
+    }
 }
 
 function build_menu_info(extension) {
@@ -936,6 +939,7 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         if (Style.get('') === '-compact') {
             element_width = Math.round(element_width / 1.5);
         }
+
         this.chart = new Chart(this.extension, element_width, IconSize, this);
 
         Schema.connect('changed::background', () => {
@@ -1000,6 +1004,16 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
             this.text_box.add_child(this.text_items[item]);
         }
         this.actor.add_child(this.chart.actor);
+        if (this.create_text_items_chart) {
+            this.text_box_chart = new St.BoxLayout();
+            this.text_box_chart.add_child(this.chart.actor);
+            this.text_items_chart = this.create_text_items();
+            for (let item in this.text_items_chart) {
+                this.text_box_chart.add_child(this.text_items_chart[item]);
+            }
+            this.actor.add_child(this.text_box_chart);
+        }
+
         change_style.call(this);
         Schema.connect('changed::' + this.elt + '-style', change_style.bind(this));
         this.menu_items = this.create_menu_items();
@@ -1388,7 +1402,8 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
             elt: 'cpu',
             item_name: _('CPU'),
             color_name: ['user', 'system', 'nice', 'iowait', 'other'],
-            cpuid: -1 // cpuid is -1 when all cores are displayed in the same graph
+            cpuid: -1, // cpuid is -1 when all cores are displayed in the same graph
+            create_text_items_chart: true
         });
         this.max = 100;
 
@@ -1407,6 +1422,15 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
         }
         this.last_total = 0;
         this.usage = [0, 0, 0, 1, 0];
+
+        this.avg_sum = 0;
+        this.avg_count = 0;
+        this.avg_history = [];
+        extension._Schema.connect(
+            'changed::cpu-graph-average-digit',
+            () => change_style.call(this)
+        );
+
         this.item_name = _('Cpu');
         if (cpuid !== -1) {
             this.item_name += ' ' + (cpuid + 1);
@@ -1494,15 +1518,24 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
         //     else
         //         this.last_total = this.gtop.xcpu_total[this.cpuid];
         // }
+
+        let percent = this.get_percent();
+        let max_samples = this.chart.width;
+        // add newest value
+        this.avg_sum += percent;
+        this.avg_history.push(percent);
+        if (this.avg_count < max_samples) {
+            this.avg_count++;
+        } else {
+            // remove the value that just left the graph
+            let removed = this.avg_history.shift();
+            this.avg_sum -= removed;
+        }
+        let avg = Math.round(this.avg_sum / this.avg_count);
+        this.text_items_chart[0].text = avg.toString();
     }
     _apply() {
-        let percent = 0;
-        if (this.cpuid === -1) {
-            percent = Math.round(((100 * this.total_cores) - this.usage[3]) /
-                                 this.total_cores);
-        } else {
-            percent = Math.round((100 - this.usage[3]));
-        }
+        let percent = this.get_percent();
 
         this.text_items[0].text = this.menu_items[0].text = percent.toString();
         let other = 100;
@@ -1518,6 +1551,16 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
         }
     }
 
+    get_percent() {
+        let percent = 0;
+        if (this.cpuid === -1) {
+            percent = Math.round(((100 * this.total_cores) - this.usage[3]) /
+                                 this.total_cores);
+        } else {
+            percent = Math.round((100 - this.usage[3]));
+        }
+        return percent;
+    }
     get_cores() {
         // Getting xcpu_total makes gjs 1.29.18 segfault
         // let cores = 0;
@@ -1533,8 +1576,7 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
     create_text_items() {
         return [
             new St.Label({
-                text: '',
-                style_class: this.extension._Style.get('sm-status-value'),
+                text: '',  style_class: this.extension._Style.get('sm-status-value'),
                 y_align: Clutter.ActorAlign.CENTER}),
             new St.Label({
                 text: '%', style_class: this.extension._Style.get('sm-perc-label'),
