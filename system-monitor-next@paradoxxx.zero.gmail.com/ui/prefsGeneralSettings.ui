@@ -19,6 +19,36 @@
           </object>
         </child>
         <child>
+          <object class="AdwActionRow">
+            <property name="title" translatable="yes">Label Color</property>
+            <child>
+              <object class="GtkColorDialogButton" id="label_color">
+                <property name="valign">center</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="AdwActionRow">
+            <property name="title" translatable="yes">Widgets Color</property>
+            <child>
+              <object class="GtkColorDialogButton" id="widgets_color">
+                <property name="valign">center</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="AdwActionRow">
+            <property name="title" translatable="yes">Disk Usage Color</property>
+            <child>
+              <object class="GtkColorDialogButton" id="disk_usage_color">
+                <property name="valign">center</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
           <object class="AdwSwitchRow" id="icon_display">
             <property name="title" translatable="yes">Display Icon</property>
           </object>

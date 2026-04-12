@@ -451,6 +451,21 @@
       <default>'#ffffff16'</default>
       <summary>Color of background</summary>
     </key>
+    <key name="label-color" type="s">
+      <default>'#bbbbbb'</default>
+      <summary>Color of label text</summary>
+      <description>Color for all labels (cpu, mem, swap, etc.) in the status bar</description>
+    </key>
+    <key name="widgets-color" type="s">
+      <default>'#bbbbbb'</default>
+      <summary>Widgets color</summary>
+      <description>Color for widgets in the expanded view</description>
+    </key>
+    <key name="disk-usage-color" type="s">
+      <default>'#888888'</default>
+      <summary>Disk usage color</summary>
+      <description>Color for disk usage bars in the expanded view</description>
+    </key>
     <key name="battery-display" type="b">
       <default>false</default>
       <summary>Display battery</summary>

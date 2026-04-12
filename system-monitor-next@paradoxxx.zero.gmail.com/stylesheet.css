@@ -24,7 +24,6 @@
 }
 
 .sm-status-label {
-    color: #bbb;
     font-size: 0.625em;
     padding: 0 2px 0 5px;
 }
@@ -127,7 +126,6 @@
 } /* Values in menu items */
 
 .sm-status-label-compact {
-    color: #bbb;
     font-size: 0.5em;
     padding: 2px 0px 0 0px;
 } /* names and Disk R and W signs in text items */

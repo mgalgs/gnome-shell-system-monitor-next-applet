@@ -65,6 +65,7 @@ Before installing, ensure you have the necessary system packages (note that if y
   };
   environment.systemPackages = with pkgs; [
       libgtop
+      gtop
   ];
   ```
 
