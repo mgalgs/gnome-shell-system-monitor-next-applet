@@ -1,8 +1,9 @@
 # -*- coding: utf-8; mode: makefile-gmake -*-
-# Basic Makefile
 
-UUID = system-monitor@paradoxxx.zero.gmail.com
+UUID = system-monitor-next@paradoxxx.zero.gmail.com
 INSTALLNAME = $(UUID)
+PREFIX ?= $(HOME)/.local
+LINTERCMD ?= eslint
 
 BASE_MODULES = \
   $(UUID)/extension.js \
@@ -14,28 +15,15 @@ BASE_MODULES = \
   $(UUID)/compat.js \
   $(UUID)/gpu_usage.sh
 
-# ---------
-# variables
-# ---------
+GSCHEMA_XML = $(UUID)/schemas/org.gnome.shell.extensions.system-monitor.gschema.xml
+GSCHEMA_COMPILED = $(UUID)/schemas/gschemas.compiled
 
-ifeq ($(strip $(DESTDIR)),)
-  INSTALLBASE = $(HOME)/.local/share/gnome-shell/extensions
-  SUDO=
-else
-  INSTALLBASE = $(DESTDIR)/usr/share/gnome-shell/extensions
-ifeq ($(BUILD_FOR_RPM),1)
-  SUDO=
-else
-  SUDO=sudo
-endif
-endif
+VERSION ?= 0
+ZIPFILE = $(UUID).zip
 
-ifdef VERSION
-  VSTRING = _v$(VERSION)
-else
-  VERSION = $(shell git rev-parse HEAD)
-  VSTRING =
-endif
+INSTALLBASE = $(PREFIX)/share/gnome-shell/extensions
+SCHEMAINSTALLBASE = $(PREFIX)/share/glib-2.0/schemas
+INSTALLDIR = $(INSTALLBASE)/$(INSTALLNAME)
 
 # VERBOSE level
 
@@ -51,13 +39,8 @@ endif
 # macros
 # -------
 
-# usage: $(call reload-extension $(UUID))
-
-reload-extension = $(shell gnome-shell-extension-tool -r $(1))
-
 # usage: $(call msg,INFO,'lorem ipsum')
 msg = @printf '  [%-12s] %s\n' '$(1)' '$(2)'
-
 
 # -------
 # targets
@@ -72,88 +55,66 @@ help:
 	@echo  'Install or remove (and reload) of the extension, for the local user'
 	@echo  'or as admin for all users:'
 	@echo  ''
-	@echo  '  make [install|remove]                        # for the local user'
-	@echo  '  make DESTDIR=/ [install|remove] clean        # as admin for all users'
+	@echo  '  make install'
 	@echo  ''
-	@echo  'Use environment VERSION=n.m to set verison string in the metadata and in'
-	@echo  'the generated zip-file explicit.  If no VERSION is passed, the current'
-	@echo  'commit SHA1 is used as version number in the metadata while the generated'
-	@echo  'zip file has no string attached.'
+	@echo  'Install the extension to $${PREFIX}/share/ (for system-wide install/packaging):'
 	@echo  ''
-	@echo  'Other targets are:'
+	@echo  '  sudo make PREFIX=/usr install       # as admin for all users'
+	@echo  '  make PREFIX=$${pkgdir}/usr install   # to another directory (for packaging)'
 	@echo  ''
-	@echo  '  zip-file  - build and zip ./$(UUID).zip'
-	@echo  '  reload    - reload extension $(UUID)'
+	@echo  'Other targets:'
+	@echo  ''
+	@echo  '  zip-file  - build $(ZIPFILE)'
+	@echo  '              (which can be uploaded to extensions.gnome.org or installed'
+	@echo  '               with gnome-extensions install)'
+	@echo  '  check     - run code quality checks (whitespace, lint)'
 	@echo  '  clean     - remove most generated files'
-	@echo  '  extension - rebuild schemas/gschemas.compiled'
-	@echo  '  translate - generate translation from po/ files'
 	@echo  ''
-	@echo  'control verbosity:'
-	@echo  ''
-	@echo  '  make V=0 [targets] -> quiet build (default)'
-	@echo  '  make V=1 [targets] -> verbose build'
+	@echo  'Note that most users should install the extension via extensions.gnome.org'
+	@echo  'or their distro package manager.'
 
-
-PHONY += install remove
-
-install: remove build
-	$(call msg,$@,$(SUDO) $(INSTALLBASE)/$(INSTALLNAME))
-	$(Q) $(SUDO) mkdir -p $(INSTALLBASE)/$(INSTALLNAME)
-	$(Q) $(SUDO) cp $(VV) -r ./_build/* $(INSTALLBASE)/$(INSTALLNAME)/
-ifeq ($(strip $(BUILD_FOR_RPM)),)
-	$(Q) $(MAKE) -s reload
-endif
+install: clean build gschemas.install
+	$(call msg,$@,Installing to $(INSTALLDIR))
+	$(Q) mkdir -p "$(INSTALLDIR)"
+	$(Q) cp $(VV) -r ./_build/* "$(INSTALLDIR)/"
 	$(call msg,$@,OK)
+	$(call msg,$@,Please reload GNOME Shell and enable the extension)
 
-remove:
-	$(call msg,$@,$(SUDO) $(INSTALLBASE)/$(INSTALLNAME))
-	$(Q) $(SUDO) rm $(VV) -fr $(INSTALLBASE)/$(INSTALLNAME)
-ifeq ($(strip $(BUILD_FOR_RPM)),)
-	$(Q) $(MAKE) -s reload
-endif
-	$(call msg,$@,OK)
+uninstall:
+	$(Q)gnome-extensions uninstall $(UUID)
 
-reload:
-	$(call reload-extension,$(UUID))
-	$(call msg,$@,OK)
+clean: zip-file.clean build.clean
 
-
-PHONY += zip-file zip-file.clean
-ZIPFILE=$(UUID)$(VSTRING).zip
-
-zip-file: build.clean build
+zip-file: clean build
 	$(Q)cd _build ; zip $(V) -qr $(ZIPFILE) .
 	$(Q)mkdir -p dist
 	$(Q)mv _build/$(ZIPFILE) ./dist/$(ZIPFILE)
+	$(call msg,$@,Zip file saved to ./dist/$(ZIPFILE))
 	$(call msg,$@,OK)
 
-clean:: zip-file.clean
 zip-file.clean:
-	$(Q)rm $(VV) -f $(ZIPFILE)
+	$(Q)rm $(VV) -vf ./dist/$(ZIPFILE)
 	$(call msg,$@,OK)
 
-
-PHONY += extension extension.clean _drop-gschemas
-
-extension: _drop-gschemas ./$(UUID)/schemas/gschemas.compiled
+gschemas: $(GSCHEMA_COMPILED)
 	$(call msg,$@,OK)
 
-clean:: extension.clean
-extension.clean:
-	$(Q)git checkout -f -- ./$(UUID)/schemas/gschemas.compiled
+gschemas.install: $(GSCHEMA_XML)
+	$(Q)mkdir -p "$(SCHEMAINSTALLBASE)"
+	$(Q)cp $(VV) $(GSCHEMA_XML) "$(SCHEMAINSTALLBASE)"
+	$(call msg,$@,gschema installed to $(SCHEMAINSTALLBASE). You might need to run "glib-compile-schemas $(SCHEMAINSTALLBASE)")
 	$(call msg,$@,OK)
 
-./$(UUID)/schemas/gschemas.compiled: ./$(UUID)/schemas/org.gnome.shell.extensions.system-monitor.gschema.xml
+# Not part of regular install since this is usually done by package manager hooks
+gschemas.install-and-compile: gschemas.install
+	$(Q)glib-compile-schemas "$(SCHEMAINSTALLBASE)"
+	$(call msg,$@,OK)
+
+$(GSCHEMA_COMPILED): $(GSCHEMA_XML)
 	$(Q)glib-compile-schemas ./$(UUID)/schemas/
 	$(call msg,gschemas,OK)
 
-_drop-gschemas:
-	$(Q)rm -f ./$(UUID)/schemas/gschemas.compiled
-
-
-PHONY += build build.clean
-
-build: translate
+build: gschemas translate
 	$(Q)mkdir -p _build
 	$(Q)cp $(VV) $(BASE_MODULES) _build
 	$(Q)mkdir -p _build/locale
@@ -162,23 +123,49 @@ build: translate
 	$(Q)cp $(VV) $(UUID)/schemas/*.xml _build/schemas/
 	$(Q)cp $(VV)  $(UUID)/schemas/gschemas.compiled _build/schemas/
 	$(Q)sed -i 's/"version": -1/"version": "$(VERSION)"/'  _build/metadata.json;
+	$(call msg,$@,Extension built, saved to: _build/)
 	$(call msg,$@,OK)
 
-clean:: build.clean
 build.clean:
-	$(Q)rm -fR ./_build
+	$(Q)rm -rf ./_build
 	$(call msg,$@,OK)
 
-PHONY += translate
-translate: extension
+translate:
 	$(Q)cd po;\
-           ./compile.sh ../system-monitor@paradoxxx.zero.gmail.com/locale \
+           ./compile.sh ../system-monitor-next@paradoxxx.zero.gmail.com/locale \
 	   | tr '\n' ' ' \
 	   | sed -e 's/^/  [$@   ] /;'; echo
 	$(call msg,$@,OK)
 
-clean:: translation.clean
-translation.clean:
-	$(Q)git checkout -f -- system-monitor@paradoxxx.zero.gmail.com/locale
+check: check.whitespace check.lint
+	$(call msg,$@,All checks passed)
 
-.PHONY: $(PHONY)
+check.whitespace:
+	$(call msg,$@,Checking for whitespace issues...)
+	$(Q)if git rev-parse --git-dir > /dev/null 2>&1; then \
+		git diff --check HEAD 2>/dev/null || (echo '  [whitespace  ] Changes have whitespace issues' && exit 1); \
+		git diff --cached --check 2>/dev/null || (echo '  [whitespace  ] Staged changes have whitespace issues' && exit 1); \
+	fi
+	$(call msg,$@,OK)
+
+check.lint:
+	$(call msg,$@,Running ESLint...)
+	$(Q)if command -v $(LINTERCMD) >/dev/null 2>&1; then \
+		$(LINTERCMD) $(UUID); \
+	else \
+		echo "  [lint        ] WARNING: $(LINTERCMD) not found, skipping"; \
+	fi
+	$(call msg,$@,OK)
+
+PHONY: help \
+	install \
+	zip-file \
+	zip-file.clean \
+	gschemas \
+	gschemas.install \
+	build \
+	build.clean \
+	translate \
+	check \
+	check.whitespace \
+	check.lint
