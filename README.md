@@ -59,10 +59,9 @@ Before installing this extension, ensure you have the necessary system packages 
 
       sudo urpmi lib64gtop-gir2.0 lib64nm-gir1.0 lib64clutter-gir1.0 gnome-system-monitor
 
-    or
+  or
 
       sudo dnf install lib64gtop-gir2.0 lib64nm-gir1.0 lib64clutter-gir1.0 gnome-system-monitor
-
 
 Additionally, if you have an NVIDIA graphics card, and want to monitor its memory usage, you'll need to install `nvidia-smi`.
 
@@ -96,10 +95,26 @@ Additionally, rebooting gnome-shell may help (type `Alt + F2` and input `r` in t
 
 #### Manual installation
 
-[Download the ZIP/Tarball](https://github.com/paradoxxxzero/gnome-shell-system-monitor-applet/releases),
-extract the archive, open a shell into its directory, and run:
+* Build & install
 
-    make install
+```bash
+git clone -b pre-45 https://github.com/mgalgs/gnome-shell-system-monitor-next-applet.git
+cd gnome-shell-system-monitor-next-applet
+make install
+```
+
+* Reload GNOME Shell (`Alt + F2`, then `r`)
+* Enable extension
+
+```bash
+gnome-extensions enable system-monitor-next@paradoxxx.zero.gmail.com
+```
+
+##### Note
+
+For reinstallation remove installed extension `rm -rf ~/.local/share/gnome-shell/extensions/system-monitor-next@paradoxxx.zero.gmal.com`. Then `make build.clean && make install` and reload.
+
+#### Development
 
 Alternately, if you plan on doing development on the extension, or testing modifications, it's advised you checkout the Git repository and install a symlink. First, install git if you don't have it: (`sudo apt-get install git-core`, `sudo pacman -S git`, etc.), then run:
 

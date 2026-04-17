@@ -594,7 +594,7 @@ const Graph = class SystemMonitor_Graph {
     set_text_scaling(interfaceSettings, key) {
         // FIXME: for some reason we only get this signal once, not on later
         // changes to the setting
-        //log('[System monitor] got text scaling signal');
+        // log('[System monitor] got text scaling signal');
         this.text_scaling = interfaceSettings.get_double(key);
         this.actor.set_width(this.width * this.scale_factor * this.text_scaling);
         this.actor.set_height(this.height * this.scale_factor * this.text_scaling);
@@ -2313,13 +2313,13 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
         this.menu_items[4].text = unit;
     }
     _apply() {
-        this.tip_unit_labels[1].text = "/ " + this.total + " " + this.menu_items[4].text;
+        this.tip_unit_labels[1].text = '/ ' + this.total + ' ' + this.menu_items[4].text;
         if (this.total === 0) {
             this.vals = [0, 0];
             this.tip_vals = [0, 0];
         } else {
-            // we subtract percentage from memory because we do not want memory to be 
-            // "accumulated" in the chart with utilization; these two measures should be 
+            // we subtract percentage from memory because we do not want memory to be
+            // "accumulated" in the chart with utilization; these two measures should be
             // independent
             this.vals = [this.percentage, this.mem / this.total * 100 - this.percentage];
             this.tip_vals = [Math.round(this.vals[0]), this.mem];

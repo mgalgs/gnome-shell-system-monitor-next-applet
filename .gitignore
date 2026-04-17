@@ -8,3 +8,4 @@ tmp
 *.out
 /_build
 /dist
+locale

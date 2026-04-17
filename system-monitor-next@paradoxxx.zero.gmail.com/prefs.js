@@ -208,7 +208,7 @@ const IntSelect = class SystemMonitor_IntSelect {
     constructor(name) {
         this.label = new Gtk.Label({label: name + _(':')});
         this.spin = new Gtk.SpinButton();
-        this.actor = box({horizontal: true, shouldPack: true, });
+        this.actor = box({horizontal: true, shouldPack: true,});
         this.actor.add(this.label);
         this.actor.add(this.spin);
         this.spin.set_numeric(true);
