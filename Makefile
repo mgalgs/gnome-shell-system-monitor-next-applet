@@ -131,8 +131,8 @@ build.clean:
 	$(call msg,$@,OK)
 
 translate:
-	$(Q)cd po;\
-           ./compile.sh ../system-monitor-next@paradoxxx.zero.gmail.com/locale \
+	$(Q)mkdir -p $(UUID)/locale && cd po &&\
+           ./compile.sh ../$(UUID)/locale \
 	   | tr '\n' ' ' \
 	   | sed -e 's/^/  [$@   ] /;'; echo
 	$(call msg,$@,OK)
