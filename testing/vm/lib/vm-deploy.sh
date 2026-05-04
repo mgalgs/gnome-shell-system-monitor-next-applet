@@ -22,11 +22,6 @@ deploy_extension() {
     vm_rsync "$vm_name" \
         "$PROJECT_ROOT/_build/" \
         "~/.local/share/gnome-shell/extensions/$EXT_UUID/"
-
-    # rsync schemas separately (not included in _build by the Makefile)
-    vm_rsync "$vm_name" \
-        "$PROJECT_ROOT/$EXT_UUID/schemas/" \
-        "~/.local/share/gnome-shell/extensions/$EXT_UUID/schemas/"
     log_ok "Extension deployed"
 
     # Compile schemas on VM (in extension dir and system-wide)
