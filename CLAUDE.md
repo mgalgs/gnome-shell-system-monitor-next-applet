@@ -38,7 +38,7 @@ make build
 make clean
 
 # Create distribution zip for extensions.gnome.org
-make zip-file VERSION=<version>
+make zip-file
 ```
 
 ### Development Workflow
