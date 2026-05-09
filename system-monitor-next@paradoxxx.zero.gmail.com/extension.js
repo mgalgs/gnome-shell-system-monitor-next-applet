@@ -1915,8 +1915,7 @@ const Net = class SystemMonitor_Net extends ElementBase {
                         let [, op_contents] = Gio.File.new_for_path(
                             '/sys/class/net/' + ifc + '/operstate').load_contents(null);
                         if (new TextDecoder().decode(op_contents).replace(/\s/g, '') === 'up' &&
-                            ifc.indexOf('br') < 0 &&
-                            ifc.indexOf('lo') < 0) {
+                            this._is_physical_iface(ifc)) {
                             this.ifs.push(ifc);
                         }
                     } catch (_e) { /* operstate file may not exist */ }
@@ -1944,13 +1943,23 @@ const Net = class SystemMonitor_Net extends ElementBase {
     update_units() {
         this.speed_in_bits = this.extension._Schema.get_boolean(this.elt + '-speed-in-bits');
     }
+    _is_physical_iface(iface) {
+        if (!iface || iface === 'lo') {
+            return false;
+        }
+        // Physical interfaces expose a backing device in sysfs.
+        return GLib.file_test('/sys/class/net/' + iface + '/device', GLib.FileTest.EXISTS);
+    }
     update_iface_list() {
         try {
             this.ifs = [];
             let iface_list = this.client.get_devices();
             for (let j = 0; j < iface_list.length; j++) {
                 if (iface_list[j].state === NetworkManager.DeviceState.ACTIVATED) {
-                    this.ifs.push(iface_list[j].get_ip_iface() || iface_list[j].get_iface());
+                    let iface = iface_list[j].get_ip_iface() || iface_list[j].get_iface();
+                    if (this._is_physical_iface(iface)) {
+                        this.ifs.push(iface);
+                    }
                 }
             }
         } catch (e) {
