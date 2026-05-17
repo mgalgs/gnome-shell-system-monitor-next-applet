@@ -13,8 +13,8 @@ const Swap = class SystemMonitor_Swap extends ElementBase {
         tooltipUnit: '%',
     };
 
-    constructor(extension) {
-        super(extension);
+    constructor(extension, config) {
+        super(extension, config);
         this.max = 1;
         this.gtop = new GTop.glibtop_swap();
 

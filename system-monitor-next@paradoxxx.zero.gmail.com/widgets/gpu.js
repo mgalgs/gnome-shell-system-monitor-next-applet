@@ -16,12 +16,19 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
         tooltipUnit: '%',
     };
 
-    constructor(extension) {
-        super(extension);
+    constructor(extension, config) {
+        super(extension, config);
         this.max = 100;
+        this.gpu_index = this.device_id;
 
+        this.item_name = _('GPU') + (this.gpu_index !== '0' ? ' ' + this.gpu_index : '');
         this.mem = 0;
         this.total = 0;
+
+        if (this.gpu_index !== '0') {
+            this.label.text = _('GPU') + this.gpu_index;
+        }
+
         this.update();
     }
     _unit(total) {
@@ -36,15 +43,12 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
         }
     }
     refresh() {
-        // Run asynchronously, to avoid shell freeze
         try {
             let path = this.extension.path;
-            let script = ['/usr/bin/env', 'bash', path + '/gpu_usage.sh'];
+            let script = ['/usr/bin/env', 'bash', path + '/gpu_usage.sh', this.gpu_index];
 
-            // Create subprocess and capture STDOUT
             let proc = new Gio.Subprocess({argv: script, flags: Gio.SubprocessFlags.STDOUT_PIPE});
             proc.init(null);
-            // Asynchronously call the output handler when script output is ready
             proc.communicate_utf8_async(null, null, this._handleOutput.bind(this));
         } catch (err) {
             console.error(err.message);
@@ -88,10 +92,8 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
     _pad(number) {
         if (this.useGiB) {
             if (number < 1) {
-                // examples: 0.01, 0.10, 0.88
                 return number.toFixed(2);
             }
-            // examples: 5.85, 16.0, 128
             return number.toPrecision(3);
         }
 
@@ -112,9 +114,6 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
             this.vals = [0, 0];
             this.tip_vals = [0, 0];
         } else {
-            // we subtract percentage from memory because we do not want memory to be
-            // "accumulated" in the chart with utilization; these two measures should be
-            // independent
             this.vals = [this.percentage, this.mem / this.total * 100 - this.percentage];
             this.tip_vals = [Math.round(this.vals[0]), this.mem];
         }

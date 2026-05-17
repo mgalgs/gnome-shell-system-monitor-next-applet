@@ -19,13 +19,19 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
         tooltipUnit: 'MiB/s',
     };
 
-    constructor(extension) {
-        super(extension);
+    constructor(extension, config) {
+        super(extension, config);
         this.mounts = extension._MountsMonitor.get_mounts();
         extension._MountsMonitor.add_listener(this.update_mounts.bind(this));
         this.last = [0, 0];
         this.usage = [0, 0];
         this.last_time = 0;
+
+        if (this.device_id !== 'all') {
+            this.label.text = this.device_id.split('/').pop();
+            this.item_name = _('Disk') + ' ' + this.device_id;
+        }
+
         this.update();
     }
     update_mounts(mounts) {
@@ -45,6 +51,14 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
                 if (typeof (entry[1]) === 'undefined') {
                     break;
                 }
+
+                if (this.device_id !== 'all') {
+                    let deviceName = entry[2];
+                    if (!this.device_id.includes(deviceName)) {
+                        continue;
+                    }
+                }
+
                 accum[0] += parseInt(entry[5]);
                 accum[1] += parseInt(entry[9]);
             }

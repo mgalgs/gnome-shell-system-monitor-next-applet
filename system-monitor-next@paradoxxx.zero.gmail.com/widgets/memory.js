@@ -18,8 +18,8 @@ const Mem = class SystemMonitor_Mem extends ElementBase {
         tooltipUnit: '%',
     };
 
-    constructor(extension) {
-        super(extension);
+    constructor(extension, config) {
+        super(extension, config);
         this.max = 1;
 
         this.gtop = new GTop.glibtop_mem();
@@ -60,10 +60,8 @@ const Mem = class SystemMonitor_Mem extends ElementBase {
         const Locale = this.extension._Locale;
         if (this.useGiB) {
             if (number < 1) {
-                // examples: 0.01, 0.10, 0.88
                 return number.toLocaleString(Locale, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             }
-            // examples: 5.85, 16.0, 128
             return number.toLocaleString(Locale, {minimumSignificantDigits: 3, maximumSignificantDigits: 3});
         }
 

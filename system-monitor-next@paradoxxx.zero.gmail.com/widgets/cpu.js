@@ -18,29 +18,38 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
         tooltipUnit: '%',
     };
 
-    constructor(extension, cpuid) {
-        super(extension);
+    constructor(extension, config) {
+        super(extension, config);
         this.max = 100;
 
-        this.cpuid = cpuid;
+        if (this.device_id === 'all') {
+            this.cpuid = -1;
+        } else {
+            this.cpuid = parseInt(this.device_id);
+        }
+
         this.gtop = new GTop.glibtop_cpu();
         this.last = [0, 0, 0, 0, 0];
         this.current = [0, 0, 0, 0, 0];
         try {
             this.total_cores = GTop.glibtop_get_sysinfo().ncpu;
-            if (cpuid === -1) {
+            if (this.cpuid === -1) {
                 this.max *= this.total_cores;
             }
         } catch (e) {
-            this.total_cores = this.get_cores();
-            console.error(e)
+            this.total_cores = 1;
+            console.error(e);
         }
         this.last_total = 0;
         this.usage = [0, 0, 0, 1, 0];
-        this.item_name = _('Cpu');
-        if (cpuid !== -1) {
-            this.item_name += ' ' + (cpuid + 1);
+
+        if (this.cpuid !== -1) {
+            this.item_name = _('CPU') + ' ' + (this.cpuid + 1);
+            this.label.text = _('CPU') + (this.cpuid + 1);
+        } else {
+            this.item_name = _('CPU');
         }
+
         this.update();
     }
     refresh() {
@@ -108,35 +117,6 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
             this.tip_vals[i] = Math.round(this.vals[i]);
         }
     }
-
-    get_cores() {
-        return 1;
-    }
 }
 
-function createCpus(extension) {
-    let array = [];
-    let numcores = 1;
-
-    if (extension._Schema.get_boolean('cpu-individual-cores')) {
-        let gtop = new GTop.glibtop_cpu();
-        try {
-            numcores = GTop.glibtop_get_sysinfo().ncpu;
-        } catch (e) {
-            console.error(e);
-            numcores = 1;
-        }
-    }
-
-    if (numcores > 1) {
-        for (let i = 0; i < numcores; i++) {
-            array.push(new Cpu(extension, i));
-        }
-    } else {
-        array.push(new Cpu(extension, -1));
-    }
-
-    return array;
-}
-
-export { Cpu, createCpus };
+export { Cpu };

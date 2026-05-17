@@ -53,11 +53,11 @@ export function l_limit(t) {
 }
 
 export function change_text() {
-    this.label.visible = this.extension._Schema.get_boolean(this.elt + '-show-text');
+    this.label.visible = this.config['show-text'];
 }
 
 export function change_style() {
-    let style = this.extension._Schema.get_string(this.elt + '-style');
+    let style = this.config.style;
     this.text_box.visible = style === 'digit' || style === 'both';
     this.chart.actor.visible = style === 'graph' || style === 'both';
 }
@@ -113,7 +113,7 @@ export function build_menu_info(extension) {
 }
 
 export function change_menu() {
-    this.menu_visible = this.extension._Schema.get_boolean(this.elt + '-show-menu');
+    this.menu_visible = this.config['show-menu'];
     build_menu_info(this.extension);
 }
 
@@ -541,10 +541,10 @@ export const RotateBinLayout = GObject.registerClass(
 
 export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
     /**
-     * Subclasses can declare static metadata to reduce constructor boilerplate:
+     * Subclasses declare static metadata for identity/class-level info:
      *
      *   static metadata = {
-     *       id: 'fan',              // GSettings key prefix (this.elt)
+     *       id: 'fan',              // Widget type identifier (this.elt)
      *       label: 'fan',           // Short panel label (this.elt_short), defaults to id
      *       name: 'Fan',            // Translatable display name (this.item_name)
      *       metrics: [              // Chart series
@@ -555,18 +555,21 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
      *       tooltipUnit: 'rpm',     // Unit label in tooltip (auto-calls tip_format)
      *   };
      *
-     * When metadata is present, create_text_items() and create_menu_items()
-     * provide sensible defaults that most widgets won't need to override.
+     * Constructor receives a config object with per-instance settings:
+     *   { uuid, type, device, display, style, graph-width, refresh-time,
+     *     show-text, show-menu, colors, ... }
      */
-    constructor(extension, properties) {
+    constructor(extension, config) {
         super(extension);
 
+        this.config = config;
         const meta = this.constructor.metadata;
 
-        this.elt = meta?.id || '';
+        this.elt = meta?.id || config.type;
         this.elt_short = meta?.label || '';
         this.item_name = meta ? _(meta.name) : _('');
         this.color_name = meta ? meta.metrics.filter(m => m.color).map(m => m.key) : [];
+        this.device_id = config.device;
         this.text_items = [];
         this.menu_items = [];
         this.menu_visible = true;
@@ -577,78 +580,40 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this.graph_scale_cooldown_timer_id = null;
         this.graph_scale_cooldown_delay_minutes = 0;
 
-        if (properties) {
-            Object.assign(this, properties);
-        }
-
-        //            TipBox.prototype._init.apply(this, arguments);
         this.vals = [];
         this.tip_labels = [];
         this.tip_vals = [];
         this.tip_unit_labels = [];
 
-        const Schema = extension._Schema;
         const Style = extension._Style;
         const IconSize = extension._IconSize;
 
         this.colors = [];
-        for (let color in this.color_name) {
-            let name = this.elt + '-' + this.color_name[color] + '-color';
-            let clutterColor = color_from_string(Schema.get_string(name));
-            Schema.connect('changed::' + name, (schema, key) => {
-                this.clutterColor = color_from_string(Schema.get_string(key));
-            });
-            Schema.connect('changed::' + name, () => {
-                this.chart.actor.queue_repaint();
-            });
+        for (let color of this.color_name) {
+            let clutterColor = color_from_string(this.config.colors[color] || '#ff0000');
             this.colors.push(clutterColor);
         }
 
-        let element_width = Schema.get_int(this.elt + '-graph-width');
+        let element_width = this.config['graph-width'];
         if (Style.get('') === '-compact') {
             element_width = Math.round(element_width / 1.5);
         }
         this.chart = new Chart(this.extension, element_width, IconSize, this);
 
-        Schema.connect('changed::background', () => {
-            this.chart.actor.queue_repaint();
-        });
+        this.actor.visible = this.config.display;
 
-        this.actor.visible = Schema.get_boolean(this.elt + '-display');
-        Schema.connect(
-            'changed::' + this.elt + '-display', (schema, key) => {
-                this.actor.visible = Schema.get_boolean(key);
-            });
-
-        this.restart_update_timer(l_limit(Schema.get_int(this.elt + '-refresh-time')));
-
-        Schema.connect(
-            'changed::' + this.elt + '-refresh-time',
-            (schema, key) => {
-                this.restart_update_timer(l_limit(Schema.get_int(key)));
-            });
-        Schema.connect('changed::' + this.elt + '-graph-width', this.resize.bind(this));
-
-        if (this.elt === 'thermal') {
-            Schema.connect('changed::thermal-threshold',
-                () => {
-                    this.reset_style();
-                    this.restart_update_timer();
-                });
-        }
+        this.restart_update_timer(l_limit(this.config['refresh-time']));
 
         this.label = new St.Label({text: _(this.elt_short || this.elt),
             style_class: Style.get('sm-status-label')});
-        change_text.call(this);
-        Schema.connect('changed::' + this.elt + '-show-text', change_text.bind(this));
+        this.label.visible = this.config['show-text'];
 
-        this.menu_visible = Schema.get_boolean(this.elt + '-show-menu');
-        Schema.connect('changed::' + this.elt + '-show-menu', change_menu.bind(this));
+        this.menu_visible = this.config['show-menu'];
 
         this.label_bin = new St.Bin({child: this.label});
         const default_layout = this.label_bin.layout_manager;
         const change_rotate_labels = () => {
-            if (Schema.get_boolean('rotate-labels')) {
+            if (this.extension._Schema.get_boolean('rotate-labels')) {
                 this.label.set_rotation_angle(Clutter.RotateAxis.Z_AXIS, -90);
                 this.label.add_style_class_name('rotated');
                 this.label_bin.layout_manager = new RotateBinLayout();
@@ -661,7 +626,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
             }
         };
         change_rotate_labels();
-        this._rotateLabelsConnection = Schema.connect('changed::rotate-labels', change_rotate_labels);
+        this._rotateLabelsConnection = this.extension._Schema.connect('changed::rotate-labels', change_rotate_labels);
 
         this.actor.add_child(this.label_bin);
         this.text_box = new St.BoxLayout();
@@ -671,19 +636,66 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         for (let item in this.text_items) {
             this.text_box.add_child(this.text_items[item]);
         }
+
+        if (this.elt === 'thermal') {
+            this.reset_style();
+        }
+
         this.actor.add_child(this.chart.actor);
         change_style.call(this);
-        Schema.connect('changed::' + this.elt + '-style', change_style.bind(this));
+
         this.menu_items = this.create_menu_items();
 
         this.restart_cooldown_timer();
-        this._cooldownConnection = Schema.connect('changed::graph-cooldown-delay-m', () => {
+        this._cooldownConnection = this.extension._Schema.connect('changed::graph-cooldown-delay-m', () => {
             this.restart_cooldown_timer();
         });
 
         if (meta?.tooltipUnit !== undefined) {
             this.tip_format(meta.tooltipUnit);
         }
+    }
+    onSettingsChanged(newConfig) {
+        const oldConfig = this.config;
+        this.config = newConfig;
+
+        if (oldConfig.display !== newConfig.display) {
+            this.actor.visible = newConfig.display;
+        }
+
+        if (oldConfig['refresh-time'] !== newConfig['refresh-time']) {
+            this.restart_update_timer(l_limit(newConfig['refresh-time']));
+        }
+
+        if (oldConfig['graph-width'] !== newConfig['graph-width']) {
+            this.resize(newConfig['graph-width']);
+        }
+
+        this.colors = [];
+        for (let color of this.color_name) {
+            let clutterColor = color_from_string(this.config.colors[color] || '#ff0000');
+            this.colors.push(clutterColor);
+        }
+        this.chart.actor.queue_repaint();
+
+        if (oldConfig['show-text'] !== newConfig['show-text']) {
+            this.label.visible = newConfig['show-text'];
+        }
+
+        if (oldConfig.style !== newConfig.style) {
+            change_style.call(this);
+        }
+
+        if (oldConfig['show-menu'] !== newConfig['show-menu']) {
+            this.menu_visible = newConfig['show-menu'];
+            build_menu_info(this.extension);
+        }
+
+        if (this.elt === 'thermal') {
+            this.reset_style();
+        }
+
+        this.update();
     }
     create_text_items() {
         const Style = this.extension._Style;
@@ -801,7 +813,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this.text_items[0].set_style('color: rgba(255, 255, 255, 1)');
     }
     threshold() {
-        if (this.extension._Schema.get_int('thermal-threshold')) {
+        if (this.config.threshold) {
             if (this.temp_over_threshold) {
                 this.text_items[0].set_style('color: rgba(255, 0, 0, 1)');
             } else {
@@ -809,8 +821,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
             }
         }
     }
-    resize(schema, key) {
-        let width = this.extension._Schema.get_int(key);
+    resize(width) {
         if (this.extension._Style.get('') === '-compact') {
             width = Math.round(width / 1.5);
         }

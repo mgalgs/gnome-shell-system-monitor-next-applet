@@ -18,11 +18,15 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
         menuUnit: 'MHz',
     };
 
-    constructor(extension) {
-        super(extension);
+    constructor(extension, config) {
+        super(extension, config);
         this.freq = 0;
 
-        extension._Schema.connect('changed::freq-display-mode', this.update.bind(this));
+        if (this.device_id !== 'all') {
+            let coreNum = parseInt(this.device_id) + 1;
+            this.label.text = _('F') + coreNum;
+            this.item_name = _('Freq Core ') + coreNum;
+        }
 
         this.update();
     }
@@ -30,29 +34,39 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
         let total_frequency = 0;
         let max_frequency = 0;
         let num_cpus = GTop.glibtop_get_sysinfo().ncpu;
-        let i = 0;
-        let file = Gio.file_new_for_path(`/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq`);
-        let that = this;
-        let display_mode = this.extension._Schema.get_enum('freq-display-mode');
+        let display_mode = this.config['display-mode'] || 'max';
 
-        file.load_contents_async(null, function cb(source, result) {
-            let as_r = source.load_contents_finish(result);
-            let current_freq = parseInt(parse_bytearray(as_r[1]));
+        if (this.device_id !== 'all') {
+            let i = parseInt(this.device_id);
+            let file = Gio.file_new_for_path(`/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq`);
+            file.load_contents_async(null, (source, result) => {
+                let as_r = source.load_contents_finish(result);
+                this.freq = Math.round(parseInt(parse_bytearray(as_r[1])) / 1000);
+            });
+        } else {
+            let i = 0;
+            let file = Gio.file_new_for_path(`/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq`);
+            let that = this;
 
-            total_frequency += current_freq;
-            max_frequency = Math.max(max_frequency, current_freq);
+            file.load_contents_async(null, function cb(source, result) {
+                let as_r = source.load_contents_finish(result);
+                let current_freq = parseInt(parse_bytearray(as_r[1]));
 
-            if (++i >= num_cpus) {
-                if (display_mode === 0) { // 'max' mode
-                    that.freq = Math.round(max_frequency / 1000);
-                } else { // 'average' mode
-                    that.freq = Math.round(total_frequency / num_cpus / 1000);
+                total_frequency += current_freq;
+                max_frequency = Math.max(max_frequency, current_freq);
+
+                if (++i >= num_cpus) {
+                    if (display_mode === 'max') {
+                        that.freq = Math.round(max_frequency / 1000);
+                    } else {
+                        that.freq = Math.round(total_frequency / num_cpus / 1000);
+                    }
+                } else {
+                    file = Gio.file_new_for_path(`/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq`);
+                    file.load_contents_async(null, cb.bind(that));
                 }
-            } else {
-                file = Gio.file_new_for_path(`/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq`);
-                file.load_contents_async(null, cb.bind(that));
-            }
-        });
+            });
+        }
     }
     _apply() {
         let value = this.freq.toString();
@@ -65,7 +79,6 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
             this.menu_items[0].text = this._pad(value, 4);
         }
     }
-    // pad a string with leading spaces
     _pad(number, length) {
         let str = '' + number;
         while (str.length < length) {

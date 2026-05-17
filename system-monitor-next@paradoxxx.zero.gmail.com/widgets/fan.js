@@ -14,23 +14,33 @@ const Fan = class SystemMonitor_Fan extends ElementBase {
         tooltipUnit: 'rpm',
     };
 
-    constructor(extension) {
-        super(extension);
+    constructor(extension, config) {
+        super(extension, config);
+        this.sensor_label = this.device_id;
         this.sensors = check_sensors("fan");
         this.rpm = 0;
         this.display_error = true;
-        extension._Schema.connect('changed::' + this.elt + '-sensor-label', this.refresh.bind(this));
+
+        this.item_name = this.sensor_label ? this.sensor_label : _('Fan');
+
+        if (this.sensor_label) {
+            let shortLabel = this.sensor_label.split(' - ').pop();
+            if (shortLabel.length > 6) {
+                shortLabel = shortLabel.substring(0, 6);
+            }
+            this.label.text = shortLabel;
+        }
+
         this.update();
     }
     refresh() {
         if (this.sensors === undefined || Object.keys(this.sensors).length === 0) {
             return;
         }
-        let label = this.extension._Schema.get_string(this.elt + '-sensor-label');
-        let sfile = this.sensors[label];
+        let sfile = this.sensors[this.sensor_label];
         if (sfile === undefined && this.display_error) {
             const validLabels = Object.keys(this.sensors).join(', ');
-            sm_log(`Invalid fan sensor label: "${label}" (valid choices: ${validLabels})`, 'error');
+            sm_log(`Invalid fan sensor label: "${this.sensor_label}" (valid choices: ${validLabels})`, 'error');
             this.display_error = false;
             return;
         }

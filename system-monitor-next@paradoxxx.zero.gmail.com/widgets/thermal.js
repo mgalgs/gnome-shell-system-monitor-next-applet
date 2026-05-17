@@ -15,27 +15,36 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
         metrics: [{ key: 'tz0', color: true }],
     };
 
-    constructor(extension) {
-        super(extension);
+    constructor(extension, config) {
+        super(extension, config);
         this.max = 100;
+        this.sensor_label = this.device_id;
         this.sensors = check_sensors("temp");
 
+        this.item_name = this.sensor_label ? this.sensor_label : _('Thermal');
         this.temperature = '-- ';
-        this.fahrenheit_unit = extension._Schema.get_boolean(this.elt + '-fahrenheit-unit');
+        this.fahrenheit_unit = this.config['fahrenheit-unit'] || false;
         this.display_error = true;
+
+        if (this.sensor_label) {
+            let shortLabel = this.sensor_label.split(' - ').pop();
+            if (shortLabel.length > 6) {
+                shortLabel = shortLabel.substring(0, 6);
+            }
+            this.label.text = shortLabel;
+        }
+
         this.tip_format(this.temperature_symbol());
-        extension._Schema.connect('changed::' + this.elt + '-sensor-label', this.refresh.bind(this));
         this.update();
     }
     refresh() {
         if (this.sensors === undefined || Object.keys(this.sensors).length === 0) {
             return;
         }
-        let label = this.extension._Schema.get_string(this.elt + '-sensor-label');
-        let sfile = this.sensors[label];
+        let sfile = this.sensors[this.sensor_label];
         if (sfile === undefined && this.display_error) {
             const validLabels = Object.keys(this.sensors).join(', ');
-            sm_log(`Invalid thermal sensor label: "${label}" (valid choices: ${validLabels})`, 'error');
+            sm_log(`Invalid thermal sensor label: "${this.sensor_label}" (valid choices: ${validLabels})`, 'error');
             this.display_error = false;
             return;
         }
@@ -44,12 +53,19 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
             this.display_error = false;
         }
 
-        this.fahrenheit_unit = this.extension._Schema.get_boolean(this.elt + '-fahrenheit-unit');
+        this.fahrenheit_unit = this.config['fahrenheit-unit'] || false;
     }
     _apply() {
         this.text_items[0].text = this.menu_items[0].text = this.temperature_text();
-        this.temp_over_threshold = this.temperature > this.extension._Schema.get_int('thermal-threshold');
-        this.vals = [this.temperature];
+
+        if (typeof this.temperature === 'number') {
+            this.temp_over_threshold = this.temperature > (this.config.threshold || 0);
+            this.vals = [this.temperature];
+        } else {
+            this.temp_over_threshold = false;
+            this.vals = [0];
+        }
+
         this.tip_vals[0] = this.temperature_text();
         this.text_items[1].text = this.menu_items[1].text = this.temperature_symbol();
         this.tip_unit_labels[0].text = _(this.temperature_symbol());
@@ -78,6 +94,9 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
     }
     temperature_text() {
         let temperature = this.temperature;
+        if (typeof temperature !== 'number')
+            return temperature.toString();
+
         if (this.fahrenheit_unit) {
             temperature = Math.round(temperature * 1.8 + 32);
         }

@@ -34,7 +34,7 @@ import { migrateSettings } from './migration.js';
 import { color_from_string, smStyleManager, build_menu_info } from './base.js';
 import { smMountsMonitor, Bar, Pie } from './mounts.js';
 import { Battery } from './widgets/battery.js';
-import { createCpus } from './widgets/cpu.js';
+import { Cpu } from './widgets/cpu.js';
 import { Disk } from './widgets/disk.js';
 import { Fan } from './widgets/fan.js';
 import { Freq } from './widgets/frequency.js';
@@ -46,6 +46,33 @@ import { Swap } from './widgets/swap.js';
 import { Thermal } from './widgets/thermal.js';
 
 const PANEL_ICON_SIZE = 16;
+
+const WIDGET_CLASSES = {
+    cpu: Cpu,
+    memory: Mem,
+    swap: Swap,
+    net: Net,
+    disk: Disk,
+    gpu: Gpu,
+    thermal: Thermal,
+    fan: Fan,
+    battery: Battery,
+    freq: Freq,
+};
+
+function parseMonitorConfigs(strv) {
+    let configs = [];
+    for (const s of strv) {
+        try {
+            let c = JSON.parse(s);
+            if (c && c.uuid && c.type)
+                configs.push(c);
+        } catch (e) {
+            sm_log(`Skipping malformed monitor config: ${e.message}`, 'warn');
+        }
+    }
+    return configs;
+}
 
 function change_usage(extension) {
     let usage = extension._Schema.get_string('disk-usage-style');
@@ -111,19 +138,69 @@ export default class SystemMonitorExtension extends Extension {
         }
     }
 
+    _syncMonitors() {
+        const newConfigs = parseMonitorConfigs(this._Schema.get_strv('monitors'));
+        const oldUUIDs = new Set(this.__sm.elts.map(elt => elt.config.uuid));
+        const newUUIDs = new Set(newConfigs.map(c => c.uuid));
+
+        // Remove widgets no longer in config
+        const removedUUIDs = [...oldUUIDs].filter(uuid => !newUUIDs.has(uuid));
+        for (const uuid of removedUUIDs) {
+            const widget = this.__sm.widgetMap.get(uuid);
+            if (widget) {
+                sm_log(`Removing monitor ${uuid}`);
+                widget.destroy();
+                this.__sm.widgetMap.delete(uuid);
+            }
+        }
+
+        // Update existing widgets and add new ones
+        const newEltArray = [];
+        for (const config of newConfigs) {
+            let widget = this.__sm.widgetMap.get(config.uuid);
+
+            if (widget) {
+                widget.onSettingsChanged(config);
+                newEltArray.push(widget);
+            } else {
+                sm_log(`Adding new monitor ${config.uuid} (${config.type})`);
+                const WidgetClass = WIDGET_CLASSES[config.type];
+                if (WidgetClass) {
+                    const newWidget = new WidgetClass(this, config);
+                    this.__sm.widgetMap.set(config.uuid, newWidget);
+                    newEltArray.push(newWidget);
+                }
+            }
+        }
+
+        // Re-order widgets in panel
+        this.__sm.elts = newEltArray;
+        this.__sm.box.remove_all_children();
+        this.__sm.box.add_child(this.__sm.icon.actor);
+        for (const widget of this.__sm.elts) {
+            this.__sm.box.add_child(widget.actor);
+            widget.actor.visible = widget.config.display;
+        }
+
+        build_menu_info(this);
+    }
+
     enable() {
         sm_log('applet enable from ' + this.path);
 
-        migrateSettings(this);
+        this._Schema = this.getSettings();
+        try {
+            migrateSettings(this);
+        } catch (e) {
+            sm_log(`Settings migration failed: ${e.message}`, 'error');
+        }
 
         // Get locale, needed as an argument for toLocaleString() since GNOME Shell 3.24
-        // See: mozjs library bug https://bugzilla.mozilla.org/show_bug.cgi?id=999003
         this._Locale = GLib.get_language_names()[0];
         if (this._Locale.indexOf('_') !== -1) {
             this._Locale = this._Locale.split('_')[0];
         }
 
-        // fallback to en for unsupported locale
         try {
             new Date().toLocaleString(this._Locale);
         } catch (e) {
@@ -133,14 +210,13 @@ export default class SystemMonitorExtension extends Extension {
 
         this._IconSize = Math.round(PANEL_ICON_SIZE * 4 / 5);
 
-        this._Schema = this.getSettings();
-
         this._Style = new smStyleManager(this);
         this._MountsMonitor = new smMountsMonitor(this);
 
         this._Background = color_from_string(this._Schema.get_string('background'));
 
         this.menuTimeout = null;
+        this._settingsConnection = null;
 
         let panel = Main.panel._rightBox;
         if (this._Schema.get_boolean('center-display')) {
@@ -152,33 +228,16 @@ export default class SystemMonitorExtension extends Extension {
 
         this._MountsMonitor.connect();
 
-        // Debug
         this.__sm = {
             tray: new PanelMenu.Button(0.5),
             icon: new Icon(this),
             pie: new Pie(this),
             bar: new Bar(this),
             elts: [],
+            widgetMap: new Map(),
+            box: null,
         };
-
-        // Items to Monitor
         let tray = this.__sm.tray;
-
-        // Load the preferred position of the displays and insert them in said order.
-        const positionList = {};
-        // CPUs are inserted differently, so cpu-position is stored apart
-        const cpuPosition = this._Schema.get_int('cpu-position');
-        positionList[cpuPosition] = createCpus(this);
-        positionList[this._Schema.get_int('freq-position')] = new Freq(this);
-        positionList[this._Schema.get_int('memory-position')] = new Mem(this);
-        positionList[this._Schema.get_int('swap-position')] = new Swap(this);
-        positionList[this._Schema.get_int('net-position')] = new Net(this);
-        positionList[this._Schema.get_int('disk-position')] = new Disk(this);
-        positionList[this._Schema.get_int('gpu-position')] = new Gpu(this);
-        positionList[this._Schema.get_int('thermal-position')] = new Thermal(this);
-        positionList[this._Schema.get_int('fan-position')] = new Fan(this);
-        // See TODO inside Battery
-        positionList[this._Schema.get_int('battery-position')] = new Battery(this);
 
         if (this._Schema.get_boolean('move-clock')) {
             let dateMenu = Main.panel.statusArea.dateMenu;
@@ -187,27 +246,30 @@ export default class SystemMonitorExtension extends Extension {
             tray.clockMoved = true;
         }
 
-        this._Schema.connect('changed::background', (schema, key) => {
+        this._bgConnection = this._Schema.connect('changed::background', (schema, key) => {
             this._Background = color_from_string(this._Schema.get_string(key));
         });
         Main.panel._addToPanelBox('system-monitor', tray, 1, panel);
 
-        // The spacing adds a distance between the graphs/text on the top bar
         let spacing = this._Schema.get_boolean('compact-display') ? '1' : '4';
-        let box = new St.BoxLayout({style: 'spacing: ' + spacing + 'px;'});
-        tray.add_child(box);
-        box.add_child(this.__sm.icon.actor);
+        this.__sm.box = new St.BoxLayout({style: 'spacing: ' + spacing + 'px;'});
+        tray.add_child(this.__sm.box);
+        this.__sm.box.add_child(this.__sm.icon.actor);
 
-        // Need to convert the positionList object into an array
-        // (sorted by object key) and then expand out the CPUs list
-        const sortedPLEntries = Object.entries(positionList).sort((a, b) => a[0] - b[0]);
-        const sortedPLValues = sortedPLEntries.map(([key, value]) => value);
-        this.__sm.elts = sortedPLValues.flat();
-
-        // Add items to panel box
-        for (const elt of this.__sm.elts) {
-            box.add_child(elt.actor);
+        // Create widgets from monitors config
+        const monitorConfigs = parseMonitorConfigs(this._Schema.get_strv('monitors'));
+        for (const config of monitorConfigs) {
+            const WidgetClass = WIDGET_CLASSES[config.type];
+            if (WidgetClass) {
+                const widget = new WidgetClass(this, config);
+                this.__sm.elts.push(widget);
+                this.__sm.widgetMap.set(config.uuid, widget);
+                this.__sm.box.add_child(widget.actor);
+            }
         }
+
+        // Listen for config changes
+        this._settingsConnection = this._Schema.connect('changed::monitors', () => this._syncMonitors());
 
         // Build Menu Info Box Table
         let menu_info = new PopupMenu.PopupBaseMenuItem({reactive: false});
@@ -228,7 +290,7 @@ export default class SystemMonitorExtension extends Extension {
         tray.menu.addMenuItem(bar_item.menu_item);
 
         change_usage(this);
-        this._Schema.connect('changed::disk-usage-style', () => change_usage(this));
+        this._diskUsageConnection = this._Schema.connect('changed::disk-usage-style', () => change_usage(this));
 
         tray.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
@@ -274,21 +336,24 @@ export default class SystemMonitorExtension extends Extension {
             GLib.Source.remove(this.menuTimeout);
             this.menuTimeout = null;
         }
+        if (this._settingsConnection) {
+            this._Schema.disconnect(this._settingsConnection);
+            this._settingsConnection = null;
+        }
+        if (this._bgConnection) {
+            this._Schema.disconnect(this._bgConnection);
+            this._bgConnection = null;
+        }
+        if (this._diskUsageConnection) {
+            this._Schema.disconnect(this._diskUsageConnection);
+            this._diskUsageConnection = null;
+        }
         // restore clock
         if (this.__sm.tray.clockMoved) {
             let dateMenu = Main.panel.statusArea.dateMenu;
             Main.panel._rightBox.remove_child(dateMenu.container);
             Main.panel._addToPanelBox('dateMenu', dateMenu, Main.sessionMode.panel.center.indexOf('dateMenu'), Main.panel._centerBox);
         }
-        // restore system power icon if necessary
-        // workaround bug introduced by multiple cpus init :
-        // if (Schema.get_boolean('battery-hidesystem') && this.__sm.elts.battery.icon_hidden) {
-        //    this.__sm.elts.battery.hide_system_icon(false);
-        // }
-        // for (let i in this.__sm.elts) {
-        //    if (this.__sm.elts[i].elt == 'battery')
-        //        this.__sm.elts[i].hide_system_icon(false);
-        // }
 
         if (this._MountsMonitor) {
             this._MountsMonitor.disconnect();
@@ -299,8 +364,8 @@ export default class SystemMonitorExtension extends Extension {
             this._Style = null;
         }
 
-        for (let eltName in this.__sm.elts) {
-            this.__sm.elts[eltName].destroy();
+        for (let elt of this.__sm.widgetMap.values()) {
+            elt.destroy();
         }
         this.__sm.tray.destroy();
         this.__sm = null;

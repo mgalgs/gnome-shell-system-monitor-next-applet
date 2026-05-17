@@ -22,41 +22,30 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
         metrics: [{ key: 'batt0', color: true }],
     };
 
-    constructor(extension) {
-        super(extension);
+    constructor(extension, config) {
+        super(extension, config);
 
         this.max = 100;
         this.icon_hidden = false;
         this.percentage = 0;
         this.timeString = '-- ';
 
-        // Battery updates are event driven, and require the following _proxy value to exist.
-        //   this._proxy = Main.panel.statusArea.quickSettings._system._systemItem._powerToggle._proxy;
-        // This does not exist at launch time, so start a GLib handler to poll for it
         this._poll_attempts = 0;
         this._max_poll_attempts = 9;
         this._poll_handler_id = GLib.timeout_add_seconds(
             GLib.PRIORITY_DEFAULT, 1, this._poll_quickSettings.bind(this)
         );
 
-        // need to specify a default icon, since the contructor completes before UPower callback
         this.gicon = Gio.icon_new_for_string(DEFAULT_BATTERY_ICON);
 
         this.tip_format('%');
 
         this.update_tips();
-        // this.hide_system_icon();
-
-        // Schema.connect('changed::' + this.elt + '-hidesystem', this.hide_system_icon.bind(this));
-        extension._Schema.connect('changed::' + this.elt + '-time', this.update_tips.bind(this));
     }
     refresh() {
-        // do nothing here?
+        // Battery updates are event-driven via UPower proxy
     }
     _poll_quickSettings() {
-        // check if the quickSettings proxy value is defined
-        // once it is, set this._proxy and remove the handler
-
         if (this._proxy) {
             return GLib.SOURCE_REMOVE;
         }
@@ -74,7 +63,6 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
 
             sm_log(`Looking for battery proxy (attempt ${this._poll_attempts})`);
             if (proxy) {
-                // set this._proxy, bind update_battery(), and stop polling
                 sm_log("Battery proxy found!");
                 this._proxy = proxy;
                 this.powerSigID = this._proxy.connect(
@@ -89,7 +77,6 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
             sm_log(`Error accessing quickSettings proxy: ${error.message}`, 'warn');
         }
 
-        // Check if we've exceeded maximum attempts
         this._poll_attempts++;
         if (this._poll_attempts >= this._max_poll_attempts) {
             sm_log(`Battery proxy not found after ${this._poll_attempts}, giving up`);
@@ -97,13 +84,11 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
             return GLib.SOURCE_REMOVE;
         }
 
-        // Exponential backoff
         const next_delay = Math.pow(2, this._poll_attempts - 1);
         this._poll_handler_id = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, next_delay, this._poll_quickSettings.bind(this));
         return GLib.SOURCE_REMOVE;
     }
     update_battery() {
-        // callback function for when battery stats updated.
         let battery_found = false;
         let isBattery = false;
         if (typeof (this._proxy.GetDevicesRemote) === 'undefined') {
@@ -116,7 +101,6 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
                 let seconds = this._proxy.TimeToEmpty;
                 this.update_battery_value(seconds, percentage, icon);
             } else {
-                // log("[System monitor] No battery found");
                 this.actor.hide();
                 this.menu_visible = false;
                 build_menu_info(this.extension);
@@ -133,7 +117,7 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
 
                 let [result] = devices;
                 for (let i = 0; i < result.length; i++) {
-                    let [device_id, device_type, icon, percentage, state, seconds] = result[i];
+                    let [_device_id, device_type, icon, percentage, _state, seconds] = result[i];
 
                     isBattery = (device_type === UPower.DeviceKind.BATTERY);
                     if (isBattery) {
@@ -144,7 +128,6 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
                 }
 
                 if (!battery_found) {
-                    // log("[System monitor] No battery found");
                     this.actor.hide();
                     this.menu_visible = false;
                     build_menu_info(this.extension);
@@ -164,53 +147,40 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
         this.percentage = Math.ceil(percentage);
         this.gicon = Gio.icon_new_for_string(icon);
 
-        if (this.extension._Schema.get_boolean(this.elt + '-display')) {
+        if (this.config.display) {
             this.actor.show()
         }
-        if (this.extension._Schema.get_boolean(this.elt + '-show-menu') && !this.menu_visible) {
+        if (this.config['show-menu'] && !this.menu_visible) {
             this.menu_visible = true;
             build_menu_info(this.extension);
         }
     }
     hide_system_icon(override) {
-        let value = this.extension._Schema.get_boolean(this.elt + '-hidesystem');
+        let value = this.config.hidesystem || false;
         if (!override) {
             value = false;
         }
-        if (value && this.extension._Schema.get_boolean(this.elt + '-display')) {
+        if (value && this.config.display) {
             const StatusArea = Main.panel.statusArea;
             if (StatusArea.battery.actor.visible) {
                 StatusArea.battery.destroy();
                 this.icon_hidden = true;
             }
         } else if (this.icon_hidden) {
-            // TODO: Figure out what to put here instead
-            // (git blame for more info)
-            // let Indicator = new Panel.PANEL_ITEM_IMPLEMENTATIONS.battery();
-            // Main.panel.addToStatusArea('battery', Indicator, Main.sessionMode.panel.right.indexOf('battery'), 'right');
             this.icon_hidden = false;
-            // Main.panel._updatePanel('right');
         }
     }
     get_battery_unit() {
-        let unitString;
-        let value = this.extension._Schema.get_boolean(this.elt + '-time');
-
-        if (value) {
-            unitString = 'h';
-        } else {
-            unitString = '%';
-        }
-
-        return unitString;
+        let value = this.config.time || false;
+        return value ? 'h' : '%';
     }
     update_tips() {
         let unitString = this.get_battery_unit();
 
-        if (this.extension._Schema.get_boolean(this.elt + '-display')) {
+        if (this.config.display) {
             this.text_items[2].text = unitString;
         }
-        if (this.extension._Schema.get_boolean(this.elt + '-show-menu')) {
+        if (this.config['show-menu']) {
             this.menu_items[1].text = unitString;
         }
 
@@ -218,17 +188,17 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
     }
     _apply() {
         let displayString;
-        let value = this.extension._Schema.get_boolean(this.elt + '-time');
+        let value = this.config.time || false;
         if (value) {
             displayString = this.timeString;
         } else {
             displayString = this.percentage.toString()
         }
-        if (this.extension._Schema.get_boolean(this.elt + '-display')) {
+        if (this.config.display) {
             this.text_items[0].gicon = this.gicon;
             this.text_items[1].text = displayString;
         }
-        if (this.extension._Schema.get_boolean(this.elt + '-show-menu')) {
+        if (this.config['show-menu']) {
             this.menu_items[0].text = displayString;
         }
         this.vals = [this.percentage];

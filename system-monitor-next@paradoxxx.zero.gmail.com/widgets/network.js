@@ -24,9 +24,9 @@ const Net = class SystemMonitor_Net extends ElementBase {
         ],
     };
 
-    constructor(extension) {
-        super(extension);
-        this.speed_in_bits = false;
+    constructor(extension, config) {
+        super(extension, config);
+        this.speed_in_bits = this.config['speed-in-bits'] || false;
         this.ifs = [];
         this.client = NM.Client.new(null);
         this.update_iface_list();
@@ -43,19 +43,26 @@ const Net = class SystemMonitor_Net extends ElementBase {
                         if (new TextDecoder().decode(op_contents).replace(/\s/g, '') === 'up' &&
                             ifc.indexOf('br') < 0 &&
                             ifc.indexOf('lo') < 0) {
-                            this.ifs.push(ifc);
+                            if (this.device_id === 'all' || this.device_id === ifc) {
+                                this.ifs.push(ifc);
+                            }
                         }
-                    } catch (_e) { /* operstate file may not exist */ }
+                    } catch { /* operstate file may not exist */ }
                 }
-            } catch (_e) { /* /proc/net/dev unavailable */ }
+            } catch { /* /proc/net/dev unavailable */ }
         }
+
+        if (this.device_id !== 'all') {
+            this.label.text = this.device_id;
+            this.item_name = _('Net') + ' ' + this.device_id;
+        }
+
         this.gtop = new GTop.glibtop_netload();
         this.last = [0, 0, 0, 0, 0];
         this.usage = [0, 0, 0, 0, 0];
         this.last_time = 0;
         this.tip_format([_('KiB/s'), '/s', _('KiB/s'), '/s', '/s']);
         this.update_units();
-        this.extension._Schema.connect('changed::' + this.elt + '-speed-in-bits', this.update_units.bind(this));
         try {
             let iface_list = this.client.get_devices();
             this.NMsigID = [];
@@ -68,7 +75,7 @@ const Net = class SystemMonitor_Net extends ElementBase {
         this.update();
     }
     update_units() {
-        this.speed_in_bits = this.extension._Schema.get_boolean(this.elt + '-speed-in-bits');
+        this.speed_in_bits = this.config['speed-in-bits'] || false;
     }
     update_iface_list() {
         try {
@@ -76,10 +83,13 @@ const Net = class SystemMonitor_Net extends ElementBase {
             let iface_list = this.client.get_devices();
             for (let j = 0; j < iface_list.length; j++) {
                 if (iface_list[j].state === NetworkManager.DeviceState.ACTIVATED) {
-                    this.ifs.push(iface_list[j].get_ip_iface() || iface_list[j].get_iface());
+                    let iface = iface_list[j].get_ip_iface() || iface_list[j].get_iface();
+                    if (this.device_id === 'all' || this.device_id === iface) {
+                        this.ifs.push(iface);
+                    }
                 }
             }
-        } catch (e) {
+        } catch {
             console.error('Please install Network Manager Gobject Introspection Bindings');
         }
     }
@@ -107,7 +117,6 @@ const Net = class SystemMonitor_Net extends ElementBase {
         this.last_time = time;
     }
 
-    // pad a string with leading spaces
     _pad(number, length) {
         let str = '' + number;
         while (str.length < length) {
