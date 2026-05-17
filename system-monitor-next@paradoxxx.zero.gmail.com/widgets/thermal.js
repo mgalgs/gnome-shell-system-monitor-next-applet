@@ -8,17 +8,18 @@ import { check_sensors } from '../common.js';
 import { ElementBase, try_read_int_file } from '../base.js';
 
 const Thermal = class SystemMonitor_Thermal extends ElementBase {
+    static metadata = {
+        id: 'thermal',
+        label: 'thrm',
+        name: 'Thermal',
+        metrics: [{ key: 'tz0', color: true }],
+    };
+
     constructor(extension) {
-        super(extension, {
-            elt: 'thermal',
-            elt_short: 'thrm',
-            item_name: _('Thermal'),
-            color_name: ['tz0']
-        });
+        super(extension);
         this.max = 100;
         this.sensors = check_sensors("temp");
 
-        this.item_name = _('Thermal');
         this.temperature = '-- ';
         this.fahrenheit_unit = extension._Schema.get_boolean(this.elt + '-fahrenheit-unit');
         this.display_error = true;

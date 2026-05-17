@@ -540,12 +540,33 @@ export const RotateBinLayout = GObject.registerClass(
 );
 
 export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
+    /**
+     * Subclasses can declare static metadata to reduce constructor boilerplate:
+     *
+     *   static metadata = {
+     *       id: 'fan',              // GSettings key prefix (this.elt)
+     *       label: 'fan',           // Short panel label (this.elt_short), defaults to id
+     *       name: 'Fan',            // Translatable display name (this.item_name)
+     *       metrics: [              // Chart series
+     *           { key: 'fan0', color: true },
+     *       ],
+     *       panelUnit: 'rpm',       // Unit label in panel (default: '%')
+     *       menuUnit: 'rpm',        // Unit label in popup menu (default: panelUnit)
+     *       tooltipUnit: 'rpm',     // Unit label in tooltip (auto-calls tip_format)
+     *   };
+     *
+     * When metadata is present, create_text_items() and create_menu_items()
+     * provide sensible defaults that most widgets won't need to override.
+     */
     constructor(extension, properties) {
         super(extension);
-        this.elt = '';
-        this.elt_short = '';
-        this.item_name = _('');
-        this.color_name = [];
+
+        const meta = this.constructor.metadata;
+
+        this.elt = meta?.id || '';
+        this.elt_short = meta?.label || '';
+        this.item_name = meta ? _(meta.name) : _('');
+        this.color_name = meta ? meta.metrics.filter(m => m.color).map(m => m.key) : [];
         this.text_items = [];
         this.menu_items = [];
         this.menu_visible = true;
@@ -556,7 +577,9 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this.graph_scale_cooldown_timer_id = null;
         this.graph_scale_cooldown_delay_minutes = 0;
 
-        Object.assign(this, properties);
+        if (properties) {
+            Object.assign(this, properties);
+        }
 
         //            TipBox.prototype._init.apply(this, arguments);
         this.vals = [];
@@ -657,6 +680,39 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this._cooldownConnection = Schema.connect('changed::graph-cooldown-delay-m', () => {
             this.restart_cooldown_timer();
         });
+
+        if (meta?.tooltipUnit !== undefined) {
+            this.tip_format(meta.tooltipUnit);
+        }
+    }
+    create_text_items() {
+        const Style = this.extension._Style;
+        const meta = this.constructor.metadata;
+        const unit = meta?.panelUnit ?? '%';
+        const unitStyle = unit === '%' ? 'sm-perc-label' : 'sm-unit-label';
+        return [
+            new St.Label({
+                text: '',
+                style_class: Style.get('sm-status-value'),
+                y_align: Clutter.ActorAlign.CENTER}),
+            new St.Label({
+                text: _(unit),
+                style_class: Style.get(unitStyle),
+                y_align: Clutter.ActorAlign.CENTER}),
+        ];
+    }
+    create_menu_items() {
+        const Style = this.extension._Style;
+        const meta = this.constructor.metadata;
+        const unit = meta?.menuUnit ?? meta?.panelUnit ?? '%';
+        return [
+            new St.Label({
+                text: '',
+                style_class: Style.get('sm-value')}),
+            new St.Label({
+                text: _(unit),
+                style_class: Style.get('sm-label')}),
+        ];
     }
     /**
      * Initializes or restarts the graph scale cooldown timer. The graph

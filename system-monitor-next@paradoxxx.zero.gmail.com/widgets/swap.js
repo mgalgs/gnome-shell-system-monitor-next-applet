@@ -1,18 +1,20 @@
 /* -*- mode: js2; js2-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
-import Clutter from "gi://Clutter";
 import GTop from "gi://GTop";
 import St from "gi://St";
 import { ElementBase } from '../base.js';
 
 const Swap = class SystemMonitor_Swap extends ElementBase {
+    static metadata = {
+        id: 'swap',
+        name: 'Swap',
+        metrics: [{ key: 'used', color: true }],
+        tooltipUnit: '%',
+    };
+
     constructor(extension) {
-        super(extension, {
-            elt: 'swap',
-            item_name: _('Swap'),
-            color_name: ['used']
-        });
+        super(extension);
         this.max = 1;
         this.gtop = new GTop.glibtop_swap();
 
@@ -27,7 +29,6 @@ const Swap = class SystemMonitor_Swap extends ElementBase {
             this._unitConversion *= 1024 / this._decimals;
         }
 
-        this.tip_format();
         this.update();
     }
     refresh() {
@@ -45,10 +46,8 @@ const Swap = class SystemMonitor_Swap extends ElementBase {
     _pad(number) {
         if (this.useGiB) {
             if (number < 1) {
-                // examples: 0.01, 0.10, 0.88
                 return number.toLocaleString(this.extension._Locale, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             }
-            // examples: 5.85, 16.0, 128
             return number.toLocaleString(this.extension._Locale, {minimumSignificantDigits: 3, maximumSignificantDigits: 3});
         }
 
@@ -72,18 +71,6 @@ const Swap = class SystemMonitor_Swap extends ElementBase {
         }
     }
 
-    create_text_items() {
-        return [
-            new St.Label({
-                text: '',
-                style_class: this.extension._Style.get('sm-status-value'),
-                y_align: Clutter.ActorAlign.CENTER}),
-            new St.Label({
-                text: '%',
-                style_class: this.extension._Style.get('sm-perc-label'),
-                y_align: Clutter.ActorAlign.CENTER})
-        ];
-    }
     create_menu_items() {
         let unit = 'MiB';
         if (this.useGiB) {
