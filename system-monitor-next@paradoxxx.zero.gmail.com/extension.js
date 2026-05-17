@@ -228,7 +228,7 @@ export default class SystemMonitorExtension extends Extension {
         tray.menu.addMenuItem(bar_item.menu_item);
 
         change_usage(this);
-        this._Schema.connect('changed::disk-usage-style', change_usage);
+        this._Schema.connect('changed::disk-usage-style', () => change_usage(this));
 
         tray.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
