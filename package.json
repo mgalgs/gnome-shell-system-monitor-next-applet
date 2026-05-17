@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "lint": "eslint system-monitor-next@paradoxxx.zero.gmail.com/widget-system system-monitor-next@paradoxxx.zero.gmail.com/widgets"
+    "lint": "eslint system-monitor-next@paradoxxx.zero.gmail.com"
   },
   "repository": {
     "type": "git",

@@ -6,6 +6,8 @@ PREFIX ?= $(HOME)/.local
 
 BASE_MODULES = \
   $(UUID)/extension.js \
+  $(UUID)/base.js \
+  $(UUID)/mounts.js \
   $(UUID)/utils.js \
   $(UUID)/migration.js \
   $(UUID)/common.js \
