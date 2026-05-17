@@ -564,8 +564,12 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
      *   tooltipUnit(optional) - Unit in tooltip, default ''
      *
      * Widget API (implement one of these patterns):
-     *   collect()            - Return {metricKey: value, ...}; framework auto-updates display
-     *   refresh() + _apply() - Legacy: fetch data, then manually update text/menu/chart/tooltip
+     *   collect()                - Return {metricKey: value}; framework auto-updates display
+     *   collectAsync(callback)   - Same but async; call callback({metricKey: value}) when ready
+     *   refresh() + _apply()     - Full control: fetch data, then manually update display
+     *
+     * Optional hooks:
+     *   format(data)             - Post-process after _autoApply (custom menu items, etc.)
      *
      * Constructor receives a config object with per-instance settings:
      *   { uuid, type, device, display, style, graph-width, refresh-time,
@@ -805,20 +809,28 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         }
         if (this.collect) {
             let data = this.collect();
-            if (data) {
+            if (data)
                 this._autoApply(data);
-            }
+            this._postApply();
+        } else if (this.collectAsync) {
+            this.collectAsync(data => {
+                if (data)
+                    this._autoApply(data);
+                this._postApply();
+            });
         } else {
             this.refresh();
             this._apply();
-        }
-        this.chart.update();
-        for (let i = 0; i < this.tip_vals.length; i++) {
-            if (this.tip_labels[i]) {
-                this.tip_labels[i].text = this.tip_vals[i].toString();
-            }
+            this._postApply();
         }
         return GLib.SOURCE_CONTINUE;
+    }
+    _postApply() {
+        this.chart.update();
+        for (let i = 0; i < this.tip_vals.length; i++) {
+            if (this.tip_labels[i])
+                this.tip_labels[i].text = this.tip_vals[i].toString();
+        }
     }
     _autoApply(data) {
         const metrics = this.color_name;
@@ -829,12 +841,18 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
                 this.tip_vals[i] = val;
             }
         }
-        let primaryKey = metrics[0];
-        if (primaryKey !== undefined && data[primaryKey] !== undefined) {
-            let display = data[primaryKey].toString();
+        let display = data.display;
+        if (display === undefined) {
+            let primaryKey = metrics[0];
+            if (primaryKey !== undefined && data[primaryKey] !== undefined)
+                display = data[primaryKey].toString();
+        }
+        if (display !== undefined) {
             if (this.text_items[0]) this.text_items[0].text = display;
             if (this.menu_items[0]) this.menu_items[0].text = display;
         }
+        if (this.format)
+            this.format(data);
     }
     resize(width) {
         if (this.extension._Style.get('') === '-compact') {

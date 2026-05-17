@@ -19,7 +19,7 @@ const Swap = class SystemMonitor_Swap extends ElementBase {
 
         GTop.glibtop_get_swap(this.gtop);
         this.total = Math.round(this.gtop.total / 1024 / 1024);
-        let threshold = 4 * 1024; // In MiB
+        let threshold = 4 * 1024;
         this.useGiB = false;
         this._unitConversion = 1024 * 1024;
         this._decimals = 100;
@@ -27,69 +27,48 @@ const Swap = class SystemMonitor_Swap extends ElementBase {
             this.useGiB = true;
             this._unitConversion *= 1024 / this._decimals;
         }
+    }
 
-    }
-    refresh() {
+    collect() {
         GTop.glibtop_get_swap(this.gtop);
+        let swap, total;
         if (this.useGiB) {
-            this.swap = Math.round(this.gtop.used / this._unitConversion);
-            this.swap /= this._decimals;
-            this.total = Math.round(this.gtop.total / this._unitConversion);
-            this.total /= this._decimals;
+            swap = Math.round(this.gtop.used / this._unitConversion) / this._decimals;
+            total = Math.round(this.gtop.total / this._unitConversion) / this._decimals;
         } else {
-            this.swap = Math.round(this.gtop.used / this._unitConversion);
-            this.total = Math.round(this.gtop.total / this._unitConversion);
+            swap = Math.round(this.gtop.used / this._unitConversion);
+            total = Math.round(this.gtop.total / this._unitConversion);
         }
+        if (total === 0)
+            return { used: 0, display: '0', _swap: 0, _total: 0 };
+        let ratio = swap / total;
+        let percent = Math.round(ratio * 100);
+        return { used: ratio, display: percent.toString(), _swap: swap, _total: total };
     }
+
+    format(data) {
+        let compact = this.extension._Style.get('') === '-compact';
+        let sep = compact ? '/' : ' / ';
+        this.menu_items[3].text = this._pad(data._swap) + sep + this._pad(data._total);
+    }
+
     _pad(number) {
         if (this.useGiB) {
-            if (number < 1) {
+            if (number < 1)
                 return number.toLocaleString(this.extension._Locale, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            }
             return number.toLocaleString(this.extension._Locale, {minimumSignificantDigits: 3, maximumSignificantDigits: 3});
         }
-
         return number.toLocaleString(this.extension._Locale);
-    }
-    _apply() {
-        if (this.total === 0) {
-            this.vals = this.tip_vals = [0];
-        } else {
-            this.vals[0] = this.swap / this.total;
-            this.tip_vals[0] = Math.round(this.vals[0] * 100);
-        }
-        this.text_items[0].text = this.tip_vals[0].toString();
-        this.menu_items[0].text = this.tip_vals[0].toString();
-        if (this.extension._Style.get('') !== '-compact') {
-            this.menu_items[3].text = this._pad(this.swap) +
-                ' / ' + this._pad(this.total);
-        } else {
-            this.menu_items[3].text = this._pad(this.swap) +
-                '/' + this._pad(this.total);
-        }
     }
 
     create_menu_items() {
-        let unit = 'MiB';
-        if (this.useGiB) {
-            unit = 'GiB';
-        }
+        let unit = this.useGiB ? 'GiB' : 'MiB';
         return [
-            new St.Label({
-                text: '',
-                style_class: this.extension._Style.get('sm-value')}),
-            new St.Label({
-                text: '%',
-                style_class: this.extension._Style.get('sm-label')}),
-            new St.Label({
-                text: '',
-                style_class: this.extension._Style.get('sm-label')}),
-            new St.Label({
-                text: '',
-                style_class: this.extension._Style.get('sm-value')}),
-            new St.Label({
-                text: _(unit),
-                style_class: this.extension._Style.get('sm-label')})
+            new St.Label({text: '', style_class: this.extension._Style.get('sm-value')}),
+            new St.Label({text: '%', style_class: this.extension._Style.get('sm-label')}),
+            new St.Label({text: '', style_class: this.extension._Style.get('sm-label')}),
+            new St.Label({text: '', style_class: this.extension._Style.get('sm-value')}),
+            new St.Label({text: _(unit), style_class: this.extension._Style.get('sm-label')}),
         ];
     }
 }

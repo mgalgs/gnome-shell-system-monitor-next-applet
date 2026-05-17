@@ -16,46 +16,47 @@ const Fan = class SystemMonitor_Fan extends ElementBase {
     constructor(extension, config) {
         super(extension, config);
         this.sensor_label = this.device_id;
-        this.sensors = check_sensors("fan");
-        this.rpm = 0;
-        this.display_error = true;
+        this.sensors = check_sensors('fan');
+        this._display_error = true;
+        this._rpm = 0;
 
         this.item_name = this.sensor_label ? this.sensor_label : _('Fan');
 
         if (this.sensor_label) {
             let shortLabel = this.sensor_label.split(' - ').pop();
-            if (shortLabel.length > 6) {
+            if (shortLabel.length > 6)
                 shortLabel = shortLabel.substring(0, 6);
-            }
             this.label.text = shortLabel;
         }
-
     }
-    refresh() {
-        if (this.sensors === undefined || Object.keys(this.sensors).length === 0) {
+
+    collectAsync(callback) {
+        if (!this.sensors || Object.keys(this.sensors).length === 0) {
+            callback(null);
             return;
         }
         let sfile = this.sensors[this.sensor_label];
-        if (sfile === undefined && this.display_error) {
-            const validLabels = Object.keys(this.sensors).join(', ');
-            sm_log(`Invalid fan sensor label: "${this.sensor_label}" (valid choices: ${validLabels})`, 'error');
-            this.display_error = false;
+        if (sfile === undefined) {
+            if (this._display_error) {
+                const validLabels = Object.keys(this.sensors).join(', ');
+                sm_log(`Invalid fan sensor label: "${this.sensor_label}" (valid choices: ${validLabels})`, 'error');
+                this._display_error = false;
+            }
+            callback(null);
             return;
         }
-        if (!try_read_int_file(sfile, value => this.rpm = value) && this.display_error) {
-            sm_log(`Error reading fan sensor file: ${sfile}`, 'error');
-            this.display_error = false;
+        if (!try_read_int_file(sfile, value => {
+            this._rpm = value;
+            try_read_int_file(sfile.replace(/_input$/, '_min'), v => { this.min = v; });
+            try_read_int_file(sfile.replace(/_input$/, '_max'), v => { this.max = v; });
+            callback({fan0: this._rpm});
+        })) {
+            if (this._display_error) {
+                sm_log(`Error reading fan sensor file: ${sfile}`, 'error');
+                this._display_error = false;
+            }
+            callback(null);
         }
-        if (sfile) {
-            try_read_int_file(sfile.replace(/_input$/, '_min'), value => this.min = value);
-            try_read_int_file(sfile.replace(/_input$/, '_max'), value => this.max = value);
-        }
-    }
-    _apply() {
-        this.text_items[0].text = this.rpm.toString();
-        this.menu_items[0].text = this.rpm.toString();
-        this.vals = [this.rpm];
-        this.tip_vals[0] = this.rpm;
     }
 }
 

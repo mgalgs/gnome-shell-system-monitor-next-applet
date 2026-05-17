@@ -66,11 +66,11 @@ The `key` serves triple duty:
 - Color config key in the monitor's `colors` object (e.g. `colors.user`)
 - Label shown in the tooltip
 
-## Widget API: collect() vs refresh()/\_apply()
+## Widget API
 
-There are two patterns for providing data. Use `collect()` for simple widgets; use `refresh()` + `_apply()` when you need full control.
+Three patterns for providing data, from simplest to most flexible:
 
-### collect() — simple path
+### collect() — synchronous data
 
 Return an object with keys matching your metric names. The framework updates the panel text, menu text, chart, and tooltip automatically.
 
@@ -80,11 +80,47 @@ collect() {
 }
 ```
 
-The first metric's value becomes the panel/menu display text. All metrics feed the chart and tooltip.
+The first metric's value becomes the panel/menu display text. To override the display text, include a `display` key:
+
+```javascript
+collect() {
+    let ratio = this.used / this.total;
+    return { used: ratio, display: Math.round(ratio * 100).toString() };
+}
+```
+
+### collectAsync(callback) — async data
+
+Same return shape as `collect()`, but for widgets that read data asynchronously (subprocess output, async file I/O):
+
+```javascript
+collectAsync(callback) {
+    this.file.load_contents_async(null, (source, result) => {
+        let [, contents] = source.load_contents_finish(result);
+        let value = parseInt(new TextDecoder().decode(contents));
+        callback({ fan0: value });
+    });
+}
+```
+
+Call `callback(data)` when the data is ready, or `callback(null)` if the read failed. The framework handles chart/tooltip updates after the callback fires.
+
+### format(data) — custom post-processing
+
+For widgets using `collect()`/`collectAsync()` that need additional display formatting beyond the primary text (e.g. updating extra menu items), implement `format()`:
+
+```javascript
+format(data) {
+    // data is the same object returned by collect()
+    this.menu_items[3].text = this._pad(data._swap) + ' / ' + this._pad(data._total);
+}
+```
+
+`format()` is called after the framework applies metric values to text/menu/chart/tooltip. Use it for custom menu layouts, dynamic units, or derived displays.
 
 ### refresh() + \_apply() — full control
 
-For widgets with complex display formatting (multiple text items, dynamic units, computed values), implement both methods:
+For widgets with highly custom display formatting (multiple text items, dynamic units, computed values), implement both methods:
 
 ```javascript
 refresh() {
@@ -211,10 +247,10 @@ After writing the widget class, register it with the extension:
 
 **Minimal** — `collect()` only, no constructor: see LoadAvg example above
 
-**Simple with state** — constructor + `collect()`: Fan widget sets up sensor detection in constructor, could use collect() to return `{ fan0: this.rpm }`
+**Async data** — `collectAsync(callback)`: Fan widget reads hwmon sysfs files asynchronously, calls `callback({fan0: rpm})` when data arrives
 
-**Medium** — `refresh()` + `_apply()` with custom menu: Memory, Swap — need custom menu layout showing `used / total` alongside percentage
+**Custom menu** — `collect()` + `format()`: Swap widget uses collect() for data, format() to populate its custom `used / total` menu display
 
-**Complex** — custom everything: Network — custom text items (up/down arrows + values + dynamic units), custom menu items, dynamic unit switching (bits vs bytes), interface detection
+**Complex** — `refresh()` + `_apply()` with custom everything: Network — custom text items (up/down arrows + values + dynamic units), dynamic unit switching (bits vs bytes), interface detection
 
 **Event-driven** — Battery — doesn't use the refresh timer at all; updates via UPower D-Bus proxy callbacks
