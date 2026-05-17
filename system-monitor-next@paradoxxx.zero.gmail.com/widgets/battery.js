@@ -25,8 +25,9 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
 
         this.max = 100;
         this.icon_hidden = false;
-        this.percentage = 0;
-        this.timeString = '-- ';
+        this._percentage = 0;
+        this._timeString = '-- ';
+        this._gicon = Gio.icon_new_for_string(DEFAULT_BATTERY_ICON);
 
         this._poll_attempts = 0;
         this._max_poll_attempts = 9;
@@ -34,19 +35,24 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
             GLib.PRIORITY_DEFAULT, 1, this._poll_quickSettings.bind(this)
         );
 
-        this.gicon = Gio.icon_new_for_string(DEFAULT_BATTERY_ICON);
-
         this.tip_format('%');
+        this._updateUnitLabels();
+    }
 
-        this.update_tips();
+    collect() {
+        let showTime = this.config.time || false;
+        let displayString = showTime ? this._timeString : this._percentage.toString();
+        return {batt0: this._percentage, display: displayString};
     }
-    refresh() {
-        // Battery updates are event-driven via UPower proxy
+
+    format(_data) {
+        if (this.config.display)
+            this.text_items[0].gicon = this._gicon;
     }
+
     _poll_quickSettings() {
-        if (this._proxy) {
+        if (this._proxy)
             return GLib.SOURCE_REMOVE;
-        }
 
         try {
             const proxy = (
@@ -61,11 +67,11 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
 
             sm_log(`Looking for battery proxy (attempt ${this._poll_attempts})`);
             if (proxy) {
-                sm_log("Battery proxy found!");
+                sm_log('Battery proxy found!');
                 this._proxy = proxy;
                 this.powerSigID = this._proxy.connect(
                     'g-properties-changed',
-                    this.update_battery.bind(this),
+                    this._onBatteryChanged.bind(this),
                 );
                 this._poll_handler_id = undefined;
                 this._poll_attempts = 0;
@@ -86,81 +92,78 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
         this._poll_handler_id = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, next_delay, this._poll_quickSettings.bind(this));
         return GLib.SOURCE_REMOVE;
     }
-    update_battery() {
+
+    _onBatteryChanged() {
         let battery_found = false;
-        let isBattery = false;
-        if (typeof (this._proxy.GetDevicesRemote) === 'undefined') {
-            let device_type = this._proxy.Type;
-            isBattery = (device_type === UPower.DeviceKind.BATTERY);
-            if (isBattery) {
+        if (typeof this._proxy.GetDevicesRemote === 'undefined') {
+            if (this._proxy.Type === UPower.DeviceKind.BATTERY) {
                 battery_found = true;
-                let icon = this._proxy.IconName;
-                let percentage = this._proxy.Percentage;
-                let seconds = this._proxy.TimeToEmpty;
-                this.update_battery_value(seconds, percentage, icon);
-            } else {
-                this.actor.hide();
-                this.menu_visible = false;
-                build_menu_info(this.extension);
+                this._updateValues(this._proxy.TimeToEmpty, this._proxy.Percentage, this._proxy.IconName);
             }
         } else {
             this._proxy.GetDevicesRemote((devices, error) => {
                 if (error) {
                     sm_log('Power proxy error: ' + error, 'error');
-                    this.actor.hide();
-                    this.menu_visible = false;
-                    build_menu_info(this.extension);
+                    this._hideBattery();
                     return;
                 }
-
                 let [result] = devices;
                 for (let i = 0; i < result.length; i++) {
                     let [_device_id, device_type, icon, percentage, _state, seconds] = result[i];
-
-                    isBattery = (device_type === UPower.DeviceKind.BATTERY);
-                    if (isBattery) {
+                    if (device_type === UPower.DeviceKind.BATTERY) {
                         battery_found = true;
-                        this.update_battery_value(seconds, percentage, icon);
+                        this._updateValues(seconds, percentage, icon);
                         break;
                     }
                 }
-
-                if (!battery_found) {
-                    this.actor.hide();
-                    this.menu_visible = false;
-                    build_menu_info(this.extension);
-                }
+                if (!battery_found)
+                    this._hideBattery();
             });
+            return;
         }
+        if (!battery_found)
+            this._hideBattery();
     }
-    update_battery_value(seconds, percentage, icon) {
+
+    _updateValues(seconds, percentage, icon) {
         if (seconds > 60) {
             let time = Math.round(seconds / 60);
             let minutes = time % 60;
             let hours = Math.floor(time / 60);
-            this.timeString = C_('battery time remaining', '%d:%02d').format(hours, minutes);
+            this._timeString = C_('battery time remaining', '%d:%02d').format(hours, minutes);
         } else {
-            this.timeString = '-- ';
+            this._timeString = '-- ';
         }
-        this.percentage = Math.ceil(percentage);
-        this.gicon = Gio.icon_new_for_string(icon);
+        this._percentage = Math.ceil(percentage);
+        this._gicon = Gio.icon_new_for_string(icon);
 
-        if (this.config.display) {
-            this.actor.show()
-        }
+        if (this.config.display)
+            this.actor.show();
         if (this.config['show-menu'] && !this.menu_visible) {
             this.menu_visible = true;
             build_menu_info(this.extension);
         }
     }
+
+    _hideBattery() {
+        this.actor.hide();
+        this.menu_visible = false;
+        build_menu_info(this.extension);
+    }
+
+    _updateUnitLabels() {
+        let unitString = (this.config.time || false) ? 'h' : '%';
+        if (this.config.display)
+            this.text_items[2].text = unitString;
+        if (this.config['show-menu'])
+            this.menu_items[1].text = unitString;
+    }
+
     hide_system_icon(override) {
-        let value = this.config.hidesystem || false;
-        if (!override) {
-            value = false;
-        }
+        let value = (this.config.hidesystem || false) && override !== false;
         if (value && this.config.display) {
             const StatusArea = Main.panel.statusArea;
-            if (StatusArea.battery.actor.visible) {
+            if (StatusArea.battery?.actor?.visible) {
                 StatusArea.battery.destroy();
                 this.icon_hidden = true;
             }
@@ -168,70 +171,31 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
             this.icon_hidden = false;
         }
     }
-    get_battery_unit() {
-        let value = this.config.time || false;
-        return value ? 'h' : '%';
-    }
-    update_tips() {
-        let unitString = this.get_battery_unit();
 
-        if (this.config.display) {
-            this.text_items[2].text = unitString;
-        }
-        if (this.config['show-menu']) {
-            this.menu_items[1].text = unitString;
-        }
-    }
-    _apply() {
-        let displayString;
-        let value = this.config.time || false;
-        if (value) {
-            displayString = this.timeString;
-        } else {
-            displayString = this.percentage.toString()
-        }
-        if (this.config.display) {
-            this.text_items[0].gicon = this.gicon;
-            this.text_items[1].text = displayString;
-        }
-        if (this.config['show-menu']) {
-            this.menu_items[0].text = displayString;
-        }
-        this.vals = [this.percentage];
-        this.tip_vals[0] = Math.round(this.percentage);
-    }
     create_text_items() {
+        let unitString = (this.config.time || false) ? 'h' : '%';
         return [
-            new St.Icon({
-                gicon: Gio.icon_new_for_string(DEFAULT_BATTERY_ICON),
+            new St.Icon({gicon: Gio.icon_new_for_string(DEFAULT_BATTERY_ICON),
                 style_class: this.extension._Style.get('sm-status-icon')}),
-            new St.Label({
-                text: '',
-                style_class: this.extension._Style.get('sm-status-value'),
+            new St.Label({text: '', style_class: this.extension._Style.get('sm-status-value'),
                 y_align: Clutter.ActorAlign.CENTER}),
-            new St.Label({
-                text: this.get_battery_unit(),
-                style_class: this.extension._Style.get('sm-perc-label'),
-                y_align: Clutter.ActorAlign.CENTER})
+            new St.Label({text: unitString, style_class: this.extension._Style.get('sm-perc-label'),
+                y_align: Clutter.ActorAlign.CENTER}),
         ];
     }
+
     create_menu_items() {
+        let unitString = (this.config.time || false) ? 'h' : '%';
         return [
-            new St.Label({
-                text: '',
-                style_class: this.extension._Style.get('sm-value')}),
-            new St.Label({
-                text: this.get_battery_unit(),
-                style_class: this.extension._Style.get('sm-label')})
+            new St.Label({text: '', style_class: this.extension._Style.get('sm-value')}),
+            new St.Label({text: unitString, style_class: this.extension._Style.get('sm-label')}),
         ];
     }
+
     destroy() {
         ElementBase.prototype.destroy.call(this);
-
-        if (this._proxy) {
+        if (this._proxy)
             this._proxy.disconnect(this.powerSigID);
-        }
-
         if (this._poll_handler_id) {
             GLib.source_remove(this._poll_handler_id);
             this._poll_handler_id = undefined;

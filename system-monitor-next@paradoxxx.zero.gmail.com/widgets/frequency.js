@@ -19,7 +19,6 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
 
     constructor(extension, config) {
         super(extension, config);
-        this.freq = 0;
 
         if (this.device_id !== 'all') {
             let coreNum = parseInt(this.device_id) + 1;
@@ -28,7 +27,7 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
         }
 
     }
-    refresh() {
+    collectAsync(callback) {
         let total_frequency = 0;
         let max_frequency = 0;
         let num_cpus = GTop.glibtop_get_sysinfo().ncpu;
@@ -39,7 +38,8 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
             let file = Gio.file_new_for_path(`/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq`);
             file.load_contents_async(null, (source, result) => {
                 let as_r = source.load_contents_finish(result);
-                this.freq = Math.round(parseInt(parse_bytearray(as_r[1])) / 1000);
+                let freq = Math.round(parseInt(parse_bytearray(as_r[1])) / 1000);
+                callback(this._buildResult(freq));
             });
         } else {
             let i = 0;
@@ -54,11 +54,13 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
                 max_frequency = Math.max(max_frequency, current_freq);
 
                 if (++i >= num_cpus) {
+                    let freq;
                     if (display_mode === 'max') {
-                        that.freq = Math.round(max_frequency / 1000);
+                        freq = Math.round(max_frequency / 1000);
                     } else {
-                        that.freq = Math.round(total_frequency / num_cpus / 1000);
+                        freq = Math.round(total_frequency / num_cpus / 1000);
                     }
+                    callback(that._buildResult(freq));
                 } else {
                     file = Gio.file_new_for_path(`/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq`);
                     file.load_contents_async(null, cb.bind(that));
@@ -66,11 +68,12 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
             });
         }
     }
-    _apply() {
-        let value = this.freq.toString();
-        this.text_items[0].text = value + ' ';
-        this.vals[0] = value;
-        this.tip_vals[0] = value;
+    _buildResult(freq) {
+        let value = freq.toString();
+        return { freq: value, display: value + ' ' };
+    }
+    format(data) {
+        let value = data.freq;
         if (this.extension._Style.get('') !== '-compact') {
             this.menu_items[0].text = value;
         } else {

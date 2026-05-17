@@ -22,7 +22,6 @@ const Mem = class SystemMonitor_Mem extends ElementBase {
         this.max = 1;
 
         this.gtop = new GTop.glibtop_mem();
-        this.mem = [0, 0, 0];
 
         GTop.glibtop_get_mem(this.gtop);
         this.total = Math.round(this.gtop.total / 1024 / 1024);
@@ -36,22 +35,53 @@ const Mem = class SystemMonitor_Mem extends ElementBase {
         }
 
     }
-    refresh() {
+    collect() {
         GTop.glibtop_get_mem(this.gtop);
+        let mem = [0, 0, 0];
+        let total;
         if (this.useGiB) {
-            this.mem[0] = Math.round(this.gtop.user / this._unitConversion);
-            this.mem[0] /= this._decimals;
-            this.mem[1] = Math.round(this.gtop.buffer / this._unitConversion);
-            this.mem[1] /= this._decimals;
-            this.mem[2] = Math.round(this.gtop.cached / this._unitConversion);
-            this.mem[2] /= this._decimals;
-            this.total = Math.round(this.gtop.total / this._unitConversion);
-            this.total /= this._decimals;
+            mem[0] = Math.round(this.gtop.user / this._unitConversion) / this._decimals;
+            mem[1] = Math.round(this.gtop.buffer / this._unitConversion) / this._decimals;
+            mem[2] = Math.round(this.gtop.cached / this._unitConversion) / this._decimals;
+            total = Math.round(this.gtop.total / this._unitConversion) / this._decimals;
         } else {
-            this.mem[0] = Math.round(this.gtop.user / this._unitConversion);
-            this.mem[1] = Math.round(this.gtop.buffer / this._unitConversion);
-            this.mem[2] = Math.round(this.gtop.cached / this._unitConversion);
-            this.total = Math.round(this.gtop.total / this._unitConversion);
+            mem[0] = Math.round(this.gtop.user / this._unitConversion);
+            mem[1] = Math.round(this.gtop.buffer / this._unitConversion);
+            mem[2] = Math.round(this.gtop.cached / this._unitConversion);
+            total = Math.round(this.gtop.total / this._unitConversion);
+        }
+
+        if (total === 0) {
+            return { program: 0, buffer: 0, cache: 0, display: '0', _mem: mem, _total: total };
+        }
+
+        let programRatio = mem[0] / total;
+        let bufferRatio = mem[1] / total;
+        let cacheRatio = mem[2] / total;
+        let percent = Math.round(programRatio * 100);
+
+        return {
+            program: programRatio,
+            buffer: bufferRatio,
+            cache: cacheRatio,
+            display: percent.toString(),
+            _mem: mem,
+            _total: total,
+        };
+    }
+    format(data) {
+        this.tip_vals[0] = Math.round(data.program * 100);
+        this.tip_vals[1] = Math.round(data.buffer * 100);
+        this.tip_vals[2] = Math.round(data.cache * 100);
+
+        this.menu_items[0].text = this.tip_vals[0].toLocaleString(this.extension._Locale);
+
+        if (this.extension._Style.get('') !== '-compact') {
+            this.menu_items[3].text = this._pad(data._mem[0]) +
+                ' / ' + this._pad(data._total);
+        } else {
+            this.menu_items[3].text = this._pad(data._mem[0]) +
+                '/' + this._pad(data._total);
         }
     }
     _pad(number) {
@@ -64,25 +94,6 @@ const Mem = class SystemMonitor_Mem extends ElementBase {
         }
 
         return number.toLocaleString(Locale);
-    }
-    _apply() {
-        if (this.total === 0) {
-            this.vals = this.tip_vals = [0, 0, 0];
-        } else {
-            for (let i = 0; i < 3; i++) {
-                this.vals[i] = this.mem[i] / this.total;
-                this.tip_vals[i] = Math.round(this.vals[i] * 100);
-            }
-        }
-        this.text_items[0].text = this.tip_vals[0].toString();
-        this.menu_items[0].text = this.tip_vals[0].toLocaleString(this.extension._Locale);
-        if (this.extension._Style.get('') !== '-compact') {
-            this.menu_items[3].text = this._pad(this.mem[0]) +
-                ' / ' + this._pad(this.total);
-        } else {
-            this.menu_items[3].text = this._pad(this.mem[0]) +
-                '/' + this._pad(this.total);
-        }
     }
     create_menu_items() {
         let unit = _('MiB');

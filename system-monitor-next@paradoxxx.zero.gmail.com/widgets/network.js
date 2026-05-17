@@ -42,9 +42,8 @@ const Net = class SystemMonitor_Net extends ElementBase {
                         if (new TextDecoder().decode(op_contents).replace(/\s/g, '') === 'up' &&
                             ifc.indexOf('br') < 0 &&
                             ifc.indexOf('lo') < 0) {
-                            if (this.device_id === 'all' || this.device_id === ifc) {
+                            if (this.device_id === 'all' || this.device_id === ifc)
                                 this.ifs.push(ifc);
-                            }
                         }
                     } catch { /* operstate file may not exist */ }
                 }
@@ -57,24 +56,19 @@ const Net = class SystemMonitor_Net extends ElementBase {
         }
 
         this.gtop = new GTop.glibtop_netload();
-        this.last = [0, 0, 0, 0, 0];
-        this.usage = [0, 0, 0, 0, 0];
-        this.last_time = 0;
+        this._last = [0, 0, 0, 0, 0];
+        this._lastTime = 0;
         this.tip_format([_('KiB/s'), '/s', _('KiB/s'), '/s', '/s']);
-        this.update_units();
         try {
             let iface_list = this.client.get_devices();
             this.NMsigID = [];
-            for (let j = 0; j < iface_list.length; j++) {
+            for (let j = 0; j < iface_list.length; j++)
                 this.NMsigID[j] = iface_list[j].connect('state-changed', this.update_iface_list.bind(this));
-            }
         } catch (e) {
             console.error('Please install Network Manager Gobject Introspection Bindings: ' + e);
         }
     }
-    update_units() {
-        this.speed_in_bits = this.config['speed-in-bits'] || false;
-    }
+
     update_iface_list() {
         try {
             this.ifs = [];
@@ -82,18 +76,17 @@ const Net = class SystemMonitor_Net extends ElementBase {
             for (let j = 0; j < iface_list.length; j++) {
                 if (iface_list[j].state === NetworkManager.DeviceState.ACTIVATED) {
                     let iface = iface_list[j].get_ip_iface() || iface_list[j].get_iface();
-                    if (this.device_id === 'all' || this.device_id === iface) {
+                    if (this.device_id === 'all' || this.device_id === iface)
                         this.ifs.push(iface);
-                    }
                 }
             }
         } catch {
             console.error('Please install Network Manager Gobject Introspection Bindings');
         }
     }
-    refresh() {
-        let accum = [0, 0, 0, 0, 0];
 
+    collect() {
+        let accum = [0, 0, 0, 0, 0];
         for (let ifn in this.ifs) {
             GTop.glibtop_get_netload(this.gtop, this.ifs[ifn]);
             accum[0] += this.gtop.bytes_in;
@@ -104,139 +97,118 @@ const Net = class SystemMonitor_Net extends ElementBase {
         }
 
         let time = GLib.get_monotonic_time() * 0.001024;
-        let delta = time - this.last_time;
+        let delta = time - this._lastTime;
+        let usage = [0, 0, 0, 0, 0];
         if (delta > 0) {
             for (let i = 0; i < 5; i++) {
-                this.usage[i] = Math.round((accum[i] - this.last[i]) / delta);
-                this.last[i] = accum[i];
-                this.vals[i] = this.usage[i];
+                usage[i] = Math.round((accum[i] - this._last[i]) / delta);
+                this._last[i] = accum[i];
             }
         }
-        this.last_time = time;
+        this._lastTime = time;
+        return {
+            down: usage[0], downerrors: usage[1],
+            up: usage[2], uperrors: usage[3],
+            collisions: usage[4],
+        };
+    }
+
+    format(data) {
+        const Style = this.extension._Style;
+        let downVal = data.down;
+        let upVal = data.up;
+
+        if (this.speed_in_bits) {
+            downVal = Math.round(downVal * 8.192);
+            upVal = Math.round(upVal * 8.192);
+            this._formatSpeed(downVal, 0, 1000,
+                Style.netunits_kbits(), _('kbit/s'),
+                Style.netunits_mbits(), _('Mbit/s'), 1000,
+                Style.netunits_gbits(), _('Gbit/s'), 1000000);
+            this._formatSpeed(upVal, 1, 1000,
+                Style.netunits_kbits(), _('kbit/s'),
+                Style.netunits_mbits(), _('Mbit/s'), 1000,
+                Style.netunits_gbits(), _('Gbit/s'), 1000000);
+        } else {
+            this._formatSpeed(downVal, 0, 1024,
+                Style.netunits_kbytes(), _('KiB/s'),
+                Style.netunits_mbytes(), _('MiB/s'), 1024,
+                Style.netunits_gbytes(), _('GiB/s'), 1048576);
+            this._formatSpeed(upVal, 1, 1024,
+                Style.netunits_kbytes(), _('KiB/s'),
+                Style.netunits_mbytes(), _('MiB/s'), 1024,
+                Style.netunits_gbytes(), _('GiB/s'), 1048576);
+        }
+
+        let compact = Style.get('') === '-compact';
+        if (compact) {
+            this.text_items[1].text = this._pad(this.tip_vals[0].toString(), 4);
+            this.text_items[4].text = this._pad(this.tip_vals[2].toString(), 4);
+            this.menu_items[0].text = this._pad(this.tip_vals[0].toString(), 4);
+            this.menu_items[3].text = this._pad(this.tip_vals[2].toString(), 4);
+        } else {
+            this.text_items[1].text = this.tip_vals[0].toString();
+            this.text_items[4].text = this.tip_vals[2].toString();
+            this.menu_items[0].text = this.tip_vals[0].toString();
+            this.menu_items[3].text = this.tip_vals[2].toString();
+        }
+    }
+
+    _formatSpeed(val, idx, threshold, kUnit, kTip, mUnit, mTip, mDiv, gUnit, gTip, gDiv) {
+        let textIdx = idx === 0 ? 2 : 5;
+        let menuIdx = idx === 0 ? 1 : 4;
+        let tipIdx = idx === 0 ? 0 : 2;
+
+        if (val < threshold) {
+            this.text_items[textIdx].text = kUnit;
+            this.menu_items[menuIdx].text = this.tip_unit_labels[tipIdx].text = kTip;
+            this.tip_vals[tipIdx] = val;
+        } else if (val < threshold * threshold) {
+            this.text_items[textIdx].text = mUnit;
+            this.menu_items[menuIdx].text = this.tip_unit_labels[tipIdx].text = mTip;
+            this.tip_vals[tipIdx] = (val / mDiv).toPrecision(3);
+        } else {
+            this.text_items[textIdx].text = gUnit;
+            this.menu_items[menuIdx].text = this.tip_unit_labels[tipIdx].text = gTip;
+            this.tip_vals[tipIdx] = (val / gDiv).toPrecision(3);
+        }
     }
 
     _pad(number, length) {
         let str = '' + number;
-        while (str.length < length) {
+        while (str.length < length)
             str = ' ' + str;
-        }
         return str;
     }
 
-    _apply() {
-        const Style = this.extension._Style;
-        this.tip_vals = this.usage;
-        if (this.speed_in_bits) {
-            this.tip_vals[0] = Math.round(this.tip_vals[0] * 8.192);
-            this.tip_vals[2] = Math.round(this.tip_vals[2] * 8.192);
-            if (this.tip_vals[0] < 1000) {
-                this.text_items[2].text = Style.netunits_kbits();
-                this.menu_items[1].text = this.tip_unit_labels[0].text = _('kbit/s');
-            } else if (this.tip_vals[0] < 1000000) {
-                this.text_items[2].text = Style.netunits_mbits();
-                this.menu_items[1].text = this.tip_unit_labels[0].text = _('Mbit/s');
-                this.tip_vals[0] = (this.tip_vals[0] / 1000).toPrecision(3);
-            } else {
-                this.text_items[2].text = Style.netunits_gbits();
-                this.menu_items[1].text = this.tip_unit_labels[0].text = _('Gbit/s');
-                this.tip_vals[0] = (this.tip_vals[0] / 1000000).toPrecision(3);
-            }
-            if (this.tip_vals[2] < 1000) {
-                this.text_items[5].text = Style.netunits_kbits();
-                this.menu_items[4].text = this.tip_unit_labels[2].text = _('kbit/s');
-            } else if (this.tip_vals[2] < 1000000) {
-                this.text_items[5].text = Style.netunits_mbits();
-                this.menu_items[4].text = this.tip_unit_labels[2].text = _('Mbit/s');
-                this.tip_vals[2] = (this.tip_vals[2] / 1000).toPrecision(3);
-            } else {
-                this.text_items[5].text = Style.netunits_gbits();
-                this.menu_items[4].text = this.tip_unit_labels[2].text = _('Gbit/s');
-                this.tip_vals[2] = (this.tip_vals[2] / 1000000).toPrecision(3);
-            }
-        } else {
-            if (this.tip_vals[0] < 1024) {
-                this.text_items[2].text = Style.netunits_kbytes();
-                this.menu_items[1].text = this.tip_unit_labels[0].text = _('KiB/s');
-            } else if (this.tip_vals[0] < 1048576) {
-                this.text_items[2].text = Style.netunits_mbytes();
-                this.menu_items[1].text = this.tip_unit_labels[0].text = _('MiB/s');
-                this.tip_vals[0] = (this.tip_vals[0] / 1024).toPrecision(3);
-            } else {
-                this.text_items[2].text = Style.netunits_gbytes();
-                this.menu_items[1].text = this.tip_unit_labels[0].text = _('GiB/s');
-                this.tip_vals[0] = (this.tip_vals[0] / 1048576).toPrecision(3);
-            }
-            if (this.tip_vals[2] < 1024) {
-                this.text_items[5].text = Style.netunits_kbytes();
-                this.menu_items[4].text = this.tip_unit_labels[2].text = _('KiB/s');
-            } else if (this.tip_vals[2] < 1048576) {
-                this.text_items[5].text = Style.netunits_mbytes();
-                this.menu_items[4].text = this.tip_unit_labels[2].text = _('MiB/s');
-                this.tip_vals[2] = (this.tip_vals[2] / 1024).toPrecision(3);
-            } else {
-                this.text_items[5].text = Style.netunits_gbytes();
-                this.menu_items[4].text = this.tip_unit_labels[2].text = _('GiB/s');
-                this.tip_vals[2] = (this.tip_vals[2] / 1048576).toPrecision(3);
-            }
-        }
-
-        if (Style.get('') !== '-compact') {
-            this.menu_items[0].text = this.text_items[1].text = this.tip_vals[0].toString();
-            this.menu_items[3].text = this.text_items[4].text = this.tip_vals[2].toString();
-        } else {
-            this.menu_items[0].text = this.text_items[1].text = this._pad(this.tip_vals[0].toString(), 4);
-            this.menu_items[3].text = this.text_items[4].text = this._pad(this.tip_vals[2].toString(), 4);
-        }
-    }
     create_text_items() {
         const Style = this.extension._Style;
         const IconSize = this.extension._IconSize;
         return [
-            new St.Icon({
-                icon_size: 2 * IconSize / 3 * Style.iconsize(),
+            new St.Icon({icon_size: 2 * IconSize / 3 * Style.iconsize(),
                 icon_name: 'go-down-symbolic'}),
-            new St.Label({
-                text: '',
-                style_class: Style.get('sm-net-value'),
+            new St.Label({text: '', style_class: Style.get('sm-net-value'),
                 y_align: Clutter.ActorAlign.CENTER}),
-            new St.Label({
-                text: _('KiB/s'),
-                style_class: Style.get('sm-net-unit-label'),
+            new St.Label({text: _('KiB/s'), style_class: Style.get('sm-net-unit-label'),
                 y_align: Clutter.ActorAlign.CENTER}),
-            new St.Icon({
-                icon_size: 2 * IconSize / 3 * Style.iconsize(),
+            new St.Icon({icon_size: 2 * IconSize / 3 * Style.iconsize(),
                 icon_name: 'go-up-symbolic'}),
-            new St.Label({
-                text: '',
-                style_class: Style.get('sm-net-value'),
+            new St.Label({text: '', style_class: Style.get('sm-net-value'),
                 y_align: Clutter.ActorAlign.CENTER}),
-            new St.Label({
-                text: _('KiB/s'),
-                style_class: Style.get('sm-net-unit-label'),
-                y_align: Clutter.ActorAlign.CENTER})
+            new St.Label({text: _('KiB/s'), style_class: Style.get('sm-net-unit-label'),
+                y_align: Clutter.ActorAlign.CENTER}),
         ];
     }
+
     create_menu_items() {
         const Style = this.extension._Style;
         return [
-            new St.Label({
-                text: '',
-                style_class: Style.get('sm-value')}),
-            new St.Label({
-                text: _('KiB/s'),
-                style_class: Style.get('sm-label')}),
-            new St.Label({
-                text: _(' ↓'),
-                style_class: Style.get('sm-label')}),
-            new St.Label({
-                text: '',
-                style_class: Style.get('sm-value')}),
-            new St.Label({
-                text: _(' KiB/s'),
-                style_class: Style.get('sm-label')}),
-            new St.Label({
-                text: _(' ↑'),
-                style_class: Style.get('sm-label')})
+            new St.Label({text: '', style_class: Style.get('sm-value')}),
+            new St.Label({text: _('KiB/s'), style_class: Style.get('sm-label')}),
+            new St.Label({text: _(' ↓'), style_class: Style.get('sm-label')}),
+            new St.Label({text: '', style_class: Style.get('sm-value')}),
+            new St.Label({text: _(' KiB/s'), style_class: Style.get('sm-label')}),
+            new St.Label({text: _(' ↑'), style_class: Style.get('sm-label')}),
         ];
     }
 }

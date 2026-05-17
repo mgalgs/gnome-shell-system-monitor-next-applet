@@ -50,7 +50,7 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
         }
 
     }
-    refresh() {
+    collect() {
         GTop.glibtop_get_cpu(this.gtop);
         if (this.cpuid === -1) {
             this.current[0] = this.gtop.user;
@@ -93,9 +93,8 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
                 this.usage = [0, 0, 0, 1, 0];
             }
         }
-    }
-    _apply() {
-        let percent = 0;
+
+        let percent;
         if (this.cpuid === -1) {
             percent = Math.round(((100 * this.total_cores) - this.usage[3]) /
                                  this.total_cores);
@@ -103,17 +102,27 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
             percent = Math.round((100 - this.usage[3]));
         }
 
-        this.text_items[0].text = this.menu_items[0].text = percent.toString();
         let other = 100;
         for (let i = 0; i < this.usage.length; i++) {
             other -= this.usage[i];
         }
         other = Math.max(0, other);
-        this.vals = [this.usage[0], this.usage[1],
-            this.usage[2], this.usage[4], other];
-        for (let i = 0; i < 5; i++) {
-            this.tip_vals[i] = Math.round(this.vals[i]);
-        }
+
+        return {
+            user: this.usage[0],
+            system: this.usage[1],
+            nice: this.usage[2],
+            iowait: this.usage[4],
+            other: other,
+            display: percent.toString(),
+        };
+    }
+    format(data) {
+        this.tip_vals[0] = Math.round(data.user);
+        this.tip_vals[1] = Math.round(data.system);
+        this.tip_vals[2] = Math.round(data.nice);
+        this.tip_vals[3] = Math.round(data.iowait);
+        this.tip_vals[4] = Math.round(data.other);
     }
 }
 
