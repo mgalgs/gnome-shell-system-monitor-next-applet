@@ -1,24 +1,27 @@
 /* -*- mode: js2; js2-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
-import Clutter from "gi://Clutter";
 import Gio from "gi://Gio";
 import St from "gi://St";
 import { ElementBase } from '../base.js';
 
 const Gpu = class SystemMonitor_Gpu extends ElementBase {
+    static metadata = {
+        id: 'gpu',
+        name: 'GPU',
+        metrics: [
+            { key: 'used', color: true },
+            { key: 'memory', color: true },
+        ],
+        tooltipUnit: '%',
+    };
+
     constructor(extension) {
-        super(extension, {
-            elt: 'gpu',
-            item_name: _('GPU'),
-            color_name: ['used', 'memory']
-        });
+        super(extension);
         this.max = 100;
 
-        this.item_name = _('GPU');
         this.mem = 0;
         this.total = 0;
-        this.tip_format();
         this.update();
     }
     _unit(total) {
@@ -124,19 +127,6 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
             this.menu_items[3].text = this._pad(this.mem).toLocaleString(Locale) +
                 '/' + this._pad(this.total).toLocaleString(Locale);
         }
-    }
-    create_text_items() {
-        const Style = this.extension._Style;
-        return [
-            new St.Label({
-                text: '',
-                style_class: Style.get('sm-status-value'),
-                y_align: Clutter.ActorAlign.CENTER}),
-            new St.Label({
-                text: '%',
-                style_class: Style.get('sm-perc-label'),
-                y_align: Clutter.ActorAlign.CENTER})
-        ];
     }
     create_menu_items() {
         const Style = this.extension._Style;

@@ -1,19 +1,25 @@
 /* -*- mode: js2; js2-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
-import Clutter from "gi://Clutter";
 import GTop from "gi://GTop";
 import St from "gi://St";
 import { ElementBase } from '../base.js';
 
 const Mem = class SystemMonitor_Mem extends ElementBase {
+    static metadata = {
+        id: 'memory',
+        label: 'mem',
+        name: 'Memory',
+        metrics: [
+            { key: 'program', color: true },
+            { key: 'buffer', color: true },
+            { key: 'cache', color: true },
+        ],
+        tooltipUnit: '%',
+    };
+
     constructor(extension) {
-        super(extension, {
-            elt: 'memory',
-            elt_short: 'mem',
-            item_name: _('Memory'),
-            color_name: ['program', 'buffer', 'cache']
-        });
+        super(extension);
         this.max = 1;
 
         this.gtop = new GTop.glibtop_mem();
@@ -30,7 +36,6 @@ const Mem = class SystemMonitor_Mem extends ElementBase {
             this._unitConversion *= 1024 / this._decimals;
         }
 
-        this.tip_format();
         this.update();
     }
     refresh() {
@@ -82,17 +87,6 @@ const Mem = class SystemMonitor_Mem extends ElementBase {
             this.menu_items[3].text = this._pad(this.mem[0]) +
                 '/' + this._pad(this.total);
         }
-    }
-    create_text_items() {
-        return [
-            new St.Label({
-                text: '',
-                style_class: this.extension._Style.get('sm-status-value'),
-                y_align: Clutter.ActorAlign.CENTER}),
-            new St.Label({
-                text: '%', style_class: this.extension._Style.get('sm-perc-label'),
-                y_align: Clutter.ActorAlign.CENTER})
-        ];
     }
     create_menu_items() {
         let unit = _('MiB');

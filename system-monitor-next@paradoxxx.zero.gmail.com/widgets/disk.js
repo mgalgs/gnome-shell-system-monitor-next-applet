@@ -9,18 +9,23 @@ import { parse_bytearray } from '../common.js';
 import { ElementBase } from '../base.js';
 
 const Disk = class SystemMonitor_Disk extends ElementBase {
+    static metadata = {
+        id: 'disk',
+        name: 'Disk',
+        metrics: [
+            { key: 'read', color: true },
+            { key: 'write', color: true },
+        ],
+        tooltipUnit: 'MiB/s',
+    };
+
     constructor(extension) {
-        super(extension, {
-            elt: 'disk',
-            item_name: _('Disk'),
-            color_name: ['read', 'write']
-        });
+        super(extension);
         this.mounts = extension._MountsMonitor.get_mounts();
         extension._MountsMonitor.add_listener(this.update_mounts.bind(this));
         this.last = [0, 0];
         this.usage = [0, 0];
         this.last_time = 0;
-        this.tip_format(_('MiB/s'));
         this.update();
     }
     update_mounts(mounts) {

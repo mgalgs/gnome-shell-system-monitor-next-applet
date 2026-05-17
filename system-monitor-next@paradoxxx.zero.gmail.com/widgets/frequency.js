@@ -9,14 +9,18 @@ import { parse_bytearray } from '../common.js';
 import { ElementBase } from '../base.js';
 
 const Freq = class SystemMonitor_Freq extends ElementBase {
+    static metadata = {
+        id: 'freq',
+        name: 'Freq',
+        metrics: [{ key: 'freq', color: true }],
+        tooltipUnit: 'MHz',
+        panelUnit: 'MHz',
+        menuUnit: 'MHz',
+    };
+
     constructor(extension) {
-        super(extension, {
-            elt: 'freq',
-            item_name: _('Freq'),
-            color_name: ['freq']
-        });
+        super(extension);
         this.freq = 0;
-        this.tip_format('MHz');
 
         extension._Schema.connect('changed::freq-display-mode', this.update.bind(this));
 
@@ -78,16 +82,6 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
             new St.Label({
                 text: 'MHz', style_class: this.extension._Style.get('sm-perc-label'),
                 y_align: Clutter.ActorAlign.CENTER})
-        ];
-    }
-    create_menu_items() {
-        return [
-            new St.Label({
-                text: '',
-                style_class: this.extension._Style.get('sm-value')}),
-            new St.Label({
-                text: 'MHz',
-                style_class: this.extension._Style.get('sm-label')})
         ];
     }
 }

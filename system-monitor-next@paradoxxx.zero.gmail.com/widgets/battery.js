@@ -12,15 +12,18 @@ import { ElementBase, build_menu_info } from '../base.js';
 
 const UPower = UPowerGlib;
 
+const DEFAULT_BATTERY_ICON = '. GThemedIcon battery-good-symbolic battery-good';
+
 const Battery = class SystemMonitor_Battery extends ElementBase {
+    static metadata = {
+        id: 'battery',
+        label: 'batt',
+        name: 'Battery',
+        metrics: [{ key: 'batt0', color: true }],
+    };
+
     constructor(extension) {
-        super(extension, {
-            elt: 'battery',
-            elt_short: 'batt',
-            item_name: _('Battery'),
-            color_name: ['batt0'],
-            icon: '. GThemedIcon battery-good-symbolic battery-good'
-        });
+        super(extension);
 
         this.max = 100;
         this.icon_hidden = false;
@@ -37,7 +40,7 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
         );
 
         // need to specify a default icon, since the contructor completes before UPower callback
-        this.gicon = Gio.icon_new_for_string(this.icon);
+        this.gicon = Gio.icon_new_for_string(DEFAULT_BATTERY_ICON);
 
         this.tip_format('%');
 
@@ -234,7 +237,7 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
     create_text_items() {
         return [
             new St.Icon({
-                gicon: Gio.icon_new_for_string(this.icon),
+                gicon: Gio.icon_new_for_string(DEFAULT_BATTERY_ICON),
                 style_class: this.extension._Style.get('sm-status-icon')}),
             new St.Label({
                 text: '',

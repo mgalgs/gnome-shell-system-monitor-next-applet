@@ -12,12 +12,20 @@ import { ElementBase } from '../base.js';
 const NetworkManager = NM;
 
 const Net = class SystemMonitor_Net extends ElementBase {
+    static metadata = {
+        id: 'net',
+        name: 'Net',
+        metrics: [
+            { key: 'down', color: true },
+            { key: 'downerrors', color: true },
+            { key: 'up', color: true },
+            { key: 'uperrors', color: true },
+            { key: 'collisions', color: true },
+        ],
+    };
+
     constructor(extension) {
-        super(extension, {
-            elt: 'net',
-            item_name: _('Net'),
-            color_name: ['down', 'downerrors', 'up', 'uperrors', 'collisions']
-        });
+        super(extension);
         this.speed_in_bits = false;
         this.ifs = [];
         this.client = NM.Client.new(null);
