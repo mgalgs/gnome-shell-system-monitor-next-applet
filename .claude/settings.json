@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make:*)",
+      "Bash(npm run:*)",
+      "Bash(npm install:*)",
+      "Bash(npm ci:*)",
+      "Bash(npx eslint:*)",
+      "Bash(eslint:*)",
+      "Bash(glib-compile-schemas:*)",
+      "Bash(./testing/vm/vm-create.sh:*)",
+      "Bash(./testing/vm/vm-test.sh:*)",
+      "Bash(./testing/vm/vm-test-matrix.sh:*)",
+      "Bash(./testing/vm/vm-list.sh:*)",
+      "Bash(./testing/vm/vm-viewer.sh:*)",
+      "Bash(./testing/vm/vm-destroy.sh:*)",
+      "Bash(./testing/vm/vm-ssh.sh:*)",
+      "Bash(cat:*)",
+      "Bash(find:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(sort:*)",
+      "Bash(uniq:*)",
+      "Bash(diff:*)",
+      "Bash(tr:*)",
+      "Bash(cut:*)",
+      "Bash(basename:*)",
+      "Bash(dirname:*)",
+      "Bash(realpath:*)",
+      "Bash(readlink:*)",
+      "Bash(stat:*)",
+      "Bash(file:*)",
+      "Bash(which:*)",
+      "Bash(command -v:*)",
+      "Bash(test:*)",
+      "Bash([:*)",
+      "Bash(true:*)",
+      "Bash(false:*)",
+      "Bash(gh run view:*)"
+    ]
+  }
+}
