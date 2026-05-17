@@ -1,0 +1,26 @@
+{
+  "name": "gnome-shell-system-monitor-next-applet",
+  "version": "1.0.0",
+  "description": "![Extension uploader](https://github.com/mgalgs/gnome-shell-system-monitor-next-applet/workflows/Extension%20uploader/badge.svg)",
+  "main": "eslint.config.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint system-monitor-next@paradoxxx.zero.gmail.com/widget-system system-monitor-next@paradoxxx.zero.gmail.com/widgets"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mgalgs/gnome-shell-system-monitor-next-applet.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/mgalgs/gnome-shell-system-monitor-next-applet/issues"
+  },
+  "homepage": "https://github.com/mgalgs/gnome-shell-system-monitor-next-applet#readme",
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "eslint": "^9.39.2"
+  }
+}

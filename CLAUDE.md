@@ -79,10 +79,8 @@ G_MESSAGES_DEBUG=all MUTTER_DEBUG_DUMMY_MODE_SPECS=1366x768 dbus-run-session -- 
 ### Linting
 
 ```bash
-# Run ESLint on extension code
-./checkjs.sh
-# Or directly:
-eslint system-monitor-next@paradoxxx.zero.gmail.com
+# Run ESLint
+npm run lint
 ```
 
 ESLint configuration is in `eslint.config.js` (flat config format, ES2022, 4-space indent, single quotes, max line length 160).
