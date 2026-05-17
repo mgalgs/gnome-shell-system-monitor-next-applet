@@ -2,6 +2,7 @@
 
 'use strict';
 
+import GLib from "gi://GLib";
 import GObject from "gi://GObject";
 import Gtk from "gi://Gtk";
 import Gio from "gi://Gio";
@@ -16,18 +17,14 @@ const N_ = function (e) {
     return e;
 };
 
-function sm_log(message) {
-    console.log(`[system-monitor-next-prefs] ${message}`);
-}
-
-String.prototype.capitalize = function () {
-    return this.replace(/(^|\s)([a-z])/g, function (m, p1, p2) {
+function capitalize(str) {
+    return str.replace(/(^|\s)([a-z])/g, function (_m, p1, p2) {
         return p1 + p2.toUpperCase();
     });
-};
+}
 
 function color_to_hex(color) {
-    var output = N_('#%02x%02x%02x%02x').format(
+    let output = N_('#%02x%02x%02x%02x').format(
         255 * color.red,
         255 * color.green,
         255 * color.blue,
@@ -125,544 +122,602 @@ const SMGeneralPrefsPage = GObject.registerClass({
     }
 });
 
-// ** Widget Position Preferences Page **
-// the code of this preferences page is an adaptation of the "Top Bar Organizer" code.
-// https://gitlab.gnome.org/julianschacher/top-bar-organizer
-const SMWidgetPosPrefsItem = GObject.registerClass({
-    GTypeName: 'SMWidgetPosPrefsItem',
-    Template: import.meta.url.replace('prefs.js', 'ui/prefsWidgetPositionItem.ui'),
-    Signals: {
-        'move': {param_types: [GObject.TYPE_STRING]},
-    },
-}, class SMWidgetPosPrefsItem extends Adw.ActionRow {
-    static {
-        this.install_action('row.move-up', null, (self, _actionName, _param) => self.emit('move', 'up'));
-        this.install_action('row.move-down', null, (self, _actionName, _param) => self.emit('move', 'down'));
-    }
+// ** Monitor Configuration Constants **
 
-    constructor(settings, widgetType, params = {}) {
+const MONITOR_TYPES = ['cpu', 'memory', 'swap', 'net', 'disk', 'gpu', 'thermal', 'fan', 'battery', 'freq'];
+
+const COLOR_MAP = {
+    cpu: ['user', 'system', 'nice', 'iowait', 'other'],
+    memory: ['program', 'buffer', 'cache'],
+    swap: ['used'],
+    net: ['down', 'downerrors', 'up', 'uperrors', 'collisions'],
+    disk: ['read', 'write'],
+    gpu: ['used', 'memory'],
+    thermal: ['tz0'],
+    fan: ['fan0'],
+    battery: ['batt0'],
+    freq: ['freq'],
+};
+
+const DEFAULT_COLORS = {
+    cpu: {user: '#0072b3', system: '#0092e6', nice: '#00a3ff', iowait: '#002f3d', other: '#001d26'},
+    memory: {program: '#00b35b', buffer: '#00ff82', cache: '#aaf5d0'},
+    swap: {used: '#8b00c3'},
+    net: {down: '#fce94f', downerrors: '#ff6e00', up: '#fb74fb', uperrors: '#e0006e', collisions: '#ff0000'},
+    disk: {read: '#c65000', write: '#ff6700'},
+    gpu: {used: '#00b35b', memory: '#00ff82'},
+    thermal: {tz0: '#f2002e'},
+    fan: {fan0: '#f2002e'},
+    battery: {batt0: '#f2002e'},
+    freq: {freq: '#001d26'},
+};
+
+const STYLE_OPTIONS = ['digit', 'graph', 'both'];
+
+// ** Device Detection **
+
+function getCpuCores() {
+    try {
+        let file = Gio.File.new_for_path('/proc/cpuinfo');
+        let [success, contents] = file.load_contents(null);
+        if (success) {
+            let text = new TextDecoder().decode(contents);
+            let matches = text.match(/^processor/gm);
+            let count = matches ? matches.length : 1;
+            return Array.from({length: count}, (_v, i) => i.toString());
+        }
+    } catch {
+        // fall through
+    }
+    return ['0'];
+}
+
+function getNetInterfaces() {
+    try {
+        let file = Gio.File.new_for_path('/proc/net/dev');
+        let [success, contents] = file.load_contents(null);
+        if (success) {
+            let lines = new TextDecoder().decode(contents).split('\n');
+            let ifaces = [];
+            for (let i = 2; i < lines.length; i++) {
+                let iface = lines[i].trim().split(':')[0];
+                if (iface && iface !== 'lo')
+                    ifaces.push(iface);
+            }
+            return ifaces;
+        }
+    } catch {
+        // fall through
+    }
+    return [];
+}
+
+function getDiskDevices() {
+    try {
+        let file = Gio.File.new_for_path('/proc/diskstats');
+        let [success, contents] = file.load_contents(null);
+        if (success) {
+            let lines = new TextDecoder().decode(contents).split('\n');
+            let disks = new Set();
+            for (let line of lines) {
+                let parts = line.trim().split(/\s+/);
+                if (parts.length > 2) {
+                    let disk = parts[2];
+                    if (disk && /^(sd[a-z]|nvme\d+n\d+|mmcblk\d+|vd[a-z])$/.test(disk))
+                        disks.add(disk);
+                }
+            }
+            return Array.from(disks);
+        }
+    } catch {
+        // fall through
+    }
+    return [];
+}
+
+function getGpuDevices() {
+    try {
+        let [success, stdout] = GLib.spawn_command_line_sync(
+            'nvidia-smi --query-gpu=count --format=csv,noheader');
+        if (success) {
+            let count = parseInt(new TextDecoder().decode(stdout).trim(), 10);
+            if (!isNaN(count) && count > 0)
+                return Array.from({length: count}, (_v, i) => i.toString());
+        }
+    } catch {
+        // nvidia-smi not available
+    }
+    try {
+        let drmDir = Gio.File.new_for_path('/sys/class/drm/');
+        let enumerator = drmDir.enumerate_children('standard::name', Gio.FileQueryInfoFlags.NONE, null);
+        let count = 0;
+        let fileInfo;
+        while ((fileInfo = enumerator.next_file(null)) !== null) {
+            if (/^card\d+$/.test(fileInfo.get_name()))
+                count++;
+        }
+        enumerator.close(null);
+        if (count > 0)
+            return Array.from({length: count}, (_v, i) => i.toString());
+    } catch {
+        // fall through
+    }
+    return ['0'];
+}
+
+function detectDevices(type) {
+    switch (type) {
+    case 'cpu':
+    case 'freq':
+        return ['all', ...getCpuCores()];
+    case 'memory':
+    case 'swap':
+    case 'battery':
+        return ['default'];
+    case 'net':
+        return ['all', ...getNetInterfaces()];
+    case 'disk':
+        return ['all', ...getDiskDevices()];
+    case 'gpu':
+        return getGpuDevices();
+    case 'thermal':
+        return Object.keys(check_sensors('temp'));
+    case 'fan':
+        return Object.keys(check_sensors('fan'));
+    default:
+        return ['all'];
+    }
+}
+
+function buildDefaultConfig(type, device) {
+    let config = {
+        uuid: GLib.uuid_string_random(),
+        type: type,
+        device: device,
+        display: true,
+        style: 'graph',
+        'graph-width': 100,
+        'refresh-time': type === 'cpu' || type === 'freq' ? 1500 : 5000,
+        'show-text': true,
+        'show-menu': true,
+        colors: {...(DEFAULT_COLORS[type] || {})},
+    };
+    if (type === 'thermal') {
+        config['fahrenheit-unit'] = false;
+        config['threshold'] = 0;
+    }
+    if (type === 'net')
+        config['speed-in-bits'] = false;
+    if (type === 'battery') {
+        config['time'] = false;
+        config['hidesystem'] = false;
+    }
+    if (type === 'freq')
+        config['display-mode'] = 'max';
+    return config;
+}
+
+// ** Monitor Row **
+
+const SMMonitorRow = GObject.registerClass({
+    GTypeName: 'SMMonitorRow',
+    Signals: {
+        'config-changed': {},
+        'delete-requested': {},
+    },
+}, class SMMonitorRow extends Adw.ExpanderRow {
+    constructor(config, params = {}) {
         super(params);
 
-        this._settings = settings;
-        this._widgetType = widgetType;
+        this._config = config;
+        this._colorDialog = new Gtk.ColorDialog({modal: true, with_alpha: true});
+        this._dragX = 0;
+        this._dragY = 0;
 
-        this.title = _(this._widgetType.capitalize());
+        this.title = this._formatTitle();
 
-        this._drag_starting_point_x = 0;
-        this._drag_starting_point_y = 0;
+        let dragHandle = new Gtk.Image({
+            icon_name: 'list-drag-handle-symbolic',
+            css_classes: ['drag-handle'],
+            valign: Gtk.Align.CENTER,
+        });
+        this.add_prefix(dragHandle);
+
+        let deleteBtn = new Gtk.Button({
+            icon_name: 'user-trash-symbolic',
+            valign: Gtk.Align.CENTER,
+            css_classes: ['flat'],
+        });
+        deleteBtn.connect('clicked', () => this.emit('delete-requested'));
+        this.add_suffix(deleteBtn);
+
+        let dragSource = new Gtk.DragSource({actions: Gdk.DragAction.MOVE});
+        dragSource.connect('prepare', this._onDragPrepare.bind(this));
+        dragSource.connect('drag-begin', this._onDragBegin.bind(this));
+        this.add_controller(dragSource);
+
+        let dropTarget = Gtk.DropTarget.new(SMMonitorRow.$gtype, Gdk.DragAction.MOVE);
+        dropTarget.connect('drop', this._onDrop.bind(this));
+        this.add_controller(dropTarget);
+
+        this._buildSettings();
     }
 
-    onDragPrepare(_source, x, y) {
-        const value = new GObject.Value();
-        value.init(SMWidgetPosPrefsItem);
-        value.set_object(this);
+    _formatTitle() {
+        let type = capitalize(this._config.type);
+        let device = this._config.device;
+        if (device === 'default' || device === '')
+            return type;
+        return `${type} — ${device}`;
+    }
 
-        this._drag_starting_point_x = x;
-        this._drag_starting_point_y = y;
+    _onDragPrepare(_source, x, y) {
+        this._dragX = x;
+        this._dragY = y;
+        let value = new GObject.Value();
+        value.init(SMMonitorRow);
+        value.set_object(this);
         return Gdk.ContentProvider.new_for_value(value);
     }
 
-    onDragBegin(_source, drag) {
+    _onDragBegin(_source, drag) {
         let dragWidget = new Gtk.ListBox();
         dragWidget.set_size_request(this.get_width(), this.get_height());
-
-        let dragSMWidgetPosPrefsItem = new SMWidgetPosPrefsItem(this._settings, this._widgetType, {});
-        dragWidget.append(dragSMWidgetPosPrefsItem);
-        dragWidget.drag_highlight_row(dragSMWidgetPosPrefsItem);
-
-        let currentDragIcon = Gtk.DragIcon.get_for_drag(drag);
-        currentDragIcon.set_child(dragWidget);
-        drag.set_hotspot(this._drag_starting_point_x, this._drag_starting_point_y);
+        let label = new Adw.ActionRow({title: this.title});
+        dragWidget.append(label);
+        dragWidget.drag_highlight_row(label);
+        let icon = Gtk.DragIcon.get_for_drag(drag);
+        icon.set_child(dragWidget);
+        drag.set_hotspot(this._dragX, this._dragY);
     }
 
-    // Handle a new drop on `this` properly. `value` is the thing getting dropped.
-    onDrop(_target, value, _x, _y) {
-        // If `this` got dropped onto itself, do nothing.
+    _onDrop(_target, value, _x, _y) {
         if (value === this)
-            return;
-
-        // Get the ListBox.
-        const listBox = this.get_parent();
-
-        // Get the position of `this` and the drop value.
-        const ownPosition = this.get_index();
-        const valuePosition = value.get_index();
-
-        // Remove the drop value from its list box.
-        listBox.removeRow(value);
-
-        // Since drop value was removed get the position of `this` again.
-        const updatedOwnPosition = this.get_index();
-
-        if (valuePosition < ownPosition) {
-            // If the drop value was before `this`, add the drop value after `this`.
-            listBox.insertRow(value, updatedOwnPosition + 1);
-        } else {
-            // Otherwise, add the drop value where `this` currently is.
-            listBox.insertRow(value, updatedOwnPosition);
-        }
-
-        // Save the widgets order to settings and make sure move
-        // actions are correctly enabled/disabled.
-        listBox.saveWidgetsPositionToSettings();
-        listBox.determineRowMoveActionEnable();
+            return false;
+        let listBox = this.get_parent();
+        let fromIndex = value.get_index();
+        let toIndex = this.get_index();
+        listBox.remove(value);
+        let updatedToIndex = this.get_index();
+        if (fromIndex < toIndex)
+            listBox.insert(value, updatedToIndex + 1);
+        else
+            listBox.insert(value, updatedToIndex);
+        this.emit('config-changed');
+        return true;
     }
-});
 
-const SMWidgetPosPrefsListBox = GObject.registerClass({
-    GTypeName: 'SMWidgetPosPrefsListBox',
-    Template: import.meta.url.replace('prefs.js', 'ui/prefsWidgetPositionList.ui'),
-    Signals: {
-        'row-move': {param_types: [SMWidgetPosPrefsItem, GObject.TYPE_STRING]},
-    },
-}, class SMWidgetPosPrefsListBox extends Gtk.ListBox {
-    constructor(settings, params = {}) {
-        super(params);
+    _emitChanged() {
+        this.emit('config-changed');
+    }
 
-        this._settings = settings;
-        this._rowSignalHandlerIds = new Map();
+    _buildSettings() {
+        let c = this._config;
 
-        let widgetTypes = [
-            'cpu',
-            'freq',
-            'memory',
-            'swap',
-            'net',
-            'disk',
-            'gpu',
-            'thermal',
-            'fan',
-            'battery',
-        ];
+        let display = new Adw.SwitchRow({title: _('Display'), active: c.display});
+        display.connect('notify::active', w => { c.display = w.active; this._emitChanged(); });
+        this.add_row(display);
 
-        widgetTypes.forEach(widgetType => {
-            let item = new SMWidgetPosPrefsItem(settings, widgetType);
-            let position = this._settings.get_int(`${widgetType}-position`);
-            this.insertRow(item, position);
+        let showMenu = new Adw.SwitchRow({title: _('Show in Menu'), active: c['show-menu']});
+        showMenu.connect('notify::active', w => { c['show-menu'] = w.active; this._emitChanged(); });
+        this.add_row(showMenu);
+
+        let showText = new Adw.SwitchRow({title: _('Show Text'), active: c['show-text']});
+        showText.connect('notify::active', w => { c['show-text'] = w.active; this._emitChanged(); });
+        this.add_row(showText);
+
+        let styleModel = new Gtk.StringList();
+        STYLE_OPTIONS.forEach(s => styleModel.append(_(s)));
+        let styleRow = new Adw.ComboRow({
+            title: _('Display Style'),
+            model: styleModel,
+            selected: STYLE_OPTIONS.indexOf(c.style),
+        });
+        styleRow.connect('notify::selected', w => {
+            c.style = STYLE_OPTIONS[w.selected];
+            this._emitChanged();
+        });
+        this.add_row(styleRow);
+
+        let graphWidth = new Adw.SpinRow({
+            title: _('Graph Width'),
+            numeric: true,
+            adjustment: new Gtk.Adjustment({
+                value: c['graph-width'], lower: 1, upper: 1000,
+                step_increment: 1, page_increment: 10,
+            }),
+        });
+        graphWidth.value = c['graph-width'];
+        this.add_row(graphWidth);
+        graphWidth.connect('notify::value', w => {
+            c['graph-width'] = w.value;
+            this._emitChanged();
         });
 
-        this.determineRowMoveActionEnable();
-    }
-
-    // Inserts the given SMWidgetPosPrefsItem to this at the given position.
-    // Also handles stuff like connecting signals.
-    insertRow(row, position) {
-        this.insert(row, position);
-
-        const signalHandlerIds = [];
-
-        signalHandlerIds.push(row.connect('move', (row, direction) => {
-            this.emit('row-move', row, direction);
-        }));
-
-        this._rowSignalHandlerIds.set(row, signalHandlerIds);
-    }
-
-    // Removes the given SMWidgetPosPrefsItem from this.
-    // Also handles stuff like disconnecting signals.
-    removeRow(row) {
-        const signalHandlerIds = this._rowSignalHandlerIds.get(row);
-
-        for (const id of signalHandlerIds)
-            row.disconnect(id);
-
-        this.remove(row);
-    }
-
-    // Save the widgets order to settings.
-    saveWidgetsPositionToSettings() {
-        let currentWidgetsOrder = [];
-
-        for (let potentialSMWidgetPosPrefsItem of this) {
-            // Only process SMWidgetPosPrefsItem.
-            if (potentialSMWidgetPosPrefsItem.constructor.$gtype.name !== 'SMWidgetPosPrefsItem')
-                continue;
-
-            currentWidgetsOrder.push(potentialSMWidgetPosPrefsItem._widgetType);
-        }
-
-        currentWidgetsOrder.forEach(widgetType => {
-            this._settings.set_int(`${widgetType}-position`, currentWidgetsOrder.indexOf(widgetType));
+        let refreshTime = new Adw.SpinRow({
+            title: _('Refresh Time (ms)'),
+            numeric: true,
+            adjustment: new Gtk.Adjustment({
+                value: c['refresh-time'], lower: 100, upper: 100000,
+                step_increment: 500, page_increment: 5000,
+            }),
         });
-    }
-
-    // Determines whether or not each move action of each SMWidgetPosPrefsItem should be enabled or disabled.
-    determineRowMoveActionEnable() {
-        for (let potentialSMWidgetPosPrefsItem of this) {
-            // Only process SMWidgetPosPrefsItem.
-            if (potentialSMWidgetPosPrefsItem.constructor.$gtype.name !== 'SMWidgetPosPrefsItem')
-                continue;
-
-
-            const row = potentialSMWidgetPosPrefsItem;
-
-            // If the current row is the topmost row then disable the move-up action.
-            if (row.get_index() === 0)
-                row.action_set_enabled('row.move-up', false);
-            else // Else enable it.
-                row.action_set_enabled('row.move-up', true);
-
-            // If the current row is the bottommost row then disable the move-down action.
-            const rowNextSibling = row.get_next_sibling();
-            if (rowNextSibling === null)
-                row.action_set_enabled('row.move-down', false);
-            else // Else enable it.
-                row.action_set_enabled('row.move-down', true);
-        }
-    }
-});
-
-const SMWidgetPosPrefsPage = GObject.registerClass({
-    GTypeName: 'SMWidgetPosPrefsPage',
-    Template: import.meta.url.replace('prefs.js', 'ui/prefsWidgetPositionPrefsPage.ui'),
-    InternalChildren: ['widget_position_group'],
-}, class SMWidgetPosPrefsPage extends Adw.PreferencesPage {
-    constructor(settings, params = {}) {
-        super(params);
-
-        let widgetListBox = new SMWidgetPosPrefsListBox(settings);
-        widgetListBox.set_css_classes(['boxed-list']);
-        widgetListBox.connect('row-move', this.onRowMove);
-        this._widget_position_group.add(widgetListBox);
-    }
-
-    onRowMove(listBox, row, direction) {
-        const rowPosition = row.get_index();
-
-        if (direction === 'up') {
-            if (rowPosition !== 0) {
-                listBox.removeRow(row);
-                listBox.insertRow(row, rowPosition - 1);
-                listBox.saveWidgetsPositionToSettings();
-                listBox.determineRowMoveActionEnable();
-            }
-        } else {
-            const rowNextSibling = row.get_next_sibling();
-            if (rowNextSibling !== null) {
-                listBox.removeRow(row);
-                listBox.insertRow(row, rowPosition + 1);
-                listBox.saveWidgetsPositionToSettings();
-                listBox.determineRowMoveActionEnable();
-            }
-        }
-    }
-});
-
-// ** Widget Preferences Page **
-const SMExpanderRow = GObject.registerClass({
-    GTypeName: 'SMExpanderRow',
-    Template: import.meta.url.replace('prefs.js', 'ui/prefsExpanderRow.ui'),
-    InternalChildren: ['display', 'show_menu', 'show_text', 'style', 'graph_width', 'refresh_time'],
-}, class SMExpanderRow extends Adw.ExpanderRow {
-    constructor(settings, widgetType, params = {}) {
-        super(params);
-
-        this._settings = settings;
-
-        this.title = _(widgetType.capitalize());
-
-        this._color = new Gdk.RGBA();
-        this._colorDialog = new Gtk.ColorDialog({
-            modal: true,
-            with_alpha: true,
+        refreshTime.value = c['refresh-time'];
+        this.add_row(refreshTime);
+        refreshTime.connect('notify::value', w => {
+            c['refresh-time'] = w.value;
+            this._emitChanged();
         });
 
-        this._settings.bind(`${widgetType}-display`, this._display,
-            'active', Gio.SettingsBindFlags.DEFAULT
-        );
-        this._settings.bind(`${widgetType}-show-menu`, this._show_menu,
-            'active', Gio.SettingsBindFlags.DEFAULT
-        );
-        this._settings.bind(`${widgetType}-show-text`, this._show_text,
-            'active', Gio.SettingsBindFlags.DEFAULT
-        );
-
-        this._style.set_selected(this._settings.get_enum(`${widgetType}-style`));
-        this._style.connect('notify::selected', widget => {
-            this._settings.set_enum(`${widgetType}-style`, widget.selected);
-        });
-
-        this._settings.bind(`${widgetType}-graph-width`, this._graph_width,
-            'value', Gio.SettingsBindFlags.DEFAULT
-        );
-        this._settings.bind(`${widgetType}-refresh-time`, this._refresh_time,
-            'value', Gio.SettingsBindFlags.DEFAULT
-        );
-
-        switch (widgetType) {
-            case 'cpu': {
-                let cpuColors = [
-                    'cpu-user-color',
-                    'cpu-iowait-color',
-                    'cpu-nice-color',
-                    'cpu-system-color',
-                    'cpu-other-color',
-                ];
-
-                this._addColorsItem(cpuColors);
-
-                let item = new Adw.SwitchRow({title: _('Display Individual Cores')});
-                this._settings.bind('cpu-individual-cores', item,
-                    'active', Gio.SettingsBindFlags.DEFAULT
-                );
-                this.add_row(item);
-                break;
-            }
-            case 'freq': {
-                let freqColors = [
-                    'freq-freq-color',
-                ];
-
-                this._addColorsItem(freqColors);
-
-                let stringListModel = new Gtk.StringList();
-                stringListModel.append(_('Max across all cores'));
-                stringListModel.append(_('Average across all cores'));
-
-                let displayModeRow = new Adw.ComboRow({
-                    title: _('Value'),
-                    model: stringListModel,
-                    selected: this._settings.get_enum('freq-display-mode')
-                });
-
-                displayModeRow.connect('notify::selected', widget => {
-                    this._settings.set_enum('freq-display-mode', widget.selected);
-                });
-
-                this.add_row(displayModeRow);
-                break;
-            }
-            case 'memory': {
-                let memoryColors = [
-                    'memory-program-color',
-                    'memory-buffer-color',
-                    'memory-cache-color',
-                ];
-
-                this._addColorsItem(memoryColors);
-                break;
-            }
-            case 'swap': {
-                let swapColors = [
-                    'swap-used-color',
-                ];
-
-                this._addColorsItem(swapColors);
-                break;
-            }
-            case 'net': {
-                let netColors = [
-                    'net-down-color',
-                    'net-up-color',
-                    'net-downerrors-color',
-                    'net-uperrors-color',
-                    'net-collisions-color',
-                ];
-
-                this._addColorsItem(netColors);
-
-                let item = new Adw.SwitchRow({title: _('Show network speed in bits')});
-                this._settings.bind('net-speed-in-bits', item,
-                    'active', Gio.SettingsBindFlags.DEFAULT
-                );
-                this.add_row(item);
-                break;
-            }
-            case 'disk': {
-                let diskColors = [
-                    'disk-read-color',
-                    'disk-write-color',
-                ];
-
-                this._addColorsItem(diskColors);
-
-                let stringListModel = new Gtk.StringList();
-                stringListModel.append(_('pie'));
-                stringListModel.append(_('bar'));
-                stringListModel.append(_('none'));
-
-                let item = new Adw.ComboRow({title: _('Usage Style')});
-                item.set_model(stringListModel);
-
-                item.set_selected(this._settings.get_enum('disk-usage-style'));
-                item.connect('notify::selected', widget => {
-                    this._settings.set_enum('disk-usage-style', widget.selected);
-                });
-                this.add_row(item);
-                break;
-            }
-            case 'gpu': {
-                let gpuColors = [
-                    'gpu-used-color',
-                    'gpu-memory-color',
-                ];
-
-                this._addColorsItem(gpuColors);
-                break;
-            }
-            case 'thermal': {
-                let thermalColors = [
-                    'thermal-tz0-color',
-                ];
-
-                const labels = Object.keys(check_sensors('temp'));
-                let stringListModel = new Gtk.StringList();
-
-                if (labels.length === 0)
-                    stringListModel.append(_('No temperature sensors found'));
-                else if (labels.length === 1)
-                    this._settings.set_string('thermal-sensor-label', labels[0]);
-
-                labels.forEach(str => {
-                    stringListModel.append(str);
-                });
-
-                let item = new Adw.ComboRow({title: _('Sensor:')});
-                item.set_model(stringListModel);
-
-                try {
-                    item.set_selected(labels.indexOf(this._settings.get_string('thermal-sensor-label')));
-                } catch (e) {
-                    item.set_selected(0);
-                }
-
-                item.connect('notify::selected', widget => {
-                    this._settings.set_string('thermal-sensor-label', labels[widget.selected]);
-                });
-                this.add_row(item);
-                this._addColorsItem(thermalColors);
-
-                item = new Adw.SpinRow({
-                    title: _('Temperature threshold (0 to disable)'),
-                    adjustment: new Gtk.Adjustment({
-                        value: 0,
-                        lower: 0,
-                        upper: 300,
-                        step_increment: 5,
-                        page_increment: 10,
-                    }),
-                });
-                item.set_numeric(true);
-                item.set_update_policy(Gtk.UPDATE_IF_VALID);
-                this._settings.bind('thermal-threshold', item,
-                    'value', Gio.SettingsBindFlags.DEFAULT
-                );
-                this.add_row(item);
-
-                item = new Adw.SwitchRow({title: _('Display temperature in Fahrenheit')});
-                this._settings.bind('thermal-fahrenheit-unit', item,
-                    'active', Gio.SettingsBindFlags.DEFAULT
-                );
-                this.add_row(item);
-                break;
-            }
-            case 'fan': {
-                let fanColors = [
-                    'fan-fan0-color',
-                ];
-
-                this._addColorsItem(fanColors);
-
-                const labels = Object.keys(check_sensors('fan'));
-                let stringListModel = new Gtk.StringList();
-
-                if (labels.length === 0)
-                    stringListModel.append(_('No fan sensors found'));
-                else if (labels.length === 1)
-                    this._settings.set_string('fan-sensor-label', labels[0]);
-
-                labels.forEach(str => {
-                    stringListModel.append(str);
-                });
-
-                let item = new Adw.ComboRow({title: _('Sensor:')});
-                item.set_model(stringListModel);
-
-                try {
-                    item.set_selected(labels.indexOf(this._settings.get_string('fan-sensor-label')));
-                } catch (e) {
-                    item.set_selected(0);
-                }
-
-                item.connect('notify::selected', widget => {
-                    this._settings.set_string('fan-sensor-label', labels[widget.selected]);
-                });
-                this.add_row(item);
-                break;
-            }
-            case 'battery': {
-                let batteryColors = [
-                    'battery-batt0-color',
-                ];
-
-                this._addColorsItem(batteryColors);
-
-                let item = new Adw.SwitchRow({title: _('Show Time Remaining')});
-                this._settings.bind('battery-time', item,
-                    'active', Gio.SettingsBindFlags.DEFAULT
-                );
-                this.add_row(item);
-
-                item = new Adw.SwitchRow({title: _('Hide System Icon')});
-                this._settings.bind('battery-hidesystem', item,
-                    'active', Gio.SettingsBindFlags.DEFAULT
-                );
-                this.add_row(item);
-                break;
-            }
-            default:
-                break;
-        }
-    }
-
-    _addColorsItem(colors) {
-        colors.forEach(color => {
-            let actionRow = new Adw.ActionRow({title: color.split('-')[1].capitalize()});
-            let colorItem = new Gtk.ColorDialogButton({valign: Gtk.Align.CENTER});
-
-            this._color.parse(this._settings.get_string(color));
-            colorItem.set_rgba(this._color);
-            colorItem.set_dialog(this._colorDialog);
-
-            colorItem.connect('notify::rgba', colorButton => {
-                this._settings.set_string(color, color_to_hex(colorButton.get_rgba()));
+        let colorNames = COLOR_MAP[c.type] || [];
+        if (!c.colors) c.colors = {};
+        for (let colorName of colorNames) {
+            let actionRow = new Adw.ActionRow({title: _(capitalize(colorName))});
+            let rgba = new Gdk.RGBA();
+            rgba.parse(c.colors[colorName] || '#ff0000');
+            let colorBtn = new Gtk.ColorDialogButton({
+                valign: Gtk.Align.CENTER,
+                dialog: this._colorDialog,
+                rgba: rgba,
             });
-            this._settings.connect(`changed::${color}`, () => {
-                this._color.parse(this._settings.get_string(color));
-                colorItem.set_rgba(this._color);
+            colorBtn.connect('notify::rgba', btn => {
+                c.colors[colorName] = color_to_hex(btn.get_rgba());
+                this._emitChanged();
             });
-
-            actionRow.add_suffix(colorItem);
+            actionRow.add_suffix(colorBtn);
             this.add_row(actionRow);
-        });
+        }
+
+        this._buildTypeSpecific(c);
+    }
+
+    _buildTypeSpecific(c) {
+        switch (c.type) {
+        case 'thermal': {
+            let fahrenheit = new Adw.SwitchRow({
+                title: _('Display in Fahrenheit'),
+                active: c['fahrenheit-unit'] || false,
+            });
+            fahrenheit.connect('notify::active', w => {
+                c['fahrenheit-unit'] = w.active;
+                this._emitChanged();
+            });
+            this.add_row(fahrenheit);
+
+            let threshold = new Adw.SpinRow({
+                title: _('Temperature threshold (0 to disable)'),
+                numeric: true,
+                adjustment: new Gtk.Adjustment({
+                    value: c.threshold || 0, lower: 0, upper: 300,
+                    step_increment: 5, page_increment: 10,
+                }),
+            });
+            this.add_row(threshold);
+            threshold.connect('notify::value', w => {
+                c.threshold = w.value;
+                this._emitChanged();
+            });
+            break;
+        }
+        case 'net': {
+            let speedBits = new Adw.SwitchRow({
+                title: _('Show speed in bits'),
+                active: c['speed-in-bits'] || false,
+            });
+            speedBits.connect('notify::active', w => {
+                c['speed-in-bits'] = w.active;
+                this._emitChanged();
+            });
+            this.add_row(speedBits);
+            break;
+        }
+        case 'battery': {
+            let showTime = new Adw.SwitchRow({
+                title: _('Show Time Remaining'),
+                active: c.time || false,
+            });
+            showTime.connect('notify::active', w => {
+                c.time = w.active;
+                this._emitChanged();
+            });
+            this.add_row(showTime);
+
+            let hideIcon = new Adw.SwitchRow({
+                title: _('Hide System Icon'),
+                active: c.hidesystem || false,
+            });
+            hideIcon.connect('notify::active', w => {
+                c.hidesystem = w.active;
+                this._emitChanged();
+            });
+            this.add_row(hideIcon);
+            break;
+        }
+        case 'freq': {
+            let modes = ['max', 'average'];
+            let modeModel = new Gtk.StringList();
+            modeModel.append(_('Max across all cores'));
+            modeModel.append(_('Average across all cores'));
+            let modeRow = new Adw.ComboRow({
+                title: _('Display Mode'),
+                model: modeModel,
+                selected: modes.indexOf(c['display-mode'] || 'max'),
+            });
+            modeRow.connect('notify::selected', w => {
+                c['display-mode'] = modes[w.selected];
+                this._emitChanged();
+            });
+            this.add_row(modeRow);
+            break;
+        }
+        }
     }
 });
 
-const SMWidgetPrefsPage = GObject.registerClass({
-    GTypeName: 'SMWidgetPrefsPage',
-    Template: import.meta.url.replace('prefs.js', 'ui/prefsWidgetSettings.ui'),
-    InternalChildren: ['widget_prefs_group'],
-}, class SMWidgetPrefsPage extends Adw.PreferencesPage {
+// ** Monitors Preferences Page **
+
+const SMMonitorsPage = GObject.registerClass({
+    GTypeName: 'SMMonitorsPage',
+}, class SMMonitorsPage extends Adw.PreferencesPage {
     constructor(settings, params = {}) {
-        super(params);
-
-        let widgetNames = [
-            'cpu',
-            'freq',
-            'memory',
-            'swap',
-            'net',
-            'disk',
-            'gpu',
-            'thermal',
-            'fan',
-            'battery',
-        ];
-
-        widgetNames.forEach(widgetName => {
-            let item = new SMExpanderRow(settings, widgetName);
-            this._widget_prefs_group.add(item);
+        super({
+            title: _('Monitors'),
+            icon_name: 'utilities-system-monitor-symbolic',
+            ...params,
         });
+
+        this._settings = settings;
+        this._monitors = [];
+        this._saveTimerId = null;
+
+        let group = new Adw.PreferencesGroup({
+            title: _('Active Monitors'),
+            description: _('Drag to reorder. Changes apply immediately.'),
+        });
+        this.add(group);
+
+        this._listBox = new Gtk.ListBox({
+            selection_mode: Gtk.SelectionMode.NONE,
+            css_classes: ['boxed-list'],
+        });
+        group.add(this._listBox);
+
+        this._loadMonitors();
+        for (let config of this._monitors)
+            this._addRow(config);
+
+        let addGroup = new Adw.PreferencesGroup();
+        this.add(addGroup);
+        let addBtn = new Gtk.Button({
+            label: _('Add Monitor…'),
+            css_classes: ['suggested-action'],
+            halign: Gtk.Align.CENTER,
+            margin_top: 12,
+        });
+        addBtn.connect('clicked', () => this._onAddMonitor());
+        addGroup.add(addBtn);
+    }
+
+    _loadMonitors() {
+        let strv = this._settings.get_strv('monitors');
+        this._monitors = [];
+        for (const s of strv) {
+            try {
+                let c = JSON.parse(s);
+                if (c && c.uuid && c.type)
+                    this._monitors.push(c);
+            } catch {
+                console.warn('system-monitor-next: skipping malformed monitor config');
+            }
+        }
+    }
+
+    _saveMonitors() {
+        if (this._saveTimerId)
+            GLib.Source.remove(this._saveTimerId);
+        this._saveTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => {
+            this._saveTimerId = null;
+            let ordered = this._getOrderedConfigs();
+            this._monitors = ordered;
+            let strv = ordered.map(m => JSON.stringify(m));
+            this._settings.set_strv('monitors', strv);
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _getOrderedConfigs() {
+        let configs = [];
+        for (let child = this._listBox.get_first_child(); child; child = child.get_next_sibling()) {
+            if (child instanceof SMMonitorRow)
+                configs.push(child._config);
+        }
+        return configs;
+    }
+
+    _addRow(config) {
+        let row = new SMMonitorRow(config);
+        row.connect('config-changed', () => this._saveMonitors());
+        row.connect('delete-requested', () => {
+            this._listBox.remove(row);
+            this._monitors = this._monitors.filter(m => m.uuid !== config.uuid);
+            this._saveMonitors();
+        });
+        this._listBox.append(row);
+    }
+
+    _onAddMonitor() {
+        let dialog = new Adw.Window({
+            modal: true,
+            title: _('Add Monitor'),
+            default_width: 400,
+            default_height: 280,
+            transient_for: this.get_root(),
+        });
+
+        let toolbar = new Adw.ToolbarView();
+        toolbar.add_top_bar(new Adw.HeaderBar());
+        dialog.set_content(toolbar);
+
+        let box = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 12,
+            margin_top: 12, margin_bottom: 12,
+            margin_start: 12, margin_end: 12,
+        });
+        toolbar.set_content(box);
+
+        let group = new Adw.PreferencesGroup();
+        box.append(group);
+
+        let typeModel = new Gtk.StringList();
+        MONITOR_TYPES.forEach(t => typeModel.append(_(capitalize(t))));
+        let typeRow = new Adw.ComboRow({title: _('Type'), model: typeModel});
+        group.add(typeRow);
+
+        let deviceModel = new Gtk.StringList();
+        let deviceRow = new Adw.ComboRow({title: _('Device'), model: deviceModel});
+        group.add(deviceRow);
+
+        let currentDevices = [];
+        const updateDevices = () => {
+            let type = MONITOR_TYPES[typeRow.selected];
+            currentDevices = detectDevices(type);
+            let model = new Gtk.StringList();
+            currentDevices.forEach(d => model.append(d));
+            deviceRow.model = model;
+            deviceRow.selected = 0;
+        };
+        typeRow.connect('notify::selected', updateDevices);
+        updateDevices();
+
+        let btnBox = new Gtk.Box({
+            orientation: Gtk.Orientation.HORIZONTAL,
+            spacing: 8,
+            halign: Gtk.Align.END,
+            margin_top: 8,
+        });
+        box.append(btnBox);
+
+        let cancelBtn = new Gtk.Button({label: _('Cancel')});
+        cancelBtn.connect('clicked', () => dialog.close());
+        btnBox.append(cancelBtn);
+
+        let addBtn = new Gtk.Button({
+            label: _('Add'),
+            css_classes: ['suggested-action'],
+        });
+        addBtn.connect('clicked', () => {
+            let type = MONITOR_TYPES[typeRow.selected];
+            let device = currentDevices[deviceRow.selected] || 'all';
+            let config = buildDefaultConfig(type, device);
+            this._monitors.push(config);
+            this._addRow(config);
+            this._saveMonitors();
+            dialog.close();
+        });
+        btnBox.append(addBtn);
+
+        dialog.present();
     }
 });
 
@@ -674,11 +729,8 @@ export default class SystemMonitorExtensionPreferences extends ExtensionPreferen
         let generalSettingsPage = new SMGeneralPrefsPage(settings);
         window.add(generalSettingsPage);
 
-        let widgetPositionSettingsPage = new SMWidgetPosPrefsPage(settings);
-        window.add(widgetPositionSettingsPage);
-
-        let widgetPreferencesPage = new SMWidgetPrefsPage(settings);
-        window.add(widgetPreferencesPage);
+        let monitorsPage = new SMMonitorsPage(settings);
+        window.add(monitorsPage);
 
         window.set_title(_('System Monitor Next Preferences'));
         window.search_enabled = true;

@@ -8,7 +8,6 @@ export default [
     {
         ignores: [
             'system-monitor-next@paradoxxx.zero.gmail.com/extension.js',
-            'system-monitor-next@paradoxxx.zero.gmail.com/prefs.js',
         ],
         languageOptions: {
             globals: {
