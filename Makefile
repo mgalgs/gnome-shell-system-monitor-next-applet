@@ -129,6 +129,8 @@ build: gschemas translate
 	$(Q)cp $(VV) $(BASE_MODULES) _build
 	$(Q)mkdir -p _build/schemas
 	$(Q)cp $(VV) -r $(UUID)/schemas/* _build/schemas/
+	$(Q)mkdir -p _build/widgets
+	$(Q)cp $(VV) -r $(UUID)/widgets/* _build/widgets/
 	$(Q)mkdir -p _build/ui
 	$(Q)cp $(VV) -r $(UUID)/ui/* _build/ui/
 	$(Q)mkdir -p _build/locale
