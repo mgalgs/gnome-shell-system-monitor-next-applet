@@ -10,7 +10,6 @@ import { ElementBase } from '../base.js';
 
 const Freq = class SystemMonitor_Freq extends ElementBase {
     static metadata = {
-        id: 'freq',
         name: 'Freq',
         metrics: [{ key: 'freq', color: true }],
         tooltipUnit: 'MHz',
@@ -28,7 +27,6 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
             this.item_name = _('Freq Core ') + coreNum;
         }
 
-        this.update();
     }
     refresh() {
         let total_frequency = 0;

@@ -10,7 +10,6 @@ import { ElementBase } from '../base.js';
 
 const Disk = class SystemMonitor_Disk extends ElementBase {
     static metadata = {
-        id: 'disk',
         name: 'Disk',
         metrics: [
             { key: 'read', color: true },
@@ -32,7 +31,6 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
             this.item_name = _('Disk') + ' ' + this.device_id;
         }
 
-        this.update();
     }
     update_mounts(mounts) {
         this.mounts = mounts;

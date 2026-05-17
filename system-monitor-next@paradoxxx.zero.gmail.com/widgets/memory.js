@@ -7,7 +7,6 @@ import { ElementBase } from '../base.js';
 
 const Mem = class SystemMonitor_Mem extends ElementBase {
     static metadata = {
-        id: 'memory',
         label: 'mem',
         name: 'Memory',
         metrics: [
@@ -36,7 +35,6 @@ const Mem = class SystemMonitor_Mem extends ElementBase {
             this._unitConversion *= 1024 / this._decimals;
         }
 
-        this.update();
     }
     refresh() {
         GTop.glibtop_get_mem(this.gtop);

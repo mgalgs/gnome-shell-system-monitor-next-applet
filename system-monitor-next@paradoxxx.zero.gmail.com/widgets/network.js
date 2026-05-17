@@ -13,7 +13,6 @@ const NetworkManager = NM;
 
 const Net = class SystemMonitor_Net extends ElementBase {
     static metadata = {
-        id: 'net',
         name: 'Net',
         metrics: [
             { key: 'down', color: true },
@@ -72,7 +71,6 @@ const Net = class SystemMonitor_Net extends ElementBase {
         } catch (e) {
             console.error('Please install Network Manager Gobject Introspection Bindings: ' + e);
         }
-        this.update();
     }
     update_units() {
         this.speed_in_bits = this.config['speed-in-bits'] || false;

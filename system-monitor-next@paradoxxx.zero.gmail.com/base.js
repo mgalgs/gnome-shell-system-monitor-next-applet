@@ -541,19 +541,31 @@ export const RotateBinLayout = GObject.registerClass(
 
 export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
     /**
-     * Subclasses declare static metadata for identity/class-level info:
+     * Minimal widget example:
      *
-     *   static metadata = {
-     *       id: 'fan',              // Widget type identifier (this.elt)
-     *       label: 'fan',           // Short panel label (this.elt_short), defaults to id
-     *       name: 'Fan',            // Translatable display name (this.item_name)
-     *       metrics: [              // Chart series
-     *           { key: 'fan0', color: true },
-     *       ],
-     *       panelUnit: 'rpm',       // Unit label in panel (default: '%')
-     *       menuUnit: 'rpm',        // Unit label in popup menu (default: panelUnit)
-     *       tooltipUnit: 'rpm',     // Unit label in tooltip (auto-calls tip_format)
-     *   };
+     *   class LoadAvg extends ElementBase {
+     *       static metadata = {
+     *           name: 'Load',
+     *           metrics: [{ key: 'load1', color: true }],
+     *       };
+     *       collect() {
+     *           let [, c] = Gio.File.new_for_path('/proc/loadavg').load_contents(null);
+     *           return { load1: parseFloat(new TextDecoder().decode(c)) };
+     *       }
+     *   }
+     *
+     * metadata fields:
+     *   name       (required) - Display name, also used to derive panel label
+     *   metrics    (required) - Chart series: [{ key: 'name', color: true }, ...]
+     *   id         (optional) - Type identifier, defaults to name.toLowerCase()
+     *   label      (optional) - Short panel label, defaults to name.toLowerCase().slice(0,4)
+     *   panelUnit  (optional) - Unit in panel text, default '%'
+     *   menuUnit   (optional) - Unit in popup menu, default panelUnit
+     *   tooltipUnit(optional) - Unit in tooltip, default ''
+     *
+     * Widget API (implement one of these patterns):
+     *   collect()            - Return {metricKey: value, ...}; framework auto-updates display
+     *   refresh() + _apply() - Legacy: fetch data, then manually update text/menu/chart/tooltip
      *
      * Constructor receives a config object with per-instance settings:
      *   { uuid, type, device, display, style, graph-width, refresh-time,
@@ -565,8 +577,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this.config = config;
         const meta = this.constructor.metadata;
 
-        this.elt = meta?.id || config.type;
-        this.elt_short = meta?.label || '';
+        this.elt = meta?.id || meta?.name?.toLowerCase() || config.type;
         this.item_name = meta ? _(meta.name) : _('');
         this.color_name = meta ? meta.metrics.filter(m => m.color).map(m => m.key) : [];
         this.device_id = config.device;
@@ -604,7 +615,8 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
 
         this.restart_update_timer(l_limit(this.config['refresh-time']));
 
-        this.label = new St.Label({text: _(this.elt_short || this.elt),
+        const panelLabel = meta?.label || meta?.name?.toLowerCase()?.slice(0, 4) || this.elt;
+        this.label = new St.Label({text: _(panelLabel),
             style_class: Style.get('sm-status-label')});
         this.label.visible = this.config['show-text'];
 
@@ -636,11 +648,6 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         for (let item in this.text_items) {
             this.text_box.add_child(this.text_items[item]);
         }
-
-        if (this.elt === 'thermal') {
-            this.reset_style();
-        }
-
         this.actor.add_child(this.chart.actor);
         change_style.call(this);
 
@@ -651,9 +658,13 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
             this.restart_cooldown_timer();
         });
 
-        if (meta?.tooltipUnit !== undefined) {
-            this.tip_format(meta.tooltipUnit);
-        }
+        this.tip_format(meta?.tooltipUnit ?? '');
+
+        this._initialUpdateId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            this._initialUpdateId = null;
+            this.update();
+            return GLib.SOURCE_REMOVE;
+        });
     }
     onSettingsChanged(newConfig) {
         const oldConfig = this.config;
@@ -689,10 +700,6 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         if (oldConfig['show-menu'] !== newConfig['show-menu']) {
             this.menu_visible = newConfig['show-menu'];
             build_menu_info(this.extension);
-        }
-
-        if (this.elt === 'thermal') {
-            this.reset_style();
         }
 
         this.update();
@@ -796,10 +803,14 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         if (!this.menu_visible && !this.actor.visible) {
             return false;
         }
-        this.refresh();
-        this._apply();
-        if (this.elt === 'thermal') {
-            this.threshold();
+        if (this.collect) {
+            let data = this.collect();
+            if (data) {
+                this._autoApply(data);
+            }
+        } else {
+            this.refresh();
+            this._apply();
         }
         this.chart.update();
         for (let i = 0; i < this.tip_vals.length; i++) {
@@ -809,16 +820,20 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         }
         return GLib.SOURCE_CONTINUE;
     }
-    reset_style() {
-        this.text_items[0].set_style('color: rgba(255, 255, 255, 1)');
-    }
-    threshold() {
-        if (this.config.threshold) {
-            if (this.temp_over_threshold) {
-                this.text_items[0].set_style('color: rgba(255, 0, 0, 1)');
-            } else {
-                this.text_items[0].set_style('color: rgba(255, 255, 255, 1)');
+    _autoApply(data) {
+        const metrics = this.color_name;
+        for (let i = 0; i < metrics.length; i++) {
+            let val = data[metrics[i]];
+            if (val !== undefined) {
+                this.vals[i] = typeof val === 'number' ? val : parseFloat(val) || 0;
+                this.tip_vals[i] = val;
             }
+        }
+        let primaryKey = metrics[0];
+        if (primaryKey !== undefined && data[primaryKey] !== undefined) {
+            let display = data[primaryKey].toString();
+            if (this.text_items[0]) this.text_items[0].text = display;
+            if (this.menu_items[0]) this.menu_items[0].text = display;
         }
     }
     resize(width) {
@@ -837,6 +852,10 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
             this._cooldownConnection = null;
         }
         TipBox.prototype.destroy.call(this);
+        if (this._initialUpdateId) {
+            GLib.Source.remove(this._initialUpdateId);
+            this._initialUpdateId = null;
+        }
         if (this.timeout) {
             GLib.Source.remove(this.timeout);
             this.timeout = null;

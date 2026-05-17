@@ -7,7 +7,6 @@ import { ElementBase } from '../base.js';
 
 const Gpu = class SystemMonitor_Gpu extends ElementBase {
     static metadata = {
-        id: 'gpu',
         name: 'GPU',
         metrics: [
             { key: 'used', color: true },
@@ -29,7 +28,6 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
             this.label.text = _('GPU') + this.gpu_index;
         }
 
-        this.update();
     }
     _unit(total) {
         this.total = total;

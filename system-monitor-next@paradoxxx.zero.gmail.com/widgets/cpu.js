@@ -6,7 +6,6 @@ import { ElementBase } from '../base.js';
 
 const Cpu = class SystemMonitor_Cpu extends ElementBase {
     static metadata = {
-        id: 'cpu',
         name: 'CPU',
         metrics: [
             { key: 'user', color: true },
@@ -50,7 +49,6 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
             this.item_name = _('CPU');
         }
 
-        this.update();
     }
     refresh() {
         GTop.glibtop_get_cpu(this.gtop);

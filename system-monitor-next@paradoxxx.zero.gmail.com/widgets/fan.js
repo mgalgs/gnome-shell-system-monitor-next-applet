@@ -7,7 +7,6 @@ import { ElementBase, try_read_int_file } from '../base.js';
 
 const Fan = class SystemMonitor_Fan extends ElementBase {
     static metadata = {
-        id: 'fan',
         name: 'Fan',
         metrics: [{ key: 'fan0', color: true }],
         panelUnit: 'rpm',
@@ -31,7 +30,6 @@ const Fan = class SystemMonitor_Fan extends ElementBase {
             this.label.text = shortLabel;
         }
 
-        this.update();
     }
     refresh() {
         if (this.sensors === undefined || Object.keys(this.sensors).length === 0) {

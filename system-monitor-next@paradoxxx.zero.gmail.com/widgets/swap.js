@@ -7,7 +7,6 @@ import { ElementBase } from '../base.js';
 
 const Swap = class SystemMonitor_Swap extends ElementBase {
     static metadata = {
-        id: 'swap',
         name: 'Swap',
         metrics: [{ key: 'used', color: true }],
         tooltipUnit: '%',
@@ -29,7 +28,6 @@ const Swap = class SystemMonitor_Swap extends ElementBase {
             this._unitConversion *= 1024 / this._decimals;
         }
 
-        this.update();
     }
     refresh() {
         GTop.glibtop_get_swap(this.gtop);

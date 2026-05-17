@@ -16,8 +16,6 @@ const DEFAULT_BATTERY_ICON = '. GThemedIcon battery-good-symbolic battery-good';
 
 const Battery = class SystemMonitor_Battery extends ElementBase {
     static metadata = {
-        id: 'battery',
-        label: 'batt',
         name: 'Battery',
         metrics: [{ key: 'batt0', color: true }],
     };
@@ -183,8 +181,6 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
         if (this.config['show-menu']) {
             this.menu_items[1].text = unitString;
         }
-
-        this.update();
     }
     _apply() {
         let displayString;

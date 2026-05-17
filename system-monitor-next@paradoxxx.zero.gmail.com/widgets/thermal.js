@@ -9,7 +9,6 @@ import { ElementBase, try_read_int_file } from '../base.js';
 
 const Thermal = class SystemMonitor_Thermal extends ElementBase {
     static metadata = {
-        id: 'thermal',
         label: 'thrm',
         name: 'Thermal',
         metrics: [{ key: 'tz0', color: true }],
@@ -35,7 +34,24 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
         }
 
         this.tip_format(this.temperature_symbol());
-        this.update();
+        this.reset_style();
+    }
+    reset_style() {
+        this.text_items[0].set_style('color: rgba(255, 255, 255, 1)');
+    }
+    threshold() {
+        if (this.config.threshold) {
+            if (this.temp_over_threshold) {
+                this.text_items[0].set_style('color: rgba(255, 0, 0, 1)');
+            } else {
+                this.text_items[0].set_style('color: rgba(255, 255, 255, 1)');
+            }
+        }
+    }
+    update() {
+        let result = ElementBase.prototype.update.call(this);
+        this.threshold();
+        return result;
     }
     refresh() {
         if (this.sensors === undefined || Object.keys(this.sensors).length === 0) {
