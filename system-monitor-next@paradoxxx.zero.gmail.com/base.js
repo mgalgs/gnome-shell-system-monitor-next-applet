@@ -813,11 +813,17 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
                 this._autoApply(data);
             this._postApply();
         } else if (this.collectAsync) {
-            this.collectAsync(data => {
-                if (data)
-                    this._autoApply(data);
-                this._postApply();
-            });
+            if (!this._asyncPending) {
+                this._asyncPending = true;
+                this.collectAsync(data => {
+                    this._asyncPending = false;
+                    if (this._destroyed)
+                        return;
+                    if (data)
+                        this._autoApply(data);
+                    this._postApply();
+                });
+            }
         } else {
             this.refresh();
             this._apply();
@@ -861,6 +867,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this.chart.resize(width);
     }
     destroy() {
+        this._destroyed = true;
         if (this._rotateLabelsConnection) {
             this.extension._Schema.disconnect(this._rotateLabelsConnection);
             this._rotateLabelsConnection = null;
