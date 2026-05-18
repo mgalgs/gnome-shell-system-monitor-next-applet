@@ -364,6 +364,13 @@ export default class SystemMonitorExtension extends Extension {
             Main.panel._addToPanelBox('dateMenu', dateMenu, Main.sessionMode.panel.center.indexOf('dateMenu'), Main.panel._centerBox);
         }
 
+        for (let elt of this.__sm.widgetMap.values()) {
+            elt.destroy();
+        }
+        this.__sm.icon.destroy();
+        this.__sm.tray.destroy();
+        this.__sm = null;
+
         if (this._MountsMonitor) {
             this._MountsMonitor.disconnect();
             this._MountsMonitor = null;
@@ -372,12 +379,6 @@ export default class SystemMonitorExtension extends Extension {
         if (this._Style) {
             this._Style = null;
         }
-
-        for (let elt of this.__sm.widgetMap.values()) {
-            elt.destroy();
-        }
-        this.__sm.tray.destroy();
-        this.__sm = null;
 
         sm_log('applet disable');
     }

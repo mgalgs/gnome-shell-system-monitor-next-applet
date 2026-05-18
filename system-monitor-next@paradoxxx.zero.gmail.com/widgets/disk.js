@@ -26,7 +26,8 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
     constructor(extension, config) {
         super(extension, config);
         this.mounts = extension._MountsMonitor.get_mounts();
-        extension._MountsMonitor.add_listener(this.update_mounts.bind(this));
+        this._mountListener = this.update_mounts.bind(this);
+        extension._MountsMonitor.add_listener(this._mountListener);
         this._last = [0, 0];
         this._lastTime = 0;
 
@@ -38,6 +39,11 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
 
     update_mounts(mounts) {
         this.mounts = mounts;
+    }
+
+    destroy() {
+        this.extension._MountsMonitor.remove_listener(this._mountListener);
+        super.destroy();
     }
 
     collectAsync(callback) {

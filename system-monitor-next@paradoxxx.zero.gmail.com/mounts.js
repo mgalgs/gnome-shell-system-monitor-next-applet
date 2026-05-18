@@ -98,7 +98,9 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
         this.listeners.push(cb);
     }
     remove_listener(cb) {
-        this.listeners.pop(cb);
+        let idx = this.listeners.indexOf(cb);
+        if (idx !== -1)
+            this.listeners.splice(idx, 1);
     }
     get_mounts() {
         return this.mounts;

@@ -1,6 +1,6 @@
 /* -*- mode: js2; js2-basic-offset: 4; indent-tabs-mode: nil -*- */
 
-import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
+import { gettext as _, pgettext as C_ } from "resource:///org/gnome/shell/extensions/extension.js";
 import GLib from "gi://GLib";
 import Gio from "gi://Gio";
 import UPowerGlib from "gi://UPowerGlib";
@@ -165,13 +165,15 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
     }
 
     destroy() {
-        ElementBase.prototype.destroy.call(this);
-        if (this._proxy)
+        if (this._proxy) {
             this._proxy.disconnect(this.powerSigID);
+            this._proxy = null;
+        }
         if (this._poll_handler_id) {
             GLib.source_remove(this._poll_handler_id);
             this._poll_handler_id = undefined;
         }
+        ElementBase.prototype.destroy.call(this);
     }
 }
 
