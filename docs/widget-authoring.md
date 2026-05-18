@@ -41,12 +41,27 @@ static metadata = {
     name: 'Load',                              // Display name and menu label
     metrics: [{ key: 'load1', color: true }],  // Chart series
 
-    // Optional — all have sensible defaults
+    // Optional identity
     id: 'loadavg',      // Type identifier. Default: name.toLowerCase()
     label: 'load',      // Panel label text. Default: name.toLowerCase().slice(0, 4)
+
+    // Optional units
     panelUnit: '%',      // Unit shown next to value in panel. Default: '%'
     menuUnit: '%',       // Unit shown in popup menu. Default: panelUnit
     tooltipUnit: 'rpm',  // Unit shown in tooltip. Default: '' (no unit)
+
+    // Optional layout declarations
+    panelLayout: 'simple',    // 'simple' (default), 'dual', or 'icon'
+    menuLayout: 'simple',     // 'simple' (default), 'detail', or 'dual'
+    dualLabels: ['R', 'W'],   // Text labels for dual panel directions
+    dualIcons: ['go-down-symbolic', 'go-up-symbolic'], // Icon names for dual panel (overrides dualLabels)
+    menuDualLabels: ['R', 'W'], // Labels for dual menu (defaults to dualLabels)
+    panelIcon: 'battery-good-symbolic', // Icon string for 'icon' panel layout
+    detailUnit: 'GiB',  // Initial detail unit for 'detail' menu layout
+
+    // Optional style overrides
+    panelValueStyle: 'sm-status-value', // Panel value CSS class. Default: 'sm-status-value'
+    panelUnitStyle: 'sm-perc-label',    // Panel unit CSS class. Default: derived from unit
 };
 ```
 
@@ -80,14 +95,33 @@ collect() {
 }
 ```
 
-The first metric's value becomes the panel/menu display text. To override the display text, include a `display` key:
+The first metric's value becomes the panel/menu display text. To override the display text or drive layout-specific slots, include well-known keys:
 
 ```javascript
 collect() {
     let ratio = this.used / this.total;
-    return { used: ratio, display: Math.round(ratio * 100).toString() };
+    return {
+        used: ratio,                    // metric value for chart
+        display: Math.round(ratio * 100).toString(), // panel + menu text
+    };
 }
 ```
+
+### collect() Return Keys
+
+| Key           | Description                                               |
+|---------------|-----------------------------------------------------------|
+| `<metricKey>` | Raw values for chart and default tooltip                  |
+| `display`     | Primary display text (default: first metric stringified)  |
+| `display2`    | Second value for dual layouts                             |
+| `menuDisplay` | Menu-specific display (overrides `display` for menu only) |
+| `detail`      | Detail text for `'detail'` menu layout                    |
+| `detailUnit`  | Dynamic detail unit text                                  |
+| `unit`        | Dynamic unit text (updates panel + menu unit labels)      |
+| `unit2`       | Dynamic second unit for dual layouts                      |
+| `icon`        | `Gio.Icon` for `'icon'` panel layout                      |
+| `tipVals`     | Array overriding auto-mapped tooltip values               |
+| `tipUnits`    | Array overriding tooltip unit labels                      |
 
 ### collectAsync(callback) — async data
 
@@ -104,43 +138,6 @@ collectAsync(callback) {
 ```
 
 Call `callback(data)` when the data is ready, or `callback(null)` if the read failed. The framework handles chart/tooltip updates after the callback fires.
-
-### format(data) — custom post-processing
-
-For widgets using `collect()`/`collectAsync()` that need additional display formatting beyond the primary text (e.g. updating extra menu items), implement `format()`:
-
-```javascript
-format(data) {
-    // data is the same object returned by collect()
-    this.menu_items[3].text = this._pad(data._swap) + ' / ' + this._pad(data._total);
-}
-```
-
-`format()` is called after the framework applies metric values to text/menu/chart/tooltip. Use it for custom menu layouts, dynamic units, or derived displays.
-
-### refresh() + \_apply() — full control
-
-For widgets with highly custom display formatting (multiple text items, dynamic units, computed values), implement both methods:
-
-```javascript
-refresh() {
-    // Fetch raw data, store on this
-    GTop.glibtop_get_mem(this.gtop);
-    this.mem = Math.round(this.gtop.user / 1024 / 1024);
-    this.total = Math.round(this.gtop.total / 1024 / 1024);
-}
-
-_apply() {
-    // Format data into display elements
-    let percent = Math.round(this.mem / this.total * 100);
-    this.text_items[0].text = percent.toString();  // panel value
-    this.menu_items[0].text = percent.toString();  // menu value
-    this.vals = [this.mem / this.total];           // chart (0-1 range)
-    this.tip_vals[0] = percent;                    // tooltip
-}
-```
-
-`refresh()` runs first to collect data, then `_apply()` formats it for display. The framework calls `chart.update()` and updates tooltip labels after `_apply()` returns.
 
 **Do not implement both `collect()` and `refresh()`** — the framework checks for `collect` first and ignores `refresh`/`_apply` if it exists.
 
@@ -206,26 +203,66 @@ Common device_id patterns:
 
 Users add multi-device instances through the preferences "Add Monitor" dialog.
 
-## Custom Text/Menu Layout
+## Declarative Layouts
 
-The default `create_text_items()` returns `[value_label, unit_label]` and `create_menu_items()` returns `[value_label, unit_label]`. Override these for custom layouts:
+The framework builds panel and menu UI from metadata declarations. Widget authors declare layout intent; the framework builds the labels and populates them from `collect()` return keys.
 
+### Panel Layouts
+
+**`simple`** (default) — `[value] [unit]`
 ```javascript
-// Disk widget: read/write with separate values and units
-create_text_items() {
-    const Style = this.extension._Style;
-    return [
-        new St.Label({text: 'R', style_class: Style.get('sm-status-label')}),
-        new St.Label({text: '', style_class: Style.get('sm-disk-value')}),
-        new St.Label({text: 'MiB/s', style_class: Style.get('sm-disk-unit-label')}),
-        new St.Label({text: 'W', style_class: Style.get('sm-status-label')}),
-        new St.Label({text: '', style_class: Style.get('sm-disk-value')}),
-        new St.Label({text: 'MiB/s', style_class: Style.get('sm-disk-unit-label')}),
-    ];
-}
+static metadata = { panelUnit: '%', ... };
+collect() { return { value: 42, display: '42' }; }
 ```
 
-When overriding text/menu items, you must also use `refresh()` + `_apply()` (not `collect()`) since the auto-apply logic only handles the default layout.
+**`dual`** — `[dir₁] [value₁] [unit] [dir₂] [value₂] [unit]`
+```javascript
+static metadata = {
+    panelLayout: 'dual',
+    dualLabels: ['R', 'W'],   // or dualIcons for icon indicators
+    panelUnit: 'MiB/s',
+    ...
+};
+collect() { return { read: 1.5, write: 0.8, display: '1.5', display2: '0.8' }; }
+```
+
+**`icon`** — `[icon] [value] [unit]`
+```javascript
+static metadata = {
+    panelLayout: 'icon',
+    panelIcon: '. GThemedIcon battery-good-symbolic',
+    ...
+};
+collect() { return { batt0: 85, display: '85', icon: someGioIcon }; }
+```
+
+### Menu Layouts
+
+**`simple`** (default) — `[value] [unit]`
+
+**`detail`** — `[value] [unit] [gap] [detail] [detailUnit]`
+```javascript
+static metadata = { menuLayout: 'detail', ... };
+collect() { return { used: 0.6, display: '60', detail: '9.6 / 16.0', detailUnit: 'GiB' }; }
+```
+
+**`dual`** — `[value₁] [unit] [dir₁] [value₂] [unit] [dir₂]`
+```javascript
+static metadata = {
+    menuLayout: 'dual',
+    menuDualLabels: ['R', 'W'],  // defaults to dualLabels
+    ...
+};
+```
+
+### Dynamic Units
+
+For widgets whose units change at runtime (Network's KiB/s → MiB/s), return `unit`/`unit2` from collect():
+```javascript
+collect() {
+    return { ..., unit: currentUnit, unit2: currentUnit2 };
+}
+```
 
 ## Wiring a New Widget
 
@@ -249,8 +286,12 @@ After writing the widget class, register it with the extension:
 
 **Async data** — `collectAsync(callback)`: Fan widget reads hwmon sysfs files asynchronously, calls `callback({fan0: rpm})` when data arrives
 
-**Custom menu** — `collect()` + `format()`: Swap widget uses collect() for data, format() to populate its custom `used / total` menu display
+**Detail menu** — Memory widget: `menuLayout: 'detail'`, collect() returns `{display, detail, detailUnit}` for `60%  9.6 / 16.0 GiB`
 
-**Complex** — `refresh()` + `_apply()` with custom everything: Network — custom text items (up/down arrows + values + dynamic units), dynamic unit switching (bits vs bytes), interface detection
+**Dual layout** — Disk widget: `panelLayout: 'dual'`, `menuLayout: 'dual'`, collect() returns `{display, display2, unit, unit2}` for R/W values
+
+**Dynamic units** — Network widget: dual layout with `dualIcons` for panel arrows, collect() returns changing `unit`/`unit2` (KiB/s → MiB/s → GiB/s)
+
+**Icon layout** — Battery widget: `panelLayout: 'icon'`, collect() returns `{icon, unit}` to update the battery icon and toggle between % and hours
 
 **Event-driven** — Battery — doesn't use the refresh timer at all; updates via UPower D-Bus proxy callbacks
