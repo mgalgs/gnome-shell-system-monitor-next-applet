@@ -331,6 +331,16 @@ const SMMonitorRow = GObject.registerClass({
         });
         this.add_prefix(dragHandle);
 
+        let displaySwitch = new Gtk.Switch({
+            active: config.display,
+            valign: Gtk.Align.CENTER,
+        });
+        displaySwitch.connect('notify::active', w => {
+            config.display = w.active;
+            this._emitChanged();
+        });
+        this.add_suffix(displaySwitch);
+
         let deleteBtn = new Gtk.Button({
             icon_name: 'user-trash-symbolic',
             valign: Gtk.Align.CENTER,
@@ -401,10 +411,6 @@ const SMMonitorRow = GObject.registerClass({
 
     _buildSettings() {
         let c = this._config;
-
-        let display = new Adw.SwitchRow({title: _('Display'), active: c.display});
-        display.connect('notify::active', w => { c.display = w.active; this._emitChanged(); });
-        this.add_row(display);
 
         let showMenu = new Adw.SwitchRow({title: _('Show in Menu'), active: c['show-menu']});
         showMenu.connect('notify::active', w => { c['show-menu'] = w.active; this._emitChanged(); });
