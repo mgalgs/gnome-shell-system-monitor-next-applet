@@ -45,6 +45,13 @@ import { Net } from './widgets/network.js';
 import { Swap } from './widgets/swap.js';
 import { Thermal } from './widgets/thermal.js';
 
+let Prometheus = null;
+try {
+    ({ Prometheus } = await import('./widgets/prometheus.js'));
+} catch (e) {
+    sm_log('Prometheus widget unavailable: ' + e.message, 'warn');
+}
+
 const PANEL_ICON_SIZE = 16;
 
 const WIDGET_CLASSES = {
@@ -59,6 +66,8 @@ const WIDGET_CLASSES = {
     battery: Battery,
     freq: Freq,
 };
+if (Prometheus)
+    WIDGET_CLASSES.prometheus = Prometheus;
 
 function parseMonitorConfigs(strv) {
     let configs = [];

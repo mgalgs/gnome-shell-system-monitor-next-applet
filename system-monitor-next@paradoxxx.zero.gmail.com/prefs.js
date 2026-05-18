@@ -124,7 +124,7 @@ const SMGeneralPrefsPage = GObject.registerClass({
 
 // ** Monitor Configuration Constants **
 
-const MONITOR_TYPES = ['cpu', 'memory', 'swap', 'net', 'disk', 'gpu', 'thermal', 'fan', 'battery', 'freq'];
+const MONITOR_TYPES = ['cpu', 'memory', 'swap', 'net', 'disk', 'gpu', 'thermal', 'fan', 'battery', 'freq', 'prometheus'];
 
 const COLOR_MAP = {
     cpu: ['user', 'system', 'nice', 'iowait', 'other'],
@@ -137,6 +137,7 @@ const COLOR_MAP = {
     fan: ['fan0'],
     battery: ['batt0'],
     freq: ['freq'],
+    prometheus: ['value'],
 };
 
 const DEFAULT_COLORS = {
@@ -150,6 +151,7 @@ const DEFAULT_COLORS = {
     fan: {fan0: '#f2002e'},
     battery: {batt0: '#f2002e'},
     freq: {freq: '#001d26'},
+    prometheus: {value: '#00b3a4'},
 };
 
 const STYLE_OPTIONS = ['digit', 'graph', 'both'];
@@ -264,6 +266,8 @@ function detectDevices(type) {
         return Object.keys(check_sensors('temp'));
     case 'fan':
         return Object.keys(check_sensors('fan'));
+    case 'prometheus':
+        return ['default'];
     default:
         return ['all'];
     }
@@ -294,6 +298,10 @@ function buildDefaultConfig(type, device) {
     }
     if (type === 'freq')
         config['display-mode'] = 'max';
+    if (type === 'prometheus') {
+        config.server = 'http://localhost:9100';
+        config.metric = 'node_load1';
+    }
     return config;
 }
 
@@ -550,6 +558,28 @@ const SMMonitorRow = GObject.registerClass({
             this.add_row(modeRow);
             break;
         }
+        case 'prometheus': {
+            let serverRow = new Adw.EntryRow({
+                title: _('Exporter URL'),
+                text: c.server || 'http://localhost:9100',
+            });
+            serverRow.connect('changed', w => {
+                c.server = w.text;
+                this._emitChanged();
+            });
+            this.add_row(serverRow);
+
+            let metricRow = new Adw.EntryRow({
+                title: _('Metric (e.g. node_load1 or metric{label="val"})'),
+                text: c.metric || 'node_load1',
+            });
+            metricRow.connect('changed', w => {
+                c.metric = w.text;
+                this._emitChanged();
+            });
+            this.add_row(metricRow);
+            break;
+        }
         }
     }
 });
@@ -678,17 +708,28 @@ const SMMonitorsPage = GObject.registerClass({
         let deviceRow = new Adw.ComboRow({title: _('Device'), model: deviceModel});
         group.add(deviceRow);
 
+        let serverRow = new Adw.EntryRow({title: _('Exporter URL'), text: 'http://localhost:9100'});
+        group.add(serverRow);
+        let metricRow = new Adw.EntryRow({title: _('Metric (e.g. node_load1 or metric{label="val"})'), text: 'node_load1'});
+        group.add(metricRow);
+
         let currentDevices = [];
-        const updateDevices = () => {
+        const updateTypeUI = () => {
             let type = MONITOR_TYPES[typeRow.selected];
-            currentDevices = detectDevices(type);
-            let model = new Gtk.StringList();
-            currentDevices.forEach(d => model.append(d));
-            deviceRow.model = model;
-            deviceRow.selected = 0;
+            let isPrometheus = type === 'prometheus';
+            deviceRow.visible = !isPrometheus;
+            serverRow.visible = isPrometheus;
+            metricRow.visible = isPrometheus;
+            if (!isPrometheus) {
+                currentDevices = detectDevices(type);
+                let model = new Gtk.StringList();
+                currentDevices.forEach(d => model.append(d));
+                deviceRow.model = model;
+                deviceRow.selected = 0;
+            }
         };
-        typeRow.connect('notify::selected', updateDevices);
-        updateDevices();
+        typeRow.connect('notify::selected', updateTypeUI);
+        updateTypeUI();
 
         let btnBox = new Gtk.Box({
             orientation: Gtk.Orientation.HORIZONTAL,
@@ -710,6 +751,10 @@ const SMMonitorsPage = GObject.registerClass({
             let type = MONITOR_TYPES[typeRow.selected];
             let device = currentDevices[deviceRow.selected] || 'all';
             let config = buildDefaultConfig(type, device);
+            if (type === 'prometheus') {
+                config.server = serverRow.text || 'http://localhost:9100';
+                config.metric = metricRow.text || 'node_load1';
+            }
             this._monitors.push(config);
             this._addRow(config);
             this._saveMonitors();
