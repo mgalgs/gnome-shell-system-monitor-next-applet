@@ -1,0 +1,79 @@
+{
+    "description": "All widget types visible with graphs and text",
+    "monitors": [
+        {
+            "uuid": "cfg-cpu-all",
+            "type": "cpu",
+            "device": "all",
+            "display": true,
+            "style": "both",
+            "graph-width": 100,
+            "refresh-time": 1500,
+            "show-text": true,
+            "show-menu": true,
+            "colors": {"user": "#0072b3", "system": "#0092e6", "nice": "#00a3ff", "iowait": "#002f3d", "other": "#001d26"}
+        },
+        {
+            "uuid": "cfg-mem-def",
+            "type": "memory",
+            "device": "default",
+            "display": true,
+            "style": "both",
+            "graph-width": 100,
+            "refresh-time": 3000,
+            "show-text": true,
+            "show-menu": true,
+            "colors": {"program": "#00b35b", "buffer": "#00ff82", "cache": "#aaf5d0"}
+        },
+        {
+            "uuid": "cfg-swap-def",
+            "type": "swap",
+            "device": "default",
+            "display": true,
+            "style": "both",
+            "graph-width": 80,
+            "refresh-time": 5000,
+            "show-text": true,
+            "show-menu": true,
+            "colors": {"used": "#8b00c3"}
+        },
+        {
+            "uuid": "cfg-net-all",
+            "type": "net",
+            "device": "all",
+            "display": true,
+            "style": "both",
+            "graph-width": 100,
+            "refresh-time": 1000,
+            "show-text": true,
+            "show-menu": true,
+            "colors": {"down": "#fce94f", "downerrors": "#ff6e00", "up": "#fb74fb", "uperrors": "#e0006e", "collisions": "#ff0000"},
+            "speed-in-bits": false
+        },
+        {
+            "uuid": "cfg-disk-all",
+            "type": "disk",
+            "device": "all",
+            "display": true,
+            "style": "both",
+            "graph-width": 100,
+            "refresh-time": 2000,
+            "show-text": true,
+            "show-menu": true,
+            "colors": {"read": "#c65000", "write": "#ff6700"}
+        },
+        {
+            "uuid": "cfg-freq-all",
+            "type": "freq",
+            "device": "all",
+            "display": true,
+            "style": "both",
+            "graph-width": 80,
+            "refresh-time": 1500,
+            "show-text": true,
+            "show-menu": true,
+            "colors": {"freq": "#001d26"},
+            "display-mode": "max"
+        }
+    ]
+}
