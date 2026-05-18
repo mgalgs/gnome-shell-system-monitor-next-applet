@@ -91,21 +91,55 @@ Automated testing in an isolated VM with a real GNOME Shell session. Requires `l
 
 ```bash
 # First time: create a test VM from a Fedora cloud image (~10-15 min)
-make vm-create
-# Or: ./testing/vm/vm-create.sh --vm gssmn-fedora42
+make vm-create VM=gssmn-fedora42
 
+# List VMs and their status (running/shut off)
+make vm-list
+
+# Start/stop VMs (created once, reused across sessions)
+make vm-start VM=gssmn-fedora42
+make vm-stop VM=gssmn-fedora42
+```
+
+#### Testing workflow
+
+```bash
 # Run a full test cycle (deploy, screenshot, logs, health check)
-make vm-test
-# Or: ./testing/vm/vm-test.sh --vm gssmn-fedora42 --label my-change
+make vm-test VM=gssmn-fedora42
 
 # Fast iteration (skip snapshot restore, reuse current VM state)
-./testing/vm/vm-test.sh --no-restore --label quick-fix
+./testing/vm/vm-test.sh --vm gssmn-fedora42 --no-restore --label quick-fix
 
 # Just take a screenshot of the current VM state
-./testing/vm/vm-test.sh --screenshot-only --label check-ui
+./testing/vm/vm-test.sh --vm gssmn-fedora42 --screenshot-only --label check-ui
+```
 
+#### Pushing configs and visual testing
+
+```bash
+# Push a preset monitor config and screenshot
+./testing/vm/vm-config.sh --vm gssmn-fedora42 --preset all-visible --screenshot
+
+# List available presets
+./testing/vm/vm-config.sh --list-presets
+
+# Push a custom JSON config file
+./testing/vm/vm-config.sh --vm gssmn-fedora42 my-config.json --screenshot
+
+# Open interactive graphical session (virt-viewer)
+make vm-viewer VM=gssmn-fedora42
+
+# SSH into the VM
+make vm-ssh VM=gssmn-fedora42
+```
+
+Config presets live in `testing/vm/configs/*.json`. Each is a JSON file with a `monitors` array and optional `settings` for globals.
+
+#### Cleanup
+
+```bash
 # Tear down test VMs (preserves cached cloud images)
-make vm-destroy
+make vm-destroy VM=gssmn-fedora42
 ```
 
 **Output:** Screenshots (PNG) and logs are saved to `testing/vm/results/`. The test script prints absolute file paths for easy inspection.

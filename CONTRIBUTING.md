@@ -62,10 +62,17 @@ npm run lint              # Run ESLint
 Every user-facing change must be VM tested before merging:
 
 ```bash
-./testing/vm/vm-test.sh --vm gssmn-fedora42 --label my-change
+# First time: create a VM (one-time, ~10 min)
+make vm-create VM=gssmn-fedora42
+
+# Test your changes
+make vm-test VM=gssmn-fedora42
+
+# Push different configs for visual testing
+./testing/vm/vm-config.sh --vm gssmn-fedora42 --preset all-visible --screenshot
 ```
 
-This deploys the extension to an isolated VM, enables it, and checks for crashes, JS errors, and visual regressions. See `testing/vm/README.md` for setup.
+This deploys the extension to an isolated VM, enables it, and checks for crashes, JS errors, and visual regressions. VMs persist across sessions (`make vm-start`/`vm-stop`). See `testing/vm/README.md` for full setup and options.
 
 ### Code Style
 

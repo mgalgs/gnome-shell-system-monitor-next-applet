@@ -179,21 +179,27 @@ For automated testing across multiple GNOME Shell versions, the project includes
 **Prerequisites:** `libvirt`, `qemu`, `virt-install`, `passt`, `genisoimage`, `imagemagick`
 
 ```bash
-make vm-create                    # Create test VM (~10 min first time, cached after)
-make vm-test                      # Deploy + smoke test on default VM
-make vm-viewer                    # Open interactive graphical session
-make vm-ssh                       # SSH into the VM
-make vm-destroy                   # Tear down
-
-# Target a specific GNOME version:
+# One-time setup (~10 min, cached after)
 make vm-create VM=gssmn-fedora42
-make vm-test VM=gssmn-fedora42
-make vm-viewer VM=gssmn-fedora42
 
-# Full matrix test with before/after comparison:
+# Day-to-day workflow
+make vm-list                      # Show VMs and their status
+make vm-start VM=gssmn-fedora42   # Boot a VM
+make vm-test VM=gssmn-fedora42    # Deploy + smoke test
+make vm-viewer VM=gssmn-fedora42  # Open interactive graphical session
+make vm-ssh VM=gssmn-fedora42     # SSH into the VM
+make vm-stop VM=gssmn-fedora42    # Shut down when done
+
+# Push monitor configs for visual testing
+./testing/vm/vm-config.sh --vm gssmn-fedora42 --preset all-visible --screenshot
+./testing/vm/vm-config.sh --list-presets
+
+# Full matrix test with before/after comparison
 make vm-test-all LABEL=master-baseline
 make vm-test-all LABEL=my-feature BASELINE=master-baseline
 ```
+
+VMs are created once and reused across sessions — just start/stop as needed.
 
 See [`testing/vm/README.md`](testing/vm/README.md) for detailed usage, architecture, and available options.
 

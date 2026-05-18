@@ -74,6 +74,8 @@ help:
 	@echo  '  vm-test-all     - run tests across full GNOME version matrix'
 	@echo  '  vm-viewer       - open interactive graphical session'
 	@echo  '  vm-ssh          - open SSH session to VM'
+	@echo  '  vm-start        - start a VM'
+	@echo  '  vm-stop         - gracefully shut down a VM'
 	@echo  '  vm-list         - list configured VMs and their status'
 	@echo  '  vm-destroy      - tear down test VM(s)'
 	@echo  ''
@@ -194,6 +196,18 @@ vm-test-all:
 	$(Q)./testing/vm/vm-test-matrix.sh $(if $(LABEL),--label $(LABEL),) $(if $(BASELINE),--baseline $(BASELINE),)
 	$(call msg,$@,OK)
 
+vm-start:
+ifndef VM
+	$(error Usage: make vm-start VM=<name>  (see: make vm-list))
+endif
+	$(Q)virsh -c qemu:///session start $(VM)
+
+vm-stop:
+ifndef VM
+	$(error Usage: make vm-stop VM=<name>  (see: make vm-list))
+endif
+	$(Q)virsh -c qemu:///session shutdown $(VM)
+
 vm-viewer:
 	$(Q)./testing/vm/vm-viewer.sh $(VM_ARGS)
 
@@ -224,6 +238,8 @@ vm-destroy:
 	vm-create-all \
 	vm-test \
 	vm-test-all \
+	vm-start \
+	vm-stop \
 	vm-viewer \
 	vm-ssh \
 	vm-list \

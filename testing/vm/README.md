@@ -29,28 +29,33 @@ sudo dnf install libvirt qemu-kvm virt-install passt genisoimage ImageMagick
 ## Quick Start
 
 ```bash
-# Create a test VM (downloads cloud image, installs GNOME, takes snapshot)
+# One-time: create a test VM (downloads cloud image, installs GNOME, takes snapshot)
 # ~10 minutes first time; cloud image is cached for subsequent creates.
-make vm-create
+make vm-create VM=gssmn-fedora42
 
 # Run a test (restore snapshot, build, deploy, screenshot, logs)
-make vm-test
+make vm-test VM=gssmn-fedora42
 
 # Open interactive graphical session for manual inspection
-make vm-viewer
+make vm-viewer VM=gssmn-fedora42
 
-# Tear down all VMs (cached cloud images are preserved)
-make vm-destroy
+# Shut down when done (VM persists, no need to recreate)
+make vm-stop VM=gssmn-fedora42
+
+# Next session: just start it again
+make vm-start VM=gssmn-fedora42
 ```
 
 ## Make Targets
 
-All VM operations are available as Make targets. Use `VM=` to target a specific VM (defaults to the first entry in `vms.conf`):
+All VM operations are available as Make targets. Use `VM=` to target a specific VM:
 
 ```bash
-make vm-create                    # Create default VM
-make vm-create VM=gssmn-fedora42  # Create specific VM
-make vm-test VM=gssmn-fedora42    # Smoke test on specific VM
+make vm-create VM=gssmn-fedora42  # Create VM (one-time setup)
+make vm-list                      # List VMs and their status
+make vm-start VM=gssmn-fedora42   # Start a stopped VM
+make vm-stop VM=gssmn-fedora42    # Graceful shutdown
+make vm-test VM=gssmn-fedora42    # Deploy + smoke test
 make vm-viewer VM=gssmn-fedora42  # Interactive SPICE graphical session
 make vm-ssh VM=gssmn-fedora42     # SSH into VM
 make vm-destroy VM=gssmn-fedora42 # Tear down specific VM
@@ -155,6 +160,19 @@ Duration: 27s
 
 Generates an HTML comparison report at `testing/vm/results/<label>/report.html` with side-by-side screenshots for each GNOME version.
 
+### `vm-config.sh` -- Push Monitor Configs
+
+```bash
+./testing/vm/vm-config.sh --vm gssmn-fedora42 --preset all-visible --screenshot
+./testing/vm/vm-config.sh --vm gssmn-fedora42 --preset prometheus --screenshot
+./testing/vm/vm-config.sh --vm gssmn-fedora42 my-custom-config.json
+./testing/vm/vm-config.sh --list-presets
+```
+
+Pushes monitor configurations from JSON files to a VM's GSettings, replacing the current monitor setup. Avoids manual GVariant escaping. Use `--screenshot` to snap the result.
+
+**Presets** live in `testing/vm/configs/*.json`. Each is a JSON file with a `monitors` array (and optional `settings` for globals like `compact-display`). To add a new preset, just drop a JSON file in that directory.
+
 ### `vm-viewer.sh` -- Interactive Graphical Access
 
 ```bash
@@ -206,6 +224,11 @@ xdg-open testing/vm/results/pr138/report.html
 
 # Just check the screenshot
 ./testing/vm/vm-test.sh --vm gssmn-fedora42 --screenshot-only --label check
+
+# Try different config combos
+./testing/vm/vm-config.sh --vm gssmn-fedora42 --preset digit-only --screenshot
+./testing/vm/vm-config.sh --vm gssmn-fedora42 --preset compact --screenshot
+./testing/vm/vm-config.sh --vm gssmn-fedora42 --preset all-visible --screenshot
 ```
 
 ### AI Agent (Claude Code) Workflow
@@ -225,8 +248,12 @@ testing/vm/
   vm-create.sh              # Create VMs from cloud images
   vm-test.sh                # Test extension in a single VM
   vm-test-matrix.sh         # Test across all VMs, generate HTML report
+  vm-config.sh              # Push monitor configs to a VM
+  vm-viewer.sh              # Open interactive graphical session
+  vm-ssh.sh                 # SSH into a VM
   vm-destroy.sh             # Tear down VMs
   vms.conf                  # VM definitions (distro, GNOME version, image URL, SSH port)
+  configs/                  # Monitor config presets (JSON)
   cloud-init/
     user-data.yaml          # Cloud-init user config (testuser, SSH key, packages)
     meta-data.yaml          # Cloud-init instance metadata
