@@ -555,21 +555,39 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
      *   }
      *
      * metadata fields:
-     *   name       (required) - Display name, also used to derive panel label
-     *   metrics    (required) - Chart series: [{ key: 'name', color: true }, ...]
-     *   id         (optional) - Type identifier, defaults to name.toLowerCase()
-     *   label      (optional) - Short panel label, defaults to name.toLowerCase().slice(0,4)
-     *   panelUnit  (optional) - Unit in panel text, default '%'
-     *   menuUnit   (optional) - Unit in popup menu, default panelUnit
-     *   tooltipUnit(optional) - Unit in tooltip, default ''
+     *   name           (required) - Display name, also used to derive panel label
+     *   metrics        (required) - Chart series: [{ key: 'name', color: true }, ...]
+     *   id             (optional) - Type identifier, defaults to name.toLowerCase()
+     *   label          (optional) - Short panel label, defaults to name.toLowerCase().slice(0,4)
+     *   panelUnit      (optional) - Unit in panel text, default '%'
+     *   menuUnit       (optional) - Unit in popup menu, default panelUnit
+     *   tooltipUnit    (optional) - Unit in tooltip, default ''
+     *   panelLayout    (optional) - 'simple' (default), 'dual', or 'icon'
+     *   menuLayout     (optional) - 'simple' (default), 'detail', or 'dual'
+     *   dualLabels     (optional) - Text labels for dual panel, e.g. ['R','W']
+     *   dualIcons      (optional) - Icon names for dual panel (overrides dualLabels)
+     *   menuDualLabels (optional) - Labels for dual menu (defaults to dualLabels)
+     *   panelIcon      (optional) - Icon string for 'icon' panel layout
+     *   panelValueStyle(optional) - Panel value CSS class, default 'sm-status-value'
+     *   panelUnitStyle (optional) - Panel unit CSS class, default derived from unit
+     *   detailUnit     (optional) - Initial detail unit for 'detail' menu layout
      *
      * Widget API (implement one of these patterns):
      *   collect()                - Return {metricKey: value}; framework auto-updates display
      *   collectAsync(callback)   - Same but async; call callback({metricKey: value}) when ready
-     *   refresh() + _apply()     - Full control: fetch data, then manually update display
      *
-     * Optional hooks:
-     *   format(data)             - Post-process after _autoApply (custom menu items, etc.)
+     * collect()/collectAsync() return keys:
+     *   <metricKey>    - Raw values for chart and default tooltip
+     *   display        - Primary display text (default: first metric stringified)
+     *   display2       - Second value for dual layouts
+     *   menuDisplay    - Menu-specific display (overrides display for menu)
+     *   detail         - Detail text for 'detail' menu layout
+     *   detailUnit     - Dynamic detail unit text
+     *   unit           - Dynamic unit text (updates panel + menu)
+     *   unit2          - Dynamic second unit for dual layouts
+     *   icon           - Gio.Icon for 'icon' panel layout
+     *   tipVals        - Array overriding auto-mapped tooltip values
+     *   tipUnits       - Array overriding tooltip unit labels
      *
      * Constructor receives a config object with per-instance settings:
      *   { uuid, type, device, display, style, graph-width, refresh-time,
@@ -710,13 +728,60 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
     }
     create_text_items() {
         const Style = this.extension._Style;
+        const IconSize = this.extension._IconSize;
         const meta = this.constructor.metadata;
+        const panelLayout = meta?.panelLayout ?? 'simple';
         const unit = meta?.panelUnit ?? '%';
-        const unitStyle = unit === '%' ? 'sm-perc-label' : 'sm-unit-label';
+        const valueStyle = meta?.panelValueStyle ?? 'sm-status-value';
+        const unitStyle = meta?.panelUnitStyle ?? (unit === '%' ? 'sm-perc-label' : 'sm-unit-label');
+
+        if (panelLayout === 'dual') {
+            const labels = meta?.dualLabels ?? ['1', '2'];
+            const icons = meta?.dualIcons;
+            const items = [];
+            for (let i = 0; i < 2; i++) {
+                if (icons) {
+                    items.push(new St.Icon({
+                        icon_size: 2 * IconSize / 3 * Style.iconsize(),
+                        icon_name: icons[i]}));
+                } else {
+                    items.push(new St.Label({
+                        text: _(labels[i]),
+                        style_class: Style.get('sm-status-label')}));
+                }
+                items.push(new St.Label({
+                    text: '',
+                    style_class: Style.get(valueStyle),
+                    y_align: Clutter.ActorAlign.CENTER}));
+                items.push(new St.Label({
+                    text: _(unit),
+                    style_class: Style.get(unitStyle),
+                    y_align: Clutter.ActorAlign.CENTER}));
+            }
+            return items;
+        }
+
+        if (panelLayout === 'icon') {
+            const iconName = meta?.panelIcon ?? 'dialog-question-symbolic';
+            return [
+                new St.Icon({
+                    gicon: Gio.icon_new_for_string(iconName),
+                    style_class: Style.get('sm-status-icon')}),
+                new St.Label({
+                    text: '',
+                    style_class: Style.get(valueStyle),
+                    y_align: Clutter.ActorAlign.CENTER}),
+                new St.Label({
+                    text: _(unit),
+                    style_class: Style.get(unitStyle),
+                    y_align: Clutter.ActorAlign.CENTER}),
+            ];
+        }
+
         return [
             new St.Label({
                 text: '',
-                style_class: Style.get('sm-status-value'),
+                style_class: Style.get(valueStyle),
                 y_align: Clutter.ActorAlign.CENTER}),
             new St.Label({
                 text: _(unit),
@@ -727,7 +792,32 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
     create_menu_items() {
         const Style = this.extension._Style;
         const meta = this.constructor.metadata;
+        const menuLayout = meta?.menuLayout ?? 'simple';
         const unit = meta?.menuUnit ?? meta?.panelUnit ?? '%';
+
+        if (menuLayout === 'detail') {
+            const detailUnit = meta?.detailUnit ?? '';
+            return [
+                new St.Label({text: '', style_class: Style.get('sm-value')}),
+                new St.Label({text: _(unit), style_class: Style.get('sm-label')}),
+                new St.Label({text: '', style_class: Style.get('sm-label')}),
+                new St.Label({text: '', style_class: Style.get('sm-value')}),
+                new St.Label({text: _(detailUnit), style_class: Style.get('sm-label')}),
+            ];
+        }
+
+        if (menuLayout === 'dual') {
+            const labels = meta?.menuDualLabels ?? meta?.dualLabels ?? ['1', '2'];
+            return [
+                new St.Label({text: '', style_class: Style.get('sm-value')}),
+                new St.Label({text: _(unit), style_class: Style.get('sm-label')}),
+                new St.Label({text: ' ' + _(labels[0]), style_class: Style.get('sm-label')}),
+                new St.Label({text: '', style_class: Style.get('sm-value')}),
+                new St.Label({text: _(unit), style_class: Style.get('sm-label')}),
+                new St.Label({text: ' ' + _(labels[1]), style_class: Style.get('sm-label')}),
+            ];
+        }
+
         return [
             new St.Label({
                 text: '',
@@ -839,6 +929,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         }
     }
     _autoApply(data) {
+        const meta = this.constructor.metadata;
         const metrics = this.color_name;
         for (let i = 0; i < metrics.length; i++) {
             let val = data[metrics[i]];
@@ -847,18 +938,80 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
                 this.tip_vals[i] = val;
             }
         }
+        if (data.tipVals) {
+            for (let i = 0; i < data.tipVals.length; i++)
+                this.tip_vals[i] = data.tipVals[i];
+        }
+        if (data.tipUnits) {
+            for (let i = 0; i < data.tipUnits.length; i++) {
+                if (this.tip_unit_labels[i])
+                    this.tip_unit_labels[i].text = data.tipUnits[i];
+            }
+        }
+
         let display = data.display;
         if (display === undefined) {
             let primaryKey = metrics[0];
             if (primaryKey !== undefined && data[primaryKey] !== undefined)
                 display = data[primaryKey].toString();
         }
-        if (display !== undefined) {
-            if (this.text_items[0]) this.text_items[0].text = display;
-            if (this.menu_items[0]) this.menu_items[0].text = display;
-        }
+
+        this._applyPanel(data, display, meta?.panelLayout ?? 'simple');
+        this._applyMenu(data, data.menuDisplay ?? display, meta?.menuLayout ?? 'simple');
+
         if (this.format)
             this.format(data);
+    }
+    _applyPanel(data, display, layout) {
+        if (layout === 'dual') {
+            if (display !== undefined && this.text_items[1])
+                this.text_items[1].text = display;
+            if (data.display2 !== undefined && this.text_items[4])
+                this.text_items[4].text = data.display2;
+            if (data.unit !== undefined && this.text_items[2])
+                this.text_items[2].text = data.unit;
+            if (data.unit2 !== undefined && this.text_items[5])
+                this.text_items[5].text = data.unit2;
+        } else if (layout === 'icon') {
+            if (display !== undefined && this.text_items[1])
+                this.text_items[1].text = display;
+            if (data.icon !== undefined && this.text_items[0])
+                this.text_items[0].gicon = data.icon;
+            if (data.unit !== undefined && this.text_items[2])
+                this.text_items[2].text = data.unit;
+        } else {
+            if (display !== undefined && this.text_items[0])
+                this.text_items[0].text = display;
+            if (data.unit !== undefined && this.text_items[1])
+                this.text_items[1].text = data.unit;
+        }
+    }
+    _applyMenu(data, display, layout) {
+        if (layout === 'dual') {
+            let display2 = data.menuDisplay2 ?? data.display2;
+            let menuUnit = data.menuUnit ?? data.unit;
+            let menuUnit2 = data.menuUnit2 ?? data.unit2;
+            if (display !== undefined && this.menu_items[0])
+                this.menu_items[0].text = display;
+            if (display2 !== undefined && this.menu_items[3])
+                this.menu_items[3].text = display2;
+            if (menuUnit !== undefined && this.menu_items[1])
+                this.menu_items[1].text = menuUnit;
+            if (menuUnit2 !== undefined && this.menu_items[4])
+                this.menu_items[4].text = menuUnit2;
+        } else if (layout === 'detail') {
+            if (display !== undefined && this.menu_items[0])
+                this.menu_items[0].text = display;
+            if (data.detail !== undefined && this.menu_items[3])
+                this.menu_items[3].text = data.detail;
+            if (data.detailUnit !== undefined && this.menu_items[4])
+                this.menu_items[4].text = data.detailUnit;
+        } else {
+            if (display !== undefined && this.menu_items[0])
+                this.menu_items[0].text = display;
+            if (data.unit !== undefined && this.menu_items[1])
+                this.menu_items[1].text = data.unit;
+        }
     }
     resize(width) {
         if (this.extension._Style.get('') === '-compact') {
