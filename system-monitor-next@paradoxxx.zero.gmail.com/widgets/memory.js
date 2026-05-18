@@ -1,8 +1,6 @@
 /* -*- mode: js2; js2-basic-offset: 4; indent-tabs-mode: nil -*- */
 
-import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
 import GTop from "gi://GTop";
-import St from "gi://St";
 import { ElementBase } from '../base.js';
 
 const Mem = class SystemMonitor_Mem extends ElementBase {
@@ -14,6 +12,7 @@ const Mem = class SystemMonitor_Mem extends ElementBase {
             { key: 'buffer', color: true },
             { key: 'cache', color: true },
         ],
+        menuLayout: 'detail',
         tooltipUnit: '%',
     };
 
@@ -52,70 +51,45 @@ const Mem = class SystemMonitor_Mem extends ElementBase {
         }
 
         if (total === 0) {
-            return { program: 0, buffer: 0, cache: 0, display: '0', _mem: mem, _total: total };
+            return {program: 0, buffer: 0, cache: 0, display: '0',
+                detail: '', detailUnit: this._unitStr(),
+                tipVals: [0, 0, 0]};
         }
 
         let programRatio = mem[0] / total;
         let bufferRatio = mem[1] / total;
         let cacheRatio = mem[2] / total;
         let percent = Math.round(programRatio * 100);
+        let compact = this.extension._Style.get('') === '-compact';
+        let sep = compact ? '/' : ' / ';
 
         return {
             program: programRatio,
             buffer: bufferRatio,
             cache: cacheRatio,
-            display: percent.toString(),
-            _mem: mem,
-            _total: total,
+            display: percent.toLocaleString(this.extension._Locale),
+            detail: this._pad(mem[0]) + sep + this._pad(total),
+            detailUnit: this._unitStr(),
+            tipVals: [
+                Math.round(programRatio * 100),
+                Math.round(bufferRatio * 100),
+                Math.round(cacheRatio * 100),
+            ],
         };
     }
-    format(data) {
-        this.tip_vals[0] = Math.round(data.program * 100);
-        this.tip_vals[1] = Math.round(data.buffer * 100);
-        this.tip_vals[2] = Math.round(data.cache * 100);
 
-        this.menu_items[0].text = this.tip_vals[0].toLocaleString(this.extension._Locale);
-
-        if (this.extension._Style.get('') !== '-compact') {
-            this.menu_items[3].text = this._pad(data._mem[0]) +
-                ' / ' + this._pad(data._total);
-        } else {
-            this.menu_items[3].text = this._pad(data._mem[0]) +
-                '/' + this._pad(data._total);
-        }
+    _unitStr() {
+        return this.useGiB ? 'GiB' : 'MiB';
     }
+
     _pad(number) {
         const Locale = this.extension._Locale;
         if (this.useGiB) {
-            if (number < 1) {
+            if (number < 1)
                 return number.toLocaleString(Locale, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            }
             return number.toLocaleString(Locale, {minimumSignificantDigits: 3, maximumSignificantDigits: 3});
         }
-
         return number.toLocaleString(Locale);
-    }
-    create_menu_items() {
-        let unit = _('MiB');
-        if (this.useGiB) {
-            unit = _('GiB');
-        }
-        return [
-            new St.Label({
-                text: '',
-                style_class: this.extension._Style.get('sm-value')}),
-            new St.Label({
-                text: '%',
-                style_class: this.extension._Style.get('sm-label')}),
-            new St.Label({
-                text: '',
-                style_class: this.extension._Style.get('sm-label')}),
-            new St.Label({
-                text: '',
-                style_class: this.extension._Style.get('sm-value')}),
-            new St.Label({text: unit,
-                style_class: this.extension._Style.get('sm-label')})
-        ];
     }
 }
 

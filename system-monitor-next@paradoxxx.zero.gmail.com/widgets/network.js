@@ -1,12 +1,10 @@
 /* -*- mode: js2; js2-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
-import Clutter from "gi://Clutter";
 import GLib from "gi://GLib";
 import Gio from "gi://Gio";
 import GTop from "gi://GTop";
 import NM from "gi://NM";
-import St from "gi://St";
 import { ElementBase } from '../base.js';
 
 const NetworkManager = NM;
@@ -21,6 +19,14 @@ const Net = class SystemMonitor_Net extends ElementBase {
             { key: 'uperrors', color: true },
             { key: 'collisions', color: true },
         ],
+        panelLayout: 'dual',
+        menuLayout: 'dual',
+        dualIcons: ['go-down-symbolic', 'go-up-symbolic'],
+        menuDualLabels: ['↓', '↑'],
+        panelValueStyle: 'sm-net-value',
+        panelUnitStyle: 'sm-net-unit-label',
+        panelUnit: '',
+        menuUnit: '',
     };
 
     constructor(extension, config) {
@@ -106,110 +112,59 @@ const Net = class SystemMonitor_Net extends ElementBase {
             }
         }
         this._lastTime = time;
-        return {
-            down: usage[0], downerrors: usage[1],
-            up: usage[2], uperrors: usage[3],
-            collisions: usage[4],
-        };
-    }
 
-    format(data) {
         const Style = this.extension._Style;
-        let downVal = data.down;
-        let upVal = data.up;
+        let downVal = usage[0];
+        let upVal = usage[2];
 
         if (this.speed_in_bits) {
             downVal = Math.round(downVal * 8.192);
             upVal = Math.round(upVal * 8.192);
-            this._formatSpeed(downVal, 0, 1000,
-                Style.netunits_kbits(), _('kbit/s'),
-                Style.netunits_mbits(), _('Mbit/s'), 1000,
-                Style.netunits_gbits(), _('Gbit/s'), 1000000);
-            this._formatSpeed(upVal, 1, 1000,
-                Style.netunits_kbits(), _('kbit/s'),
-                Style.netunits_mbits(), _('Mbit/s'), 1000,
-                Style.netunits_gbits(), _('Gbit/s'), 1000000);
-        } else {
-            this._formatSpeed(downVal, 0, 1024,
-                Style.netunits_kbytes(), _('KiB/s'),
-                Style.netunits_mbytes(), _('MiB/s'), 1024,
-                Style.netunits_gbytes(), _('GiB/s'), 1048576);
-            this._formatSpeed(upVal, 1, 1024,
-                Style.netunits_kbytes(), _('KiB/s'),
-                Style.netunits_mbytes(), _('MiB/s'), 1024,
-                Style.netunits_gbytes(), _('GiB/s'), 1048576);
         }
 
+        let downFmt = this._computeSpeed(downVal);
+        let upFmt = this._computeSpeed(upVal);
         let compact = Style.get('') === '-compact';
-        if (compact) {
-            this.text_items[1].text = this._pad(this.tip_vals[0].toString(), 4);
-            this.text_items[4].text = this._pad(this.tip_vals[2].toString(), 4);
-            this.menu_items[0].text = this._pad(this.tip_vals[0].toString(), 4);
-            this.menu_items[3].text = this._pad(this.tip_vals[2].toString(), 4);
-        } else {
-            this.text_items[1].text = this.tip_vals[0].toString();
-            this.text_items[4].text = this.tip_vals[2].toString();
-            this.menu_items[0].text = this.tip_vals[0].toString();
-            this.menu_items[3].text = this.tip_vals[2].toString();
-        }
+
+        return {
+            down: usage[0], downerrors: usage[1],
+            up: usage[2], uperrors: usage[3],
+            collisions: usage[4],
+            display: compact ? this._pad(downFmt.display, 4) : downFmt.display,
+            display2: compact ? this._pad(upFmt.display, 4) : upFmt.display,
+            unit: downFmt.panelUnit, unit2: upFmt.panelUnit,
+            menuUnit: downFmt.tipUnit, menuUnit2: upFmt.tipUnit,
+            tipVals: [downFmt.tipVal, usage[1], upFmt.tipVal, usage[3], usage[4]],
+            tipUnits: [downFmt.tipUnit, '/s', upFmt.tipUnit, '/s', '/s'],
+        };
     }
 
-    _formatSpeed(val, idx, threshold, kUnit, kTip, mUnit, mTip, mDiv, gUnit, gTip, gDiv) {
-        let textIdx = idx === 0 ? 2 : 5;
-        let menuIdx = idx === 0 ? 1 : 4;
-        let tipIdx = idx === 0 ? 0 : 2;
-
-        if (val < threshold) {
-            this.text_items[textIdx].text = kUnit;
-            this.menu_items[menuIdx].text = this.tip_unit_labels[tipIdx].text = kTip;
-            this.tip_vals[tipIdx] = val;
-        } else if (val < threshold * threshold) {
-            this.text_items[textIdx].text = mUnit;
-            this.menu_items[menuIdx].text = this.tip_unit_labels[tipIdx].text = mTip;
-            this.tip_vals[tipIdx] = (val / mDiv).toPrecision(3);
+    _computeSpeed(val) {
+        const Style = this.extension._Style;
+        let threshold, kPanel, kTip, mPanel, mTip, mDiv, gPanel, gTip, gDiv;
+        if (this.speed_in_bits) {
+            threshold = 1000;
+            kPanel = Style.netunits_kbits(); kTip = _('kbit/s');
+            mPanel = Style.netunits_mbits(); mTip = _('Mbit/s'); mDiv = 1000;
+            gPanel = Style.netunits_gbits(); gTip = _('Gbit/s'); gDiv = 1000000;
         } else {
-            this.text_items[textIdx].text = gUnit;
-            this.menu_items[menuIdx].text = this.tip_unit_labels[tipIdx].text = gTip;
-            this.tip_vals[tipIdx] = (val / gDiv).toPrecision(3);
+            threshold = 1024;
+            kPanel = Style.netunits_kbytes(); kTip = _('KiB/s');
+            mPanel = Style.netunits_mbytes(); mTip = _('MiB/s'); mDiv = 1024;
+            gPanel = Style.netunits_gbytes(); gTip = _('GiB/s'); gDiv = 1048576;
         }
+
+        if (val < threshold)
+            return {display: val.toString(), panelUnit: kPanel, tipVal: val, tipUnit: kTip};
+        if (val < threshold * threshold)
+            return {display: (val / mDiv).toPrecision(3), panelUnit: mPanel, tipVal: (val / mDiv).toPrecision(3), tipUnit: mTip};
+        return {display: (val / gDiv).toPrecision(3), panelUnit: gPanel, tipVal: (val / gDiv).toPrecision(3), tipUnit: gTip};
     }
 
-    _pad(number, length) {
-        let str = '' + number;
+    _pad(str, length) {
         while (str.length < length)
             str = ' ' + str;
         return str;
-    }
-
-    create_text_items() {
-        const Style = this.extension._Style;
-        const IconSize = this.extension._IconSize;
-        return [
-            new St.Icon({icon_size: 2 * IconSize / 3 * Style.iconsize(),
-                icon_name: 'go-down-symbolic'}),
-            new St.Label({text: '', style_class: Style.get('sm-net-value'),
-                y_align: Clutter.ActorAlign.CENTER}),
-            new St.Label({text: _('KiB/s'), style_class: Style.get('sm-net-unit-label'),
-                y_align: Clutter.ActorAlign.CENTER}),
-            new St.Icon({icon_size: 2 * IconSize / 3 * Style.iconsize(),
-                icon_name: 'go-up-symbolic'}),
-            new St.Label({text: '', style_class: Style.get('sm-net-value'),
-                y_align: Clutter.ActorAlign.CENTER}),
-            new St.Label({text: _('KiB/s'), style_class: Style.get('sm-net-unit-label'),
-                y_align: Clutter.ActorAlign.CENTER}),
-        ];
-    }
-
-    create_menu_items() {
-        const Style = this.extension._Style;
-        return [
-            new St.Label({text: '', style_class: Style.get('sm-value')}),
-            new St.Label({text: _('KiB/s'), style_class: Style.get('sm-label')}),
-            new St.Label({text: _(' ↓'), style_class: Style.get('sm-label')}),
-            new St.Label({text: '', style_class: Style.get('sm-value')}),
-            new St.Label({text: _(' KiB/s'), style_class: Style.get('sm-label')}),
-            new St.Label({text: _(' ↑'), style_class: Style.get('sm-label')}),
-        ];
     }
 }
 

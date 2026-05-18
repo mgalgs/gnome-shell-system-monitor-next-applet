@@ -1,14 +1,13 @@
 /* -*- mode: js2; js2-basic-offset: 4; indent-tabs-mode: nil -*- */
 
-import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
 import GTop from "gi://GTop";
-import St from "gi://St";
 import { ElementBase } from '../base.js';
 
 const Swap = class SystemMonitor_Swap extends ElementBase {
     static metadata = {
         name: 'Swap',
         metrics: [{ key: 'used', color: true }],
+        menuLayout: 'detail',
         tooltipUnit: '%',
     };
 
@@ -40,16 +39,21 @@ const Swap = class SystemMonitor_Swap extends ElementBase {
             total = Math.round(this.gtop.total / this._unitConversion);
         }
         if (total === 0)
-            return { used: 0, display: '0', _swap: 0, _total: 0 };
+            return {used: 0, display: '0', detail: '', detailUnit: this._unitStr()};
         let ratio = swap / total;
         let percent = Math.round(ratio * 100);
-        return { used: ratio, display: percent.toString(), _swap: swap, _total: total };
-    }
-
-    format(data) {
         let compact = this.extension._Style.get('') === '-compact';
         let sep = compact ? '/' : ' / ';
-        this.menu_items[3].text = this._pad(data._swap) + sep + this._pad(data._total);
+        return {
+            used: ratio,
+            display: percent.toString(),
+            detail: this._pad(swap) + sep + this._pad(total),
+            detailUnit: this._unitStr(),
+        };
+    }
+
+    _unitStr() {
+        return this.useGiB ? 'GiB' : 'MiB';
     }
 
     _pad(number) {
@@ -59,17 +63,6 @@ const Swap = class SystemMonitor_Swap extends ElementBase {
             return number.toLocaleString(this.extension._Locale, {minimumSignificantDigits: 3, maximumSignificantDigits: 3});
         }
         return number.toLocaleString(this.extension._Locale);
-    }
-
-    create_menu_items() {
-        let unit = this.useGiB ? 'GiB' : 'MiB';
-        return [
-            new St.Label({text: '', style_class: this.extension._Style.get('sm-value')}),
-            new St.Label({text: '%', style_class: this.extension._Style.get('sm-label')}),
-            new St.Label({text: '', style_class: this.extension._Style.get('sm-label')}),
-            new St.Label({text: '', style_class: this.extension._Style.get('sm-value')}),
-            new St.Label({text: _(unit), style_class: this.extension._Style.get('sm-label')}),
-        ];
     }
 }
 

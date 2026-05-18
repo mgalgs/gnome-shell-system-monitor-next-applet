@@ -1,8 +1,6 @@
 /* -*- mode: js2; js2-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
-import Clutter from "gi://Clutter";
-import St from "gi://St";
 import { sm_log } from '../utils.js';
 import { check_sensors } from '../common.js';
 import { ElementBase, try_read_int_file } from '../base.js';
@@ -12,6 +10,8 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
         label: 'thrm',
         name: 'Thermal',
         metrics: [{ key: 'tz0', color: true }],
+        panelUnitStyle: 'sm-temp-label',
+        panelUnit: '',
     };
 
     constructor(extension, config) {
@@ -54,8 +54,15 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
         if (!try_read_int_file(sfile, value => {
             this._temperature = Math.round(value / 1000);
             this.fahrenheit_unit = this.config['fahrenheit-unit'] || false;
-            let display = this._formatTemp();
-            callback({tz0: this._temperature, display: display});
+            let symbol = this._symbol();
+            this.temp_over_threshold = this._temperature !== null &&
+                this._temperature > (this.config.threshold || 0);
+            callback({
+                tz0: this._temperature,
+                display: this._formatTemp(),
+                unit: symbol,
+                tipUnits: [_(symbol)],
+            });
         })) {
             if (this._display_error) {
                 sm_log(`Error reading thermal sensor file: ${sfile}`, 'error');
@@ -63,16 +70,6 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
             }
             callback(null);
         }
-    }
-
-    format(data) {
-        let symbol = this._symbol();
-        this.text_items[1].text = symbol;
-        this.menu_items[1].text = symbol;
-        this.tip_unit_labels[0].text = _(symbol);
-
-        this.temp_over_threshold = this._temperature !== null &&
-            this._temperature > (this.config.threshold || 0);
     }
 
     update() {
@@ -107,29 +104,6 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
         return this.fahrenheit_unit ? '°F' : '°C';
     }
 
-    create_text_items() {
-        return [
-            new St.Label({
-                text: '',
-                style_class: this.extension._Style.get('sm-status-value'),
-                y_align: Clutter.ActorAlign.CENTER}),
-            new St.Label({
-                text: this._symbol(),
-                style_class: this.extension._Style.get('sm-temp-label'),
-                y_align: Clutter.ActorAlign.CENTER}),
-        ];
-    }
-
-    create_menu_items() {
-        return [
-            new St.Label({
-                text: '',
-                style_class: this.extension._Style.get('sm-value')}),
-            new St.Label({
-                text: this._symbol(),
-                style_class: this.extension._Style.get('sm-label')}),
-        ];
-    }
 }
 
 export { Thermal };

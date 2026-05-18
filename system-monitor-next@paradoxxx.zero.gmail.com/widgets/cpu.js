@@ -117,13 +117,6 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
             display: percent.toString(),
         };
     }
-    format(data) {
-        this.tip_vals[0] = Math.round(data.user);
-        this.tip_vals[1] = Math.round(data.system);
-        this.tip_vals[2] = Math.round(data.nice);
-        this.tip_vals[3] = Math.round(data.iowait);
-        this.tip_vals[4] = Math.round(data.other);
-    }
 }
 
 export { Cpu };

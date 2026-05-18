@@ -1,10 +1,8 @@
 /* -*- mode: js2; js2-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
-import Clutter from "gi://Clutter";
 import Gio from "gi://Gio";
 import GTop from "gi://GTop";
-import St from "gi://St";
 import { parse_bytearray } from '../common.js';
 import { ElementBase } from '../base.js';
 
@@ -15,6 +13,8 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
         tooltipUnit: 'MHz',
         panelUnit: 'MHz',
         menuUnit: 'MHz',
+        panelValueStyle: 'sm-big-status-value',
+        panelUnitStyle: 'sm-perc-label',
     };
 
     constructor(extension, config) {
@@ -70,33 +70,14 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
     }
     _buildResult(freq) {
         let value = freq.toString();
-        return { freq: value, display: value + ' ' };
+        let compact = this.extension._Style.get('') === '-compact';
+        let menuDisplay = compact ? this._pad(value, 4) : value;
+        return {freq: value, display: value, menuDisplay: menuDisplay};
     }
-    format(data) {
-        let value = data.freq;
-        if (this.extension._Style.get('') !== '-compact') {
-            this.menu_items[0].text = value;
-        } else {
-            this.menu_items[0].text = this._pad(value, 4);
-        }
-    }
-    _pad(number, length) {
-        let str = '' + number;
-        while (str.length < length) {
+    _pad(str, length) {
+        while (str.length < length)
             str = ' ' + str;
-        }
         return str;
-    }
-    create_text_items() {
-        return [
-            new St.Label({
-                text: '',
-                style_class: this.extension._Style.get('sm-big-status-value'),
-                y_align: Clutter.ActorAlign.CENTER}),
-            new St.Label({
-                text: 'MHz', style_class: this.extension._Style.get('sm-perc-label'),
-                y_align: Clutter.ActorAlign.CENTER})
-        ];
     }
 }
 

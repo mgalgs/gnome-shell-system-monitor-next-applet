@@ -1,10 +1,8 @@
 /* -*- mode: js2; js2-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
-import Clutter from "gi://Clutter";
 import GLib from "gi://GLib";
 import Gio from "gi://Gio";
-import St from "gi://St";
 import UPowerGlib from "gi://UPowerGlib";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import { sm_log } from '../utils.js';
@@ -18,6 +16,8 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
     static metadata = {
         name: 'Battery',
         metrics: [{ key: 'batt0', color: true }],
+        panelLayout: 'icon',
+        panelIcon: DEFAULT_BATTERY_ICON,
     };
 
     constructor(extension, config) {
@@ -36,18 +36,18 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
         );
 
         this.tip_format('%');
-        this._updateUnitLabels();
     }
 
     collect() {
         let showTime = this.config.time || false;
         let displayString = showTime ? this._timeString : this._percentage.toString();
-        return {batt0: this._percentage, display: displayString};
-    }
-
-    format(_data) {
-        if (this.config.display)
-            this.text_items[0].gicon = this._gicon;
+        let unitString = showTime ? 'h' : '%';
+        return {
+            batt0: this._percentage,
+            display: displayString,
+            icon: this._gicon,
+            unit: unitString,
+        };
     }
 
     _poll_quickSettings() {
@@ -151,14 +151,6 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
         build_menu_info(this.extension);
     }
 
-    _updateUnitLabels() {
-        let unitString = (this.config.time || false) ? 'h' : '%';
-        if (this.config.display)
-            this.text_items[2].text = unitString;
-        if (this.config['show-menu'])
-            this.menu_items[1].text = unitString;
-    }
-
     hide_system_icon(override) {
         let value = (this.config.hidesystem || false) && override !== false;
         if (value && this.config.display) {
@@ -170,26 +162,6 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
         } else if (this.icon_hidden) {
             this.icon_hidden = false;
         }
-    }
-
-    create_text_items() {
-        let unitString = (this.config.time || false) ? 'h' : '%';
-        return [
-            new St.Icon({gicon: Gio.icon_new_for_string(DEFAULT_BATTERY_ICON),
-                style_class: this.extension._Style.get('sm-status-icon')}),
-            new St.Label({text: '', style_class: this.extension._Style.get('sm-status-value'),
-                y_align: Clutter.ActorAlign.CENTER}),
-            new St.Label({text: unitString, style_class: this.extension._Style.get('sm-perc-label'),
-                y_align: Clutter.ActorAlign.CENTER}),
-        ];
-    }
-
-    create_menu_items() {
-        let unitString = (this.config.time || false) ? 'h' : '%';
-        return [
-            new St.Label({text: '', style_class: this.extension._Style.get('sm-value')}),
-            new St.Label({text: unitString, style_class: this.extension._Style.get('sm-label')}),
-        ];
     }
 
     destroy() {
