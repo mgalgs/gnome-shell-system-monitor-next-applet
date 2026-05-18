@@ -49,7 +49,7 @@ const Fan = class SystemMonitor_Fan extends ElementBase {
             this._rpm = value;
             try_read_int_file(sfile.replace(/_input$/, '_min'), v => { this.min = v; });
             try_read_int_file(sfile.replace(/_input$/, '_max'), v => { this.max = v; });
-            callback({fan0: this._rpm});
+            callback({metrics: {fan0: this._rpm}});
         })) {
             if (this._display_error) {
                 sm_log(`Error reading fan sensor file: ${sfile}`, 'error');

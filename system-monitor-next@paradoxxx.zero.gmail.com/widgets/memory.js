@@ -51,7 +51,7 @@ const Mem = class SystemMonitor_Mem extends ElementBase {
         }
 
         if (total === 0) {
-            return {program: 0, buffer: 0, cache: 0, display: '0',
+            return {metrics: {program: 0, buffer: 0, cache: 0}, display: '0',
                 detail: '', detailUnit: this._unitStr(),
                 tipVals: [0, 0, 0]};
         }
@@ -64,9 +64,11 @@ const Mem = class SystemMonitor_Mem extends ElementBase {
         let sep = compact ? '/' : ' / ';
 
         return {
-            program: programRatio,
-            buffer: bufferRatio,
-            cache: cacheRatio,
+            metrics: {
+                program: programRatio,
+                buffer: bufferRatio,
+                cache: cacheRatio,
+            },
             display: percent.toLocaleString(this.extension._Locale),
             detail: this._pad(mem[0]) + sep + this._pad(total),
             detailUnit: this._unitStr(),

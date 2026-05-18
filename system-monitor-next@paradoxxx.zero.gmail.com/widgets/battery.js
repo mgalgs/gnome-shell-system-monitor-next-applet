@@ -43,7 +43,7 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
         let displayString = showTime ? this._timeString : this._percentage.toString();
         let unitString = showTime ? 'h' : '%';
         return {
-            batt0: this._percentage,
+            metrics: {batt0: this._percentage},
             display: displayString,
             icon: this._gicon,
             unit: unitString,

@@ -42,7 +42,7 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
                 }
                 this._parseOutput(output);
                 if (this._total === 0) {
-                    callback({used: 0, memory: 0, display: '0',
+                    callback({metrics: {used: 0, memory: 0}, display: '0',
                         detail: '', detailUnit: this._unitStr()});
                 } else {
                     const Locale = this.extension._Locale;
@@ -51,8 +51,10 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
                     let sep = compact ? '/' : '  /  ';
                     let unitStr = this._unitStr();
                     callback({
-                        used: this._percentage,
-                        memory: memPct,
+                        metrics: {
+                            used: this._percentage,
+                            memory: memPct,
+                        },
                         display: Math.round(this._percentage).toLocaleString(Locale),
                         detail: this._pad(this._mem).toLocaleString(Locale) +
                             sep + this._pad(this._total).toLocaleString(Locale),

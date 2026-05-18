@@ -73,7 +73,7 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
             const Locale = this.extension._Locale;
             const units = this.extension._Style.diskunits();
             callback({
-                read: usage[0], write: usage[1],
+                metrics: {read: usage[0], write: usage[1]},
                 display: r.toLocaleString(Locale),
                 display2: w.toLocaleString(Locale),
                 unit: units, unit2: units,

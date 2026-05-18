@@ -109,11 +109,13 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
         other = Math.max(0, other);
 
         return {
-            user: this.usage[0],
-            system: this.usage[1],
-            nice: this.usage[2],
-            iowait: this.usage[4],
-            other: other,
+            metrics: {
+                user: this.usage[0],
+                system: this.usage[1],
+                nice: this.usage[2],
+                iowait: this.usage[4],
+                other: other,
+            },
             display: percent.toString(),
         };
     }

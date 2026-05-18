@@ -72,7 +72,7 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
         let value = freq.toString();
         let compact = this.extension._Style.get('') === '-compact';
         let menuDisplay = compact ? this._pad(value, 4) : value;
-        return {freq: value, display: value, menuDisplay: menuDisplay};
+        return {metrics: {freq: value}, display: value, menuDisplay: menuDisplay};
     }
     _pad(str, length) {
         while (str.length < length)

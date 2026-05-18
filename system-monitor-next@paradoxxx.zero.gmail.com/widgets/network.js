@@ -127,9 +127,11 @@ const Net = class SystemMonitor_Net extends ElementBase {
         let compact = Style.get('') === '-compact';
 
         return {
-            down: usage[0], downerrors: usage[1],
-            up: usage[2], uperrors: usage[3],
-            collisions: usage[4],
+            metrics: {
+                down: usage[0], downerrors: usage[1],
+                up: usage[2], uperrors: usage[3],
+                collisions: usage[4],
+            },
             display: compact ? this._pad(downFmt.display, 4) : downFmt.display,
             display2: compact ? this._pad(upFmt.display, 4) : upFmt.display,
             unit: downFmt.panelUnit, unit2: upFmt.panelUnit,

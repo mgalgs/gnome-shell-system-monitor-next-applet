@@ -931,8 +931,9 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
     _autoApply(data) {
         const meta = this.constructor.metadata;
         const metrics = this.color_name;
+        const metricData = data.metrics || {};
         for (let i = 0; i < metrics.length; i++) {
-            let val = data[metrics[i]];
+            let val = metricData[metrics[i]];
             if (val !== undefined) {
                 this.vals[i] = typeof val === 'number' ? val : parseFloat(val) || 0;
                 this.tip_vals[i] = val;
@@ -952,8 +953,8 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         let display = data.display;
         if (display === undefined) {
             let primaryKey = metrics[0];
-            if (primaryKey !== undefined && data[primaryKey] !== undefined)
-                display = data[primaryKey].toString();
+            if (primaryKey !== undefined && metricData[primaryKey] !== undefined)
+                display = metricData[primaryKey].toString();
         }
 
         this._applyPanel(data, display, meta?.panelLayout ?? 'simple');

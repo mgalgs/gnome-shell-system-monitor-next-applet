@@ -58,7 +58,7 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
             this.temp_over_threshold = this._temperature !== null &&
                 this._temperature > (this.config.threshold || 0);
             callback({
-                tz0: this._temperature,
+                metrics: {tz0: this._temperature},
                 display: this._formatTemp(),
                 unit: symbol,
                 tipUnits: [_(symbol)],

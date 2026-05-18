@@ -39,13 +39,13 @@ const Swap = class SystemMonitor_Swap extends ElementBase {
             total = Math.round(this.gtop.total / this._unitConversion);
         }
         if (total === 0)
-            return {used: 0, display: '0', detail: '', detailUnit: this._unitStr()};
+            return {metrics: {used: 0}, display: '0', detail: '', detailUnit: this._unitStr()};
         let ratio = swap / total;
         let percent = Math.round(ratio * 100);
         let compact = this.extension._Style.get('') === '-compact';
         let sep = compact ? '/' : ' / ';
         return {
-            used: ratio,
+            metrics: {used: ratio},
             display: percent.toString(),
             detail: this._pad(swap) + sep + this._pad(total),
             detailUnit: this._unitStr(),
