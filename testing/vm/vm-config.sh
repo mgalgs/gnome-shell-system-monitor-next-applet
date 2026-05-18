@@ -110,55 +110,14 @@ if ! vm_is_running "$TARGET_VM"; then
     exit 2
 fi
 
-# Convert JSON config to GVariant string array and push via gsettings
+# Copy JSON + apply script to VM, run remotely (avoids shell-escaping double quotes)
 log_info "Pushing config '$LABEL' to $TARGET_VM..."
 
-# The JSON file has a top-level object with "monitors" array (and optional metadata).
-# Each monitor is a JSON object that gets serialized as a string element in the GSettings array.
-GVARIANT=$(python3 -c "
-import json, sys
-
-with open('$CONFIG_FILE') as f:
-    data = json.load(f)
-
-monitors = data.get('monitors', data) if isinstance(data, dict) else data
-
-parts = []
-for m in monitors:
-    s = json.dumps(m, separators=(',', ':'))
-    # Escape single quotes for GVariant string
-    s = s.replace(\"'\", \"'\\\\''\" )
-    parts.append(\"'\" + s + \"'\")
-
-print('[' + ', '.join(parts) + ']')
-")
-
-vm_ssh "$TARGET_VM" "gsettings set org.gnome.shell.extensions.system-monitor-next-applet monitors \"$GVARIANT\""
+APPLY_SCRIPT="$SCRIPT_DIR/lib/apply-config.py"
+vm_rsync "$TARGET_VM" "$CONFIG_FILE" "/tmp/_sm_config.json"
+vm_rsync "$TARGET_VM" "$APPLY_SCRIPT" "/tmp/_sm_apply.py"
+vm_ssh "$TARGET_VM" "python3 /tmp/_sm_apply.py /tmp/_sm_config.json"
 log_ok "Config applied"
-
-# Also push global settings if present
-GLOBALS=$(python3 -c "
-import json
-with open('$CONFIG_FILE') as f:
-    data = json.load(f)
-settings = data.get('settings', {})
-for k, v in settings.items():
-    if isinstance(v, bool):
-        print(f'{k} {str(v).lower()}')
-    elif isinstance(v, int):
-        print(f'{k} {v}')
-    elif isinstance(v, str):
-        print(f'{k} {v}')
-" 2>/dev/null || true)
-
-if [[ -n "$GLOBALS" ]]; then
-    while IFS= read -r line; do
-        key=$(echo "$line" | cut -d' ' -f1)
-        val=$(echo "$line" | cut -d' ' -f2-)
-        vm_ssh "$TARGET_VM" "gsettings set org.gnome.shell.extensions.system-monitor-next-applet $key $val"
-        log_info "Set $key = $val"
-    done <<< "$GLOBALS"
-fi
 
 if $SCREENSHOT; then
     sleep 3
