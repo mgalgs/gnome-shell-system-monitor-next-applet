@@ -66,9 +66,10 @@ export function build_menu_info(extension) {
     let elts = extension.__sm.elts;
     let tray_menu = extension.__sm.tray.menu;
 
-    if (tray_menu._getMenuItems().length &&
-        typeof tray_menu._getMenuItems()[0].actor.get_last_child() !== 'undefined') {
-        tray_menu._getMenuItems()[0].actor.get_last_child().destroy_all_children();
+    let firstItem = tray_menu._getMenuItems()[0];
+    let lastChild = firstItem?.actor.get_last_child();
+    if (lastChild) {
+        lastChild.destroy_all_children();
         for (let elt in elts) {
             elts[elt].menu_items = elts[elt].create_menu_items();
         }
@@ -252,7 +253,7 @@ export const Chart = class SystemMonitor_Chart {
         for (let i = 0; i < this.parentC.colors.length; i++) {
             this.data[i] = [];
         }
-        themeContext.connect('notify::scale-factor', this.rescale.bind(this));
+        this._scaleFactorSigId = themeContext.connect('notify::scale-factor', this.rescale.bind(this));
         this.actor.connect('repaint', this._draw.bind(this));
     }
     update() {
@@ -341,6 +342,13 @@ export const Chart = class SystemMonitor_Chart {
     rescale(themeContext) {
         this.scale_factor = themeContext.scale_factor;
         this.actor.set_width(this.width * this.scale_factor); // repaints
+    }
+    destroy() {
+        let themeContext = St.ThemeContext.get_for_stage(global.stage);
+        if (this._scaleFactorSigId) {
+            themeContext.disconnect(this._scaleFactorSigId);
+            this._scaleFactorSigId = null;
+        }
     }
 }
 
@@ -508,6 +516,10 @@ export const TipBox = class SystemMonitor_TipBox {
     destroy() {
         this.stop_in_timer();
         this.stop_out_timer();
+        if (this.tipmenu) {
+            this.tipmenu.destroy();
+            this.tipmenu = null;
+        }
         this.actor.destroy();
     }
 }
@@ -844,8 +856,9 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
                 GLib.PRIORITY_DEFAULT,
                 this.graph_scale_cooldown_delay_minutes * 60,
                 () => {
+                    this.graph_scale_cooldown_timer_id = null;
                     this.restart_cooldown_timer();
-                    return GLib.SOURCE_CONTINUE;
+                    return GLib.SOURCE_REMOVE;
                 });
         }
     }
@@ -895,7 +908,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
     //           }
     update() {
         if (!this.menu_visible && !this.actor.visible) {
-            return false;
+            return GLib.SOURCE_CONTINUE;
         }
         if (this.collect) {
             let data = this.collect();
@@ -1045,6 +1058,8 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
             this.extension._Schema.disconnect(this._cooldownConnection);
             this._cooldownConnection = null;
         }
+        if (this.chart)
+            this.chart.destroy();
         TipBox.prototype.destroy.call(this);
         if (this._initialUpdateId) {
             GLib.Source.remove(this._initialUpdateId);
