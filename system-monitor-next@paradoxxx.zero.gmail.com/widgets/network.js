@@ -31,7 +31,6 @@ const Net = class SystemMonitor_Net extends ElementBase {
 
     constructor(extension, config) {
         super(extension, config);
-        this.speed_in_bits = this.config['speed-in-bits'] || false;
         this.ifs = [];
         this.client = NM.Client.new(null);
         this.update_iface_list();
@@ -116,8 +115,9 @@ const Net = class SystemMonitor_Net extends ElementBase {
         const Style = this.extension._Style;
         let downVal = usage[0];
         let upVal = usage[2];
+        let speed_in_bits = this.config['speed-in-bits'] || false;
 
-        if (this.speed_in_bits) {
+        if (speed_in_bits) {
             downVal = Math.round(downVal * 8.192);
             upVal = Math.round(upVal * 8.192);
         }
@@ -143,8 +143,9 @@ const Net = class SystemMonitor_Net extends ElementBase {
 
     _computeSpeed(val) {
         const Style = this.extension._Style;
+        let speed_in_bits = this.config['speed-in-bits'] || false;
         let threshold, kPanel, kTip, mPanel, mTip, mDiv, gPanel, gTip, gDiv;
-        if (this.speed_in_bits) {
+        if (speed_in_bits) {
             threshold = 1000;
             kPanel = Style.netunits_kbits(); kTip = _('kbit/s');
             mPanel = Style.netunits_mbits(); mTip = _('Mbit/s'); mDiv = 1000;
