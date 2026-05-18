@@ -208,6 +208,11 @@ ifndef VM
 endif
 	$(Q)virsh -c qemu:///session shutdown $(VM)
 
+vm-stop-all:
+	$(Q)for vm in $$(virsh -c qemu:///session list --name 2>/dev/null); do \
+		[ -n "$$vm" ] && echo "Shutting down $$vm..." && virsh -c qemu:///session shutdown "$$vm"; \
+	done
+
 vm-viewer:
 	$(Q)./testing/vm/vm-viewer.sh $(VM_ARGS)
 
@@ -240,6 +245,7 @@ vm-destroy:
 	vm-test-all \
 	vm-start \
 	vm-stop \
+	vm-stop-all \
 	vm-viewer \
 	vm-ssh \
 	vm-list \

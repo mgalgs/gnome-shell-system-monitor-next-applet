@@ -184,6 +184,10 @@ for vm_name in "${VM_NAMES[@]}"; do
             fi
         done
     fi
+
+    # Shut down VM to free resources for the next one
+    log_info "Shutting down $vm_name..."
+    $VIRSH shutdown "$vm_name" &>/dev/null || true
 done
 
 # --- Generate HTML report ---
