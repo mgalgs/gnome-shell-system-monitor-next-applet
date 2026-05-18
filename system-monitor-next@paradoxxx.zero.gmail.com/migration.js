@@ -50,7 +50,7 @@ function migrateFrom0(_extension, _settings) {
     return true;
 }
 
-function migrateFrom1(extension, settings) {
+function migrateFrom1(extension, settings) { // eslint-disable-line complexity
     sm_log('Migrating settings: v1 -> v2 (creating monitors config)');
 
     const monitors = [];

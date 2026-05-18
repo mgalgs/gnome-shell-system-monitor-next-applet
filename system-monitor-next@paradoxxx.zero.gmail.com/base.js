@@ -154,6 +154,7 @@ export function try_read_int_file(filename, callback) {
         });
         return true;
     }
+    return false;
 }
 
 export const smStyleManager = class SystemMonitor_smStyleManager {
@@ -290,8 +291,7 @@ export const Chart = class SystemMonitor_Chart {
             if (this.parentC.graph_scale_cooldown_delay_minutes !== 0) {
                 if (max > this.parentC.graph_scale_max_including_cooldown) {
                     // Restart the cooldown period with this new max.
-                    const oldMax = this.parentC.graph_scale_max_including_cooldown;
-                    this.parentC.restart_cooldown_timer(max);
+                        this.parentC.restart_cooldown_timer(max);
                 }
                 this.parentC.graph_scale_max_including_cooldown =
                     Math.max(max, this.parentC.graph_scale_max_including_cooldown);
@@ -349,9 +349,8 @@ export let TipItem = GObject.registerClass(
         GTypeName: 'TipItem'
     },
     class SystemMonitor_TipItem extends PopupMenu.PopupBaseMenuItem {
-        _init() {
-            super._init();
-            // PopupMenu.PopupBaseMenuItem.prototype._init.call(this);
+        constructor() {
+            super();
             this.actor.remove_style_class_name('popup-menu-item');
             this.actor.add_style_class_name('sm-tooltip-item');
         }
@@ -392,11 +391,11 @@ export const TipMenu = class SystemMonitor_TipMenu extends PopupMenu.PopupMenuBa
         sourceTopLeftY = sourceTopLeft.y;
         sourceTopLeftX = sourceTopLeft.x;
         let monitor = Main.layoutManager.findMonitorForActor(this.sourceActor);
-        let [x, y] = [sourceTopLeftX + contentbox.x1,
+        let [_x, _y] = [sourceTopLeftX + contentbox.x1,
             sourceTopLeftY + contentbox.y1];
-        let [cx, cy] = [sourceTopLeftX + (contentbox.x1 + contentbox.x2) / 2,
+        let [cx, _cy] = [sourceTopLeftX + (contentbox.x1 + contentbox.x2) / 2,
             sourceTopLeftY + (contentbox.y1 + contentbox.y2) / 2];
-        let [xm, ym] = [sourceTopLeftX + contentbox.x2,
+        let [_xm, ym] = [sourceTopLeftX + contentbox.x2,
             sourceTopLeftY + contentbox.y2];
         let [width, height] = this.actor.get_size();
         let tipx = cx - width / 2;
@@ -410,7 +409,7 @@ export const TipMenu = class SystemMonitor_TipMenu extends PopupMenu.PopupMenuBa
         }
         this.actor.set_position(tipx, tipy);
     }
-    open(animate) {
+    open(_animate) {
         if (this.isOpen) {
             return;
         }
@@ -421,7 +420,7 @@ export const TipMenu = class SystemMonitor_TipMenu extends PopupMenu.PopupMenuBa
         this.actor.raise_top();
         this.emit('open-state-changed', true);
     }
-    close(animate) {
+    close(_animate) {
         this.isOpen = false;
         this.actor.hide();
         this.emit('open-state-changed', false);
@@ -434,7 +433,8 @@ export const TipBox = class SystemMonitor_TipBox {
         this.actor = new St.BoxLayout({reactive: true});
         this.actor._delegate = this;
         this.set_tip(new TipMenu(this.actor));
-        this.in_to = this.out_to = 0;
+        this.in_to = 0;
+        this.out_to = 0;
         this.actor.connect('enter-event', this.on_enter.bind(this));
         this.actor.connect('leave-event', this.on_leave.bind(this));
     }
@@ -962,7 +962,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         if (this.format)
             this.format(data);
     }
-    _applyPanel(data, display, layout) {
+    _applyPanel(data, display, layout) { // eslint-disable-line complexity
         if (layout === 'dual') {
             if (display !== undefined && this.text_items[1])
                 this.text_items[1].text = display;
@@ -986,7 +986,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
                 this.text_items[1].text = data.unit;
         }
     }
-    _applyMenu(data, display, layout) {
+    _applyMenu(data, display, layout) { // eslint-disable-line complexity
         if (layout === 'dual') {
             let display2 = data.menuDisplay2 ?? data.display2;
             let menuUnit = data.menuUnit ?? data.unit;

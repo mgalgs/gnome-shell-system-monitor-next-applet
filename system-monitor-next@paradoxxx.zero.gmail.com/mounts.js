@@ -125,7 +125,7 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
             let file = mount.get_default_location();
             let info = file.query_filesystem_info(Gio.FILE_ATTRIBUTE_FILESYSTEM_READONLY, null);
             return info.get_attribute_boolean(Gio.FILE_ATTRIBUTE_FILESYSTEM_READONLY);
-        } catch (e) {
+        } catch {
             return false;
         }
     }
@@ -136,7 +136,7 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
             let result = info.get_attribute_string(Gio.FILE_ATTRIBUTE_FILESYSTEM_TYPE);
             let net_fs = ['nfs', 'smbfs', 'cifs', 'ftp', 'sshfs', 'sftp', 'mtp', 'mtpfs'];
             return !file.is_native() || net_fs.indexOf(result) > -1;
-        } catch (e) {
+        } catch {
             return false;
         }
     }
@@ -235,7 +235,7 @@ export const Bar = class SystemMonitor_Bar extends Graph {
         let thickness = this.extension._Style.bar_thickness() * this.scale_factor * this.text_scaling;
         let fontsize = this.extension._Style.bar_fontsize() * this.scale_factor * this.text_scaling;
         this.actor.set_height(this.mounts.length * (3 * thickness));
-        let [width, height] = this.actor.get_surface_size();
+        let [width, _height] = this.actor.get_surface_size();
         let cr = this.actor.get_context();
 
         let x0 = width / 8;
