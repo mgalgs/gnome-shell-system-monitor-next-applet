@@ -98,7 +98,7 @@ uninstall:
 clean: zip-file.clean build.clean
 
 zip-file: clean build
-	$(Q)cd _build ; zip $(V) -qr $(ZIPFILE) .
+	$(Q)cd _build ; zip $(VV) -qr $(ZIPFILE) .
 	$(Q)mkdir -p dist
 	$(Q)mv _build/$(ZIPFILE) ./dist/$(ZIPFILE)
 	$(call msg,$@,Zip file saved to ./dist/$(ZIPFILE))
