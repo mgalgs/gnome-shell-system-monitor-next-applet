@@ -169,6 +169,18 @@ const Net = class SystemMonitor_Net extends ElementBase {
             str = ' ' + str;
         return str;
     }
+
+    destroy() {
+        if (this.NMsigID) {
+            let iface_list = this.client.get_devices();
+            for (let j = 0; j < this.NMsigID.length; j++) {
+                if (this.NMsigID[j] && iface_list[j])
+                    iface_list[j].disconnect(this.NMsigID[j]);
+            }
+            this.NMsigID = null;
+        }
+        super.destroy();
+    }
 }
 
 export { Net };
