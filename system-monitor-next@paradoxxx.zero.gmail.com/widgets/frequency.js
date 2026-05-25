@@ -11,7 +11,7 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
         name: 'Freq',
         metrics: [{ key: 'freq', color: true }],
         tooltipUnit: 'MHz',
-        panelUnit: 'MHz',
+        panelUnit: ' MHz',
         menuUnit: 'MHz',
         panelValueStyle: 'sm-big-status-value',
         panelUnitStyle: 'sm-perc-label',
