@@ -79,7 +79,7 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
     }
 
     reset_style() {
-        this.text_items[0].set_style('color: rgba(255, 255, 255, 1)');
+        this.text_items[0].set_style(null);
     }
 
     threshold() {
@@ -87,7 +87,7 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
             if (this.temp_over_threshold)
                 this.text_items[0].set_style('color: rgba(255, 0, 0, 1)');
             else
-                this.text_items[0].set_style('color: rgba(255, 255, 255, 1)');
+                this.text_items[0].set_style(null);
         }
     }
 

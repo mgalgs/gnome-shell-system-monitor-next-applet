@@ -6,7 +6,9 @@ import GTop from "gi://GTop";
 import St from "gi://St";
 import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 import { sm_log } from './utils.js';
-import { color_from_string, sm_cairo_set_source_color } from './base.js';
+
+// Visual distinction between adjacent mount rings/bars; cycled per index.
+const MOUNT_SHADE_ALPHAS = [1.0, 0.7, 0.5];
 
 // stale network shares will cause the shell to freeze, enable this with caution
 export const ENABLE_NETWORK_DISK_USAGE = false;
@@ -179,10 +181,6 @@ export const Graph = class SystemMonitor_Graph {
         this.width = width;
         this.height = height;
         this.gtop = new GTop.glibtop_fsusage();
-        this.colors = ['#888', '#aaa', '#ccc'];
-        for (let color in this.colors) {
-            this.colors[color] = color_from_string(this.colors[color]);
-        }
 
         let themeContext = St.ThemeContext.get_for_stage(global.stage);
         themeContext.connect('notify::scale-factor', this.set_scale.bind(this));
@@ -244,11 +242,13 @@ export const Bar = class SystemMonitor_Bar extends Graph {
         let y0 = thickness / 2;
         cr.setLineWidth(thickness);
         cr.setFontSize(fontsize);
+        const fg = this.actor.get_theme_node().get_foreground_color();
         for (let mount in this.mounts) {
             GTop.glibtop_get_fsusage(this.gtop, this.mounts[mount]);
             const {used, total} = calc_usage(this.gtop);
             const perc_full = used / total;
-            sm_cairo_set_source_color(cr, this.colors[mount % this.colors.length]);
+            const alpha = MOUNT_SHADE_ALPHAS[mount % MOUNT_SHADE_ALPHAS.length];
+            cr.setSourceRGBA(fg.red / 255, fg.green / 255, fg.blue / 255, alpha);
 
             let text = this.mounts[mount];
             if (text.length > 10) {
@@ -311,10 +311,12 @@ export const Pie = class SystemMonitor_Pie extends Graph {
 
         cr.setLineWidth(thickness);
         cr.setFontSize(fontsize);
+        const fg = this.actor.get_theme_node().get_foreground_color();
         let r = (height - ring_width) / 2;
         for (let mount in this.mounts) {
             GTop.glibtop_get_fsusage(this.gtop, this.mounts[mount]);
-            sm_cairo_set_source_color(cr, this.colors[mount % this.colors.length]);
+            const alpha = MOUNT_SHADE_ALPHAS[mount % MOUNT_SHADE_ALPHAS.length];
+            cr.setSourceRGBA(fg.red / 255, fg.green / 255, fg.blue / 255, alpha);
             const {used, total} = calc_usage(this.gtop);
             arc(r, used, total, -pi / 2);
             cr.stroke();
@@ -322,6 +324,8 @@ export const Pie = class SystemMonitor_Pie extends Graph {
         }
         let y = (ring_width + fontsize) / 2;
         for (let mount in this.mounts) {
+            const alpha = MOUNT_SHADE_ALPHAS[mount % MOUNT_SHADE_ALPHAS.length];
+            cr.setSourceRGBA(fg.red / 255, fg.green / 255, fg.blue / 255, alpha);
             let text = this.mounts[mount];
             if (text.length > 10) {
                 text = text.split('/').pop();
