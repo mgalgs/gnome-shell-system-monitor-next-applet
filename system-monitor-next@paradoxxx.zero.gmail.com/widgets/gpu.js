@@ -25,7 +25,7 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
 
         this.item_name = _('GPU') + (this.gpu_index !== '0' ? ' ' + this.gpu_index : '');
         if (this.gpu_index !== '0')
-            this.label.text = _('GPU') + this.gpu_index;
+            this.label.text = _('gpu') + this.gpu_index;
     }
 
     collectAsync(callback) {
