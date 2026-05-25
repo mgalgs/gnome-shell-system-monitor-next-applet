@@ -4,14 +4,14 @@
 }
 
 .sm-label {
-    color: #bbb;
+    opacity: 0.75;
     font-size: 0.75em;
     padding-top: 5px;
     font-family: monospace;
 }
 
 .sm-label-left {
-    color: #bbb;
+    opacity: 0.75;
     font-size: 0.75em;
     padding: 5px 5px 0 0;
 }
@@ -24,7 +24,7 @@
 }
 
 .sm-status-label {
-    color: #bbb;
+    opacity: 0.75;
     font-size: 0.625em;
     padding: 0 2px 0 5px;
 }
@@ -35,13 +35,13 @@
 
 .sm-unit-label,
 .sm-net-unit-label {
-    color: #aaa;
+    opacity: 0.65;
     font-size: 0.5em;
     padding: 0 5px 0 2px;
 }
 
 .sm-disk-unit-label {
-    color: #aaa;
+    opacity: 0.65;
     font-size: 0.625em;
     padding: 0 5px 0 2px;
 }
@@ -51,13 +51,13 @@
 }
 
 .sm-perc-label {
-    color: #aaa;
+    opacity: 0.65;
     font-size: 0.625em;
     padding: 0 5px 0 2px;
 }
 
 .sm-temp-label {
-    color: #aaa;
+    opacity: 0.65;
     font-size: 0.6875em;
     padding: 0 5px 0 2px;
 }
@@ -115,7 +115,7 @@
 }
 
 .sm-label-compact {
-    color: #bbb;
+    opacity: 0.75;
     font-size: 0.6875em;
     font-family: monospace;
 } /* Bat, Net... units in menu items */
@@ -127,35 +127,35 @@
 } /* Values in menu items */
 
 .sm-status-label-compact {
-    color: #bbb;
+    opacity: 0.75;
     font-size: 0.5em;
     padding: 2px 0px 0 0px;
 } /* names and Disk R and W signs in text items */
 
 .sm-unit-label-compact,
 .sm-net-unit-label-compact {
-    color: #aaa;
+    opacity: 0.65;
     padding: 0 3px 0px 1px;
     text-align: right;
     font-size: 0.4375em;
 } /* Bat, Net... units in text items */
 
 .sm-disk-unit-label-compact {
-    color: #aaa;
+    opacity: 0.65;
     padding: 0 3px 0px 0px;
     text-align: right;
     font-size: 0.4375em;
 } /* Disk units in text items */
 
 .sm-perc-label-compact {
+    opacity: 0.65;
     padding: 0 3px 0 0px;
-    color: #aaa;
     font-size: 0.5em;
 } /* Cpu, Mem ... % sign in text items */
 
 .sm-temp-label-compact {
+    opacity: 0.65;
     font-size: 0.625em;
-    color: #aaa;
     padding: 0 1px 0 1px;
 } /* Thermal °C sign in text items */
 
