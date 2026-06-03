@@ -35,6 +35,10 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
             let proc = new Gio.Subprocess({argv: script, flags: Gio.SubprocessFlags.STDOUT_PIPE});
             proc.init(null);
             proc.communicate_utf8_async(null, null, (p, result) => {
+                if (this._destroyed) {
+                    callback(null);
+                    return;
+                }
                 let [ok, output] = p.communicate_utf8_finish(result);
                 if (!ok) {
                     callback(null);
