@@ -1,3 +1,68 @@
+# Custom Metrics and Widget Authoring
+
+## Custom Metrics (No Code Changes)
+
+The Prometheus widget lets you graph any metric in the panel without modifying the extension. Write a script that serves a [Prometheus metrics](https://prometheus.io/docs/instrumenting/writing_exporters/) endpoint, then point a Prometheus monitor at it.
+
+### Example: Battery Power Draw
+
+A Python script that exposes battery power draw as a Prometheus gauge:
+
+`~/.local/bin/power-metrics-server-uv`
+```python
+#!/usr/bin/env -S uv run --script
+# /// script
+# dependencies = ["prometheus-client"]
+# requires-python = ">=3.10"
+# ///
+
+from prometheus_client import Gauge, start_http_server
+import os, threading
+
+BAT = os.environ.get('BAT', 'BAT1')
+SYSFS = f'/sys/class/power_supply/{BAT}'
+
+def read_power():
+    pf = os.path.join(SYSFS, 'power_now')
+    if os.path.exists(pf):
+        return int(open(pf).read()) / 1e6
+    v = int(open(os.path.join(SYSFS, 'voltage_now')).read())
+    i = int(open(os.path.join(SYSFS, 'current_now')).read())
+    return v * i / 1e12
+
+Gauge('power_watts', 'System power draw in watts').set_function(read_power)
+start_http_server(int(os.environ.get('PORT', '19101')), addr='127.0.0.1')
+threading.Event().wait()
+```
+
+Run it as a systemd user service:
+
+`~/.config/systemd/user/power-metrics.service`
+```ini
+[Unit]
+Description=Power draw Prometheus metrics exporter
+After=network.target
+
+[Service]
+ExecStart=%h/.local/bin/power-metrics-server-uv
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
+```
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now power-metrics.service
+```
+
+Then in the extension preferences: **Add Monitor → Prometheus**, set the server to `http://127.0.0.1:19101/metrics` and the metric name to `power_watts`.
+
+This pattern works for anything you can measure — temperature probes, smart home sensors, CI queue depth, stock prices. If you can expose it as a Prometheus metric, you can graph it in the panel.
+
+---
+
 # Writing Widgets
 
 This guide covers how to add a new system monitor widget to the extension.
