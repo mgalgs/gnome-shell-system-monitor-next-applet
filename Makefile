@@ -49,14 +49,14 @@ msg = @printf '  [%-12s] %s\n' '$(1)' '$(2)'
 # -------
 
 help:
-	@echo  'Install the extension to ~/.local/share/ (for the local user):'
+	@echo  'Install the extension locally (builds, installs, compiles schemas):'
 	@echo  ''
 	@echo  '  make install'
 	@echo  ''
-	@echo  'Install the extension to $${PREFIX}/share/ (for system-wide install/packaging):'
+	@echo  'Install for packaging (schemas compiled by package manager hooks):'
 	@echo  ''
-	@echo  '  sudo make PREFIX=/usr install       # as admin for all users'
-	@echo  '  make PREFIX=$${pkgdir}/usr install   # to another directory (for packaging)'
+	@echo  '  sudo make PREFIX=/usr install'
+	@echo  '  make PREFIX=$${pkgdir}/usr install'
 	@echo  ''
 	@echo  'Other targets:'
 	@echo  ''
@@ -89,8 +89,18 @@ install: clean build gschemas.install
 	$(call msg,$@,Installing to $(INSTALLDIR))
 	$(Q) mkdir -p "$(INSTALLDIR)"
 	$(Q) cp $(VV) -r ./_build/* "$(INSTALLDIR)/"
+# Auto-compile schemas for local installs (package managers handle their own)
+ifeq ($(origin PREFIX),file)
+	$(Q)glib-compile-schemas "$(SCHEMAINSTALLBASE)"
+	$(call msg,gschemas,Compiled)
+endif
 	$(call msg,$@,OK)
-	$(call msg,$@,Please reload GNOME Shell and enable the extension)
+	@echo ''
+	@echo '  Installed to $(INSTALLDIR)'
+	@echo '  Reload GNOME Shell to activate:'
+	@echo '    X11:     Alt+F2, type r, press Enter'
+	@echo '    Wayland: Log out and back in'
+	@echo ''
 
 uninstall:
 	$(Q)gnome-extensions uninstall $(UUID)
@@ -114,10 +124,10 @@ gschemas: $(GSCHEMA_COMPILED)
 gschemas.install: $(GSCHEMA_XML)
 	$(Q)mkdir -p "$(SCHEMAINSTALLBASE)"
 	$(Q)cp $(VV) $(GSCHEMA_XML) "$(SCHEMAINSTALLBASE)"
-	$(call msg,$@,gschema installed to $(SCHEMAINSTALLBASE). You might need to run "glib-compile-schemas $(SCHEMAINSTALLBASE)")
+	$(call msg,$@,gschema installed to $(SCHEMAINSTALLBASE))
 	$(call msg,$@,OK)
 
-# Not part of regular install since this is usually done by package manager hooks
+# Standalone target for backward compat; `make install` now auto-compiles for local installs
 gschemas.install-and-compile: gschemas.install
 	$(Q)glib-compile-schemas "$(SCHEMAINSTALLBASE)"
 	$(call msg,$@,OK)

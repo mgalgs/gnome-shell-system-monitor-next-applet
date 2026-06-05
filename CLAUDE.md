@@ -25,8 +25,8 @@ The extension requires system libraries to function:
 ### Installation and Building
 
 ```bash
-# Install the extension locally
-make install gschemas.install-and-compile
+# Install the extension locally (builds, installs, compiles schemas)
+make install
 
 # Uninstall the extension
 make uninstall
@@ -46,8 +46,8 @@ make zip-file
 After making changes to the extension code:
 
 ```bash
-# Reinstall and recompile schemas
-make uninstall install gschemas.install-and-compile
+# Reinstall
+make install
 ```
 
 Then reload GNOME Shell:

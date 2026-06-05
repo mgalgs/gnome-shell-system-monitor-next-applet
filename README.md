@@ -99,13 +99,13 @@ After installation, the extension will be available for enabling in GNOME Extens
    ```
    git clone https://github.com/mgalgs/gnome-shell-system-monitor-next-applet.git
    ```
-2. Install and rebuild gschemas:
+2. Install:
    ```
    cd gnome-shell-system-monitor-next-applet
-   make install gschemas.install-and-compile
+   make install
    ```
 3. Reload GNOME Shell:
-   - X11: Press `Alt+F2`, type `r`, and press Enter
+   - X11: Press `Alt+F2`, type `r`, press Enter
    - Wayland: Log out and log back in
 4. Enable the extension:
    ```
