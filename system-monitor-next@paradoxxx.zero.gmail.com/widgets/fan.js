@@ -2,8 +2,8 @@
 
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
 import { sm_log } from '../utils.js';
-import { check_sensors } from '../common.js';
-import { ElementBase, try_read_int_file } from '../base.js';
+import { check_sensors, read_sensor_async } from '../common.js';
+import { ElementBase } from '../base.js';
 
 const Fan = class SystemMonitor_Fan extends ElementBase {
     static metadata = {
@@ -35,8 +35,8 @@ const Fan = class SystemMonitor_Fan extends ElementBase {
             callback(null);
             return;
         }
-        let sfile = this.sensors[this.sensor_label];
-        if (sfile === undefined) {
+        let sensorInfo = this.sensors[this.sensor_label];
+        if (!sensorInfo) {
             if (this._display_error) {
                 const validLabels = Object.keys(this.sensors).join(', ');
                 sm_log(`Invalid fan sensor label: "${this.sensor_label}" (valid choices: ${validLabels})`, 'error');
@@ -45,18 +45,18 @@ const Fan = class SystemMonitor_Fan extends ElementBase {
             callback(null);
             return;
         }
-        if (!try_read_int_file(sfile, value => {
-            this._rpm = value;
-            try_read_int_file(sfile.replace(/_input$/, '_min'), v => { this.min = v; });
-            try_read_int_file(sfile.replace(/_input$/, '_max'), v => { this.max = v; });
-            callback({metrics: {fan0: this._rpm}});
-        })) {
-            if (this._display_error) {
-                sm_log(`Error reading fan sensor file: ${sfile}`, 'error');
-                this._display_error = false;
+        read_sensor_async(sensorInfo, value => {
+            if (value === null) {
+                if (this._display_error) {
+                    sm_log(`Error reading fan sensor: "${this.sensor_label}"`, 'error');
+                    this._display_error = false;
+                }
+                callback(null);
+                return;
             }
-            callback(null);
-        }
+            this._rpm = value;
+            callback({metrics: {fan0: this._rpm}});
+        });
     }
 }
 
