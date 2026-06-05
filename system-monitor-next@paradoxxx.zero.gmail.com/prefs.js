@@ -772,6 +772,110 @@ const SMMonitorsPage = GObject.registerClass({
     }
 });
 
+// ** What's New Page **
+
+const PROJECT_URL = 'https://github.com/mgalgs/gnome-shell-system-monitor-next-applet';
+
+
+const SMWhatsNewPage = GObject.registerClass({
+    GTypeName: 'SMWhatsNewPage',
+}, class SMWhatsNewPage extends Adw.PreferencesPage {
+    constructor(params = {}) {
+        super({
+            title: _('About'),
+            icon_name: 'dialog-information-symbolic',
+            ...params,
+        });
+
+        let aboutGroup = new Adw.PreferencesGroup({
+            title: 'System Monitor Next',
+            description: _('Modular, config-driven system monitoring for your GNOME desktop. Add, remove, and reorder monitors freely — each with independent settings.'),
+        });
+        this.add(aboutGroup);
+
+        let featuresGroup = new Adw.PreferencesGroup({
+            title: _("What's New"),
+        });
+        this.add(featuresGroup);
+
+        this._addFeatureRow(featuresGroup,
+            'list-add-symbolic',
+            _('Multi-Device Monitoring'),
+            _('Add multiple instances of any monitor type. Track individual CPU cores, specific network interfaces, or separate GPU devices — each with its own colors and refresh rate.')
+        );
+
+        this._addFeatureRow(featuresGroup,
+            'network-server-symbolic',
+            _('Prometheus Metrics'),
+            _('Graph any metric from a Prometheus-compatible exporter directly in your panel. Monitor custom application metrics, hardware sensors, or anything with a metrics endpoint — no code changes required.')
+        );
+
+        this._addFeatureRow(featuresGroup,
+            'view-list-symbolic',
+            _('Drag &amp; Drop Reordering'),
+            _('Reorder monitors by dragging them in the Monitors tab. Changes apply instantly — no shell restart required.')
+        );
+
+        this._addFeatureRow(featuresGroup,
+            'applications-graphics-symbolic',
+            _('Theme Integration'),
+            _("Panel widgets automatically use your desktop theme's foreground color for text and labels, blending seamlessly with any theme.")
+        );
+
+        let linksGroup = new Adw.PreferencesGroup({
+            title: _('Learn More'),
+        });
+        this.add(linksGroup);
+
+        this._addLinkRow(linksGroup,
+            _('Custom Metrics Guide'),
+            _('Graph any metric using Prometheus exporters'),
+            `${PROJECT_URL}/blob/master/docs/widget-authoring.md#custom-metrics-no-code-changes`
+        );
+
+        this._addLinkRow(linksGroup,
+            _('Widget Development'),
+            _('Create new widget types for the extension'),
+            `${PROJECT_URL}/blob/master/docs/widget-authoring.md`
+        );
+
+        this._addLinkRow(linksGroup,
+            _('Project Homepage'),
+            _('Report issues, contribute, or star the project'),
+            PROJECT_URL
+        );
+    }
+
+    _addFeatureRow(group, iconName, title, subtitle) {
+        let row = new Adw.ActionRow({
+            title: title,
+            subtitle: subtitle,
+        });
+        row.add_prefix(new Gtk.Image({
+            icon_name: iconName,
+            pixel_size: 24,
+            valign: Gtk.Align.CENTER,
+        }));
+        group.add(row);
+    }
+
+    _addLinkRow(group, title, subtitle, uri) {
+        let row = new Adw.ActionRow({
+            title: title,
+            subtitle: subtitle,
+            activatable: true,
+        });
+        row.add_suffix(new Gtk.Image({
+            icon_name: 'go-next-symbolic',
+            valign: Gtk.Align.CENTER,
+        }));
+        row.connect('activated', () => {
+            Gtk.show_uri(this.get_root(), uri, 0);
+        });
+        group.add(row);
+    }
+});
+
 // ** Extension Preferences **
 export default class SystemMonitorExtensionPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
@@ -782,6 +886,9 @@ export default class SystemMonitorExtensionPreferences extends ExtensionPreferen
 
         let monitorsPage = new SMMonitorsPage(settings);
         window.add(monitorsPage);
+
+        let whatsNewPage = new SMWhatsNewPage();
+        window.add(whatsNewPage);
 
         window.set_title(_('System Monitor Next Preferences'));
         window.search_enabled = true;
