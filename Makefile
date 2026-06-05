@@ -23,6 +23,10 @@ GSCHEMA_COMPILED = $(UUID)/schemas/gschemas.compiled
 VERSION ?= 0
 ZIPFILE = $(UUID).zip
 
+# Files that must be present in the release zip (sanity check)
+RELEASE_REQUIRED = metadata.json extension.js prefs.js base.js stylesheet.css \
+    schemas/gschemas.compiled widgets/cpu.js ui/prefsGeneralSettings.ui
+
 INSTALLBASE = $(PREFIX)/share/gnome-shell/extensions
 SCHEMAINSTALLBASE = $(PREFIX)/share/glib-2.0/schemas
 INSTALLDIR = $(INSTALLBASE)/$(INSTALLNAME)
@@ -60,9 +64,8 @@ help:
 	@echo  ''
 	@echo  'Other targets:'
 	@echo  ''
-	@echo  '  zip-file  - build $(ZIPFILE)'
-	@echo  '              (which can be uploaded to extensions.gnome.org or installed'
-	@echo  '               with gnome-extensions install)'
+	@echo  '  release   - lint, build zip, verify contents (use this for EGO uploads)'
+	@echo  '  zip-file  - build zip only (no checks)'
 	@echo  '  check     - run code quality checks (whitespace, lint)'
 	@echo  '  clean     - remove most generated files'
 	@echo  ''
@@ -117,6 +120,26 @@ zip-file: clean build
 zip-file.clean:
 	$(Q)rm $(VV) -vf ./dist/$(ZIPFILE)
 	$(call msg,$@,OK)
+
+release: check zip-file
+	$(call msg,$@,Verifying zip contents...)
+	$(Q)contents=$$(unzip -l dist/$(ZIPFILE)); \
+	ok=true; \
+	for f in $(RELEASE_REQUIRED); do \
+		if ! echo "$$contents" | grep -q "$$f"; then \
+			printf '  [%-12s] MISSING: %s\n' '$@' "$$f" >&2; ok=false; \
+		fi; \
+	done; \
+	if ! $$ok; then \
+		echo '' >&2; \
+		printf '  [%-12s] %s\n' '$@' 'Verification FAILED! Do not upload this zip.' >&2; \
+		exit 1; \
+	fi
+	$(call msg,$@,All required files present)
+	@echo ''
+	@printf '  Release zip: dist/%s (%s)\n' '$(ZIPFILE)' "$$(du -h dist/$(ZIPFILE) | cut -f1)"
+	@echo '  Upload at:   https://extensions.gnome.org/upload/'
+	@echo ''
 
 gschemas: $(GSCHEMA_COMPILED)
 	$(call msg,$@,OK)
@@ -239,6 +262,7 @@ vm-destroy:
 
 .PHONY: help \
 	install \
+	release \
 	zip-file \
 	zip-file.clean \
 	gschemas \
