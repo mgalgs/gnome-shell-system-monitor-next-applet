@@ -93,13 +93,29 @@ function _check_sensors_sysfs(sensor_type) {
     return sensors;
 }
 
+// A full `sensors -jA` sweep forks a subprocess and can take hundreds of
+// milliseconds on slow SMBus hardware, and enumeration runs synchronously on
+// the compositor thread from every thermal/fan widget constructor. Share one
+// result across all of them (and across the temp/fan calls) instead of
+// spawning per caller.
+const SENSORS_ENUM_CACHE_US = 60 * 1e6;
+let _sensors_json_cache;
+let _sensors_json_cache_time = 0;
+
 function _run_sensors_json() {
+    const now = GLib.get_monotonic_time();
+    if (_sensors_json_cache !== undefined && now - _sensors_json_cache_time < SENSORS_ENUM_CACHE_US)
+        return _sensors_json_cache;
+    let data = null;
     try {
         let [, stdout] = GLib.spawn_command_line_sync('sensors -jA');
-        return JSON.parse(new TextDecoder().decode(stdout));
+        data = JSON.parse(new TextDecoder().decode(stdout));
     } catch {
-        return null;
+        data = null;
     }
+    _sensors_json_cache = data;
+    _sensors_json_cache_time = now;
+    return data;
 }
 
 function _check_sensors_lm(sensor_type) {
@@ -156,34 +172,66 @@ function check_sensors(sensor_type) {
     return lm_sensors;
 }
 
+// Several widgets polling sensors on the same chip would each fork their own
+// `sensors` subprocess every refresh tick. Coalesce concurrent reads and
+// briefly cache the result so one spawn serves all widgets on that chip.
+const CHIP_READ_CACHE_MS = 1000;
+const _chip_reads = new Map();
+
+function _read_chip_async(chip, callback) {
+    let entry = _chip_reads.get(chip);
+    if (entry) {
+        if (entry.pending) {
+            entry.pending.push(callback);
+            return;
+        }
+        if (GLib.get_monotonic_time() / 1000 - entry.time < CHIP_READ_CACHE_MS) {
+            callback(entry.data);
+            return;
+        }
+    }
+    entry = {pending: [callback]};
+    _chip_reads.set(chip, entry);
+    const finish = data => {
+        entry.time = GLib.get_monotonic_time() / 1000;
+        entry.data = data;
+        const callbacks = entry.pending;
+        entry.pending = null;
+        for (const cb of callbacks)
+            cb(data);
+    };
+    try {
+        let proc = new Gio.Subprocess({
+            argv: ['sensors', '-jA', chip],
+            flags: Gio.SubprocessFlags.STDOUT_PIPE,
+        });
+        proc.init(null);
+        proc.communicate_utf8_async(null, null, (p, result) => {
+            try {
+                let [, output] = p.communicate_utf8_finish(result);
+                finish(JSON.parse(output)[chip] ?? null);
+            } catch {
+                finish(null);
+            }
+        });
+    } catch {
+        finish(null);
+    }
+}
+
 function read_sensor_async(sensorInfo, callback) {
     if (sensorInfo.chip) {
-        try {
-            let proc = new Gio.Subprocess({
-                argv: ['sensors', '-jA', sensorInfo.chip],
-                flags: Gio.SubprocessFlags.STDOUT_PIPE,
-            });
-            proc.init(null);
-            proc.communicate_utf8_async(null, null, (p, result) => {
-                try {
-                    let [, output] = p.communicate_utf8_finish(result);
-                    let chipData = JSON.parse(output)[sensorInfo.chip];
-                    let value = chipData?.[sensorInfo.sensorLabel]?.[sensorInfo.rawKey];
-                    if (value === undefined) {
-                        callback(null);
-                        return;
-                    }
-                    if (sensorInfo.rawKey.startsWith('temp'))
-                        callback(Math.round(value * 1000));
-                    else
-                        callback(Math.round(value));
-                } catch {
-                    callback(null);
-                }
-            });
-        } catch {
-            callback(null);
-        }
+        _read_chip_async(sensorInfo.chip, chipData => {
+            let value = chipData?.[sensorInfo.sensorLabel]?.[sensorInfo.rawKey];
+            if (value === undefined) {
+                callback(null);
+                return;
+            }
+            if (sensorInfo.rawKey.startsWith('temp'))
+                callback(Math.round(value * 1000));
+            else
+                callback(Math.round(value));
+        });
     } else if (sensorInfo.sysfsPath) {
         let file = Gio.file_new_for_path(sensorInfo.sysfsPath);
         if (!file.query_exists(null)) {
