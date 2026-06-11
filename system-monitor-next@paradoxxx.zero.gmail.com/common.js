@@ -140,7 +140,20 @@ function _check_sensors_lm(sensor_type) {
 }
 
 function check_sensors(sensor_type) {
-    return _check_sensors_lm(sensor_type) || _check_sensors_sysfs(sensor_type);
+    const lm_sensors = _check_sensors_lm(sensor_type);
+    const sysfs_sensors = _check_sensors_sysfs(sensor_type);
+    if (!lm_sensors)
+        return sysfs_sensors;
+    // lm-sensors labels can differ from the sysfs ones for the same sensor
+    // (e.g. "acpitz - temp1" vs "acpitz - 1"). Configs saved before
+    // lm-sensors was installed -- including everything produced by the
+    // v1->v2 settings migration -- store sysfs-style labels, so keep those
+    // resolvable alongside the preferred lm-sensors entries.
+    for (const [label, info] of Object.entries(sysfs_sensors)) {
+        if (!(label in lm_sensors))
+            lm_sensors[label] = info;
+    }
+    return lm_sensors;
 }
 
 function read_sensor_async(sensorInfo, callback) {
