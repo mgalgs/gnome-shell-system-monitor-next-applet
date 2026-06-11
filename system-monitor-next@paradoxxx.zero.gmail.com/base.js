@@ -619,6 +619,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this.menu_items = [];
         this.menu_visible = true;
         this.timeout = null;
+        this._updateErrorLogged = false;
 
         // Maximum value preserved during cooldown period
         this.graph_scale_max_including_cooldown = 0;
@@ -910,44 +911,63 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         if (!this.menu_visible && !this.actor.visible) {
             return GLib.SOURCE_CONTINUE;
         }
-        if (this.collect) {
-            let data = this.collect();
+        // A throw escaping a GLib source callback removes the source, which
+        // would silently stop this widget's updates until shell restart —
+        // never let collection errors propagate out of here.
+        try {
+            if (this.collect) {
+                this._applyCollected(this.collect());
+            } else if (this.collectAsync) {
+                if (!this._asyncPending) {
+                    this._asyncPending = true;
+                    if (this._asyncTimeoutId)
+                        GLib.Source.remove(this._asyncTimeoutId);
+                    this._asyncTimeoutId = GLib.timeout_add_seconds(
+                        GLib.PRIORITY_DEFAULT, 30, () => {
+                            this._asyncTimeoutId = null;
+                            if (this._asyncPending) {
+                                sm_log(`${this.elt}: async collect timed out`, 'warn');
+                                this._asyncPending = false;
+                            }
+                            return GLib.SOURCE_REMOVE;
+                        });
+                    this.collectAsync(data => {
+                        this._asyncPending = false;
+                        if (this._asyncTimeoutId) {
+                            GLib.Source.remove(this._asyncTimeoutId);
+                            this._asyncTimeoutId = null;
+                        }
+                        if (this._destroyed)
+                            return;
+                        this._applyCollected(data);
+                    });
+                }
+            } else {
+                this.refresh();
+                this._apply();
+                this._postApply();
+                this._updateErrorLogged = false;
+            }
+        } catch (e) {
+            this._logUpdateError(e);
+        }
+        return GLib.SOURCE_CONTINUE;
+    }
+    _applyCollected(data) {
+        try {
             if (data)
                 this._autoApply(data);
             this._postApply();
-        } else if (this.collectAsync) {
-            if (!this._asyncPending) {
-                this._asyncPending = true;
-                if (this._asyncTimeoutId)
-                    GLib.Source.remove(this._asyncTimeoutId);
-                this._asyncTimeoutId = GLib.timeout_add_seconds(
-                    GLib.PRIORITY_DEFAULT, 30, () => {
-                        this._asyncTimeoutId = null;
-                        if (this._asyncPending) {
-                            sm_log(`${this.elt}: async collect timed out`, 'warn');
-                            this._asyncPending = false;
-                        }
-                        return GLib.SOURCE_REMOVE;
-                    });
-                this.collectAsync(data => {
-                    this._asyncPending = false;
-                    if (this._asyncTimeoutId) {
-                        GLib.Source.remove(this._asyncTimeoutId);
-                        this._asyncTimeoutId = null;
-                    }
-                    if (this._destroyed)
-                        return;
-                    if (data)
-                        this._autoApply(data);
-                    this._postApply();
-                });
-            }
-        } else {
-            this.refresh();
-            this._apply();
-            this._postApply();
+            this._updateErrorLogged = false;
+        } catch (e) {
+            this._logUpdateError(e);
         }
-        return GLib.SOURCE_CONTINUE;
+    }
+    _logUpdateError(e) {
+        if (this._updateErrorLogged)
+            return;
+        this._updateErrorLogged = true;
+        sm_log(`${this.elt}: update failed: ${e}`, 'error');
     }
     _postApply() {
         this.chart.update();
