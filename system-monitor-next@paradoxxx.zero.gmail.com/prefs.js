@@ -738,22 +738,28 @@ const SMMonitorsPage = GObject.registerClass({
         group.add(metricRow);
 
         let currentDevices = [];
+        let addBtn; // created below with the button box
         const updateTypeUI = () => {
             let type = MONITOR_TYPES[typeRow.selected];
             let isPrometheus = type === 'prometheus';
             deviceRow.visible = !isPrometheus;
             serverRow.visible = isPrometheus;
             metricRow.visible = isPrometheus;
+            let haveDevices = true;
             if (!isPrometheus) {
                 currentDevices = detectDevices(type);
                 let model = new Gtk.StringList();
                 currentDevices.forEach(d => model.append(d));
                 deviceRow.model = model;
                 deviceRow.selected = 0;
+                // E.g. thermal/fan on a machine with no readable sensors;
+                // a monitor saved without a real device could never
+                // resolve, so block the add instead.
+                haveDevices = currentDevices.length > 0;
+                deviceRow.subtitle = haveDevices ? '' : _('No devices detected');
             }
+            addBtn.sensitive = haveDevices;
         };
-        typeRow.connect('notify::selected', updateTypeUI);
-        updateTypeUI();
 
         let btnBox = new Gtk.Box({
             orientation: Gtk.Orientation.HORIZONTAL,
@@ -767,7 +773,7 @@ const SMMonitorsPage = GObject.registerClass({
         cancelBtn.connect('clicked', () => dialog.close());
         btnBox.append(cancelBtn);
 
-        let addBtn = new Gtk.Button({
+        addBtn = new Gtk.Button({
             label: _('Add'),
             css_classes: ['suggested-action'],
         });
@@ -785,6 +791,9 @@ const SMMonitorsPage = GObject.registerClass({
             dialog.close();
         });
         btnBox.append(addBtn);
+
+        typeRow.connect('notify::selected', updateTypeUI);
+        updateTypeUI();
 
         dialog.present();
     }
