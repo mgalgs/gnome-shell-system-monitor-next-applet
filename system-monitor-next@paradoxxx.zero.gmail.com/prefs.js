@@ -776,7 +776,6 @@ const SMMonitorsPage = GObject.registerClass({
 
 const PROJECT_URL = 'https://github.com/mgalgs/gnome-shell-system-monitor-next-applet';
 
-
 const SMWhatsNewPage = GObject.registerClass({
     GTypeName: 'SMWhatsNewPage',
 }, class SMWhatsNewPage extends Adw.PreferencesPage {
