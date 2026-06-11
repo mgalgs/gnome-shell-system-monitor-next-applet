@@ -37,14 +37,14 @@ const Prometheus = class SystemMonitor_Prometheus extends ElementBase {
 
     collectAsync(callback) {
         if (!this._session) {
-            callback({metrics: {value: 0}, display: '--'});
+            callback(this._failureData());
             return;
         }
 
         let uri = this._server + '/metrics';
         let message = Soup.Message.new('GET', uri);
         if (!message) {
-            callback({metrics: {value: 0}, display: '--'});
+            callback(this._failureData());
             return;
         }
 
@@ -52,23 +52,34 @@ const Prometheus = class SystemMonitor_Prometheus extends ElementBase {
             try {
                 let bytes = session.send_and_read_finish(result);
                 if (message.get_status() !== Soup.Status.OK) {
-                    callback({metrics: {value: 0}, display: '--'});
+                    callback(this._failureData());
                     return;
                 }
                 let text = new TextDecoder().decode(bytes.get_data());
                 let val = this._parseMetric(text);
                 if (val === null) {
-                    callback({metrics: {value: 0}, display: '--'});
+                    callback(this._failureData());
                     return;
                 }
+                this._fetchErrorLogged = false;
                 let display = this._formatValue(val);
                 callback({metrics: {value: val}, display: display});
             } catch (e) {
-                if (!(e instanceof Gio.IOErrorEnum) || e.code !== Gio.IOErrorEnum.CANCELLED)
+                if (!this._fetchErrorLogged &&
+                    (!(e instanceof Gio.IOErrorEnum) || e.code !== Gio.IOErrorEnum.CANCELLED)) {
                     sm_log(`Prometheus fetch error: ${e.message}`, 'warn');
-                callback({metrics: {value: 0}, display: '--'});
+                    this._fetchErrorLogged = true;
+                }
+                callback(this._failureData());
             }
         });
+    }
+
+    // No metrics key: a failed scrape must not chart a fake 0
+    // (indistinguishable from a real zero reading) -- leave the chart at
+    // its last value and signal the failure via the panel text.
+    _failureData() {
+        return {display: '--'};
     }
 
     _parseMetric(text) {
