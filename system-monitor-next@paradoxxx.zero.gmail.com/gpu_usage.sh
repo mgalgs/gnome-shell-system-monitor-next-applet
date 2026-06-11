@@ -63,7 +63,7 @@ elif checkcommand glxinfo; then
 	AVAILVRAM=$(glxinfo | grep -A4 -i GL_NVX_gpu_memory_info | grep -E -i 'available dedicated')
 	AVAILVRAM=${AVAILVRAM##*:[[:blank:]]}
 	AVAILVRAM=${AVAILVRAM%%[[:blank:]]MB*}
-	let FREEVRAM=TOTALVRAM-AVAILVRAM
+	FREEVRAM=$((TOTALVRAM - AVAILVRAM))
 	echo "$TOTALVRAM"
 	echo "$FREEVRAM"
 
