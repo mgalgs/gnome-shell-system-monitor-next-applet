@@ -890,6 +890,13 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
                 unit.push(all_unit);
             }
         }
+        // The base constructor already builds a default set of rows; widgets
+        // calling this again with custom units must replace them, not append
+        // a second set.
+        this.tipmenu.removeAll();
+        this.tip_labels = [];
+        this.tip_unit_labels = [];
+        this.tip_vals = [];
         for (let i = 0; i < this.color_name.length; i++) {
             let tipline = new TipItem();
             this.tipmenu.addMenuItem(tipline);
