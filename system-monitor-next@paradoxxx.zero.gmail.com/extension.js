@@ -147,6 +147,23 @@ export default class SystemMonitorExtension extends Extension {
         }
     }
 
+    // One malformed entry in the user-editable monitors key must not take
+    // down the whole extension (or abort a sync mid-way), so widget
+    // construction failures are contained here and the entry skipped.
+    _createWidget(config) {
+        const WidgetClass = WIDGET_CLASSES[config.type];
+        if (!WidgetClass) {
+            sm_log(`Skipping monitor ${config.uuid}: unknown type "${config.type}"`, 'warn');
+            return null;
+        }
+        try {
+            return new WidgetClass(this, config);
+        } catch (e) {
+            sm_log(`Skipping monitor ${config.uuid} (${config.type}): ${e}`, 'error');
+            return null;
+        }
+    }
+
     _syncMonitors() {
         const newConfigs = parseMonitorConfigs(this._Schema.get_strv('monitors'));
         const oldUUIDs = new Set(this.__sm.elts.map(elt => elt.config.uuid));
@@ -169,13 +186,16 @@ export default class SystemMonitorExtension extends Extension {
             let widget = this.__sm.widgetMap.get(config.uuid);
 
             if (widget) {
-                widget.onSettingsChanged(config);
+                try {
+                    widget.onSettingsChanged(config);
+                } catch (e) {
+                    sm_log(`Monitor ${config.uuid} (${config.type}) failed to apply new settings: ${e}`, 'error');
+                }
                 newEltArray.push(widget);
             } else {
                 sm_log(`Adding new monitor ${config.uuid} (${config.type})`);
-                const WidgetClass = WIDGET_CLASSES[config.type];
-                if (WidgetClass) {
-                    const newWidget = new WidgetClass(this, config);
+                const newWidget = this._createWidget(config);
+                if (newWidget) {
                     this.__sm.widgetMap.set(config.uuid, newWidget);
                     newEltArray.push(newWidget);
                 }
@@ -268,9 +288,8 @@ export default class SystemMonitorExtension extends Extension {
         // Create widgets from monitors config
         const monitorConfigs = parseMonitorConfigs(this._Schema.get_strv('monitors'));
         for (const config of monitorConfigs) {
-            const WidgetClass = WIDGET_CLASSES[config.type];
-            if (WidgetClass) {
-                const widget = new WidgetClass(this, config);
+            const widget = this._createWidget(config);
+            if (widget) {
                 this.__sm.elts.push(widget);
                 this.__sm.widgetMap.set(config.uuid, widget);
                 this.__sm.box.add_child(widget.actor);
