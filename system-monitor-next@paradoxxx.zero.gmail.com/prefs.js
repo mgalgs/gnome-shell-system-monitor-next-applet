@@ -38,7 +38,8 @@ const SMGeneralPrefsPage = GObject.registerClass({
     Template: import.meta.url.replace('prefs.js', 'ui/prefsGeneralSettings.ui'),
     InternalChildren: ['background', 'icon_display', 'show_tooltip', 'move_clock',
         'compact_display', 'center_display', 'left_display', 'rotate_labels',
-        'tooltip_delay_ms', 'graph_delay_m', 'custom_monitor_switch', 'custom_monitor_command'],
+        'tooltip_delay_ms', 'graph_delay_m', 'disk_usage_style',
+        'custom_monitor_switch', 'custom_monitor_command'],
 }, class SMGeneralPrefsPage extends Adw.PreferencesPage {
     constructor(settings, params = {}) {
         super(params);
@@ -104,6 +105,12 @@ const SMGeneralPrefsPage = GObject.registerClass({
         this._settings.bind('graph-cooldown-delay-m', this._graph_delay_m,
             'value', Gio.SettingsBindFlags.DEFAULT
         );
+
+        // Enum key: bind() can't map a combo index to the enum nick.
+        this._disk_usage_style.selected = this._settings.get_enum('disk-usage-style');
+        this._disk_usage_style.connect('notify::selected', w => {
+            this._settings.set_enum('disk-usage-style', w.selected);
+        });
 
         const hasCommand = this._settings.get_string('custom-monitor-command').trim() !== '';
         this._custom_monitor_switch.active = hasCommand;
