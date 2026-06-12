@@ -612,7 +612,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         const meta = this.constructor.metadata;
 
         this.elt = meta?.id || meta?.name?.toLowerCase() || config.type;
-        this.item_name = meta ? _(meta.name) : _('');
+        this.item_name = meta ? _(meta.name) : '';
         this.color_name = meta ? meta.metrics.filter(m => m.color).map(m => m.key) : [];
         this.device_id = config.device;
         this.text_items = [];
