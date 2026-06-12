@@ -88,7 +88,7 @@
         </child>
         <child>
           <object class="AdwComboRow" id="disk_usage_style">
-            <property name="title" translatable="yes">Disk Usage Style</property>
+            <property name="title" translatable="yes">Usage Style</property>
             <property name="subtitle" translatable="yes">How disk usage is shown in the dropdown menu</property>
             <property name="model">
               <object class="GtkStringList">

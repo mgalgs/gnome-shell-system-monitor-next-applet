@@ -430,7 +430,7 @@ const SMMonitorRow = GObject.registerClass({
     _buildSettings() {
         let c = this._config;
 
-        let showMenu = new Adw.SwitchRow({title: _('Show in Menu'), active: c['show-menu']});
+        let showMenu = new Adw.SwitchRow({title: _('Show In Menu'), active: c['show-menu']});
         showMenu.connect('notify::active', w => { c['show-menu'] = w.active; this._emitChanged(); });
         this.add_row(showMenu);
 
@@ -467,7 +467,8 @@ const SMMonitorRow = GObject.registerClass({
         });
 
         let refreshTime = new Adw.SpinRow({
-            title: _('Refresh Time (ms)'),
+            title: _('Refresh Time'),
+            subtitle: 'ms',
             numeric: true,
             adjustment: new Gtk.Adjustment({
                 value: c['refresh-time'], lower: 100, upper: 100000,
@@ -507,7 +508,7 @@ const SMMonitorRow = GObject.registerClass({
         switch (c.type) {
         case 'thermal': {
             let fahrenheit = new Adw.SwitchRow({
-                title: _('Display in Fahrenheit'),
+                title: _('Display temperature in Fahrenheit'),
                 active: c['fahrenheit-unit'] || false,
             });
             fahrenheit.connect('notify::active', w => {
@@ -533,7 +534,7 @@ const SMMonitorRow = GObject.registerClass({
         }
         case 'net': {
             let speedBits = new Adw.SwitchRow({
-                title: _('Show speed in bits'),
+                title: _('Show network speed in bits'),
                 active: c['speed-in-bits'] || false,
             });
             speedBits.connect('notify::active', w => {
