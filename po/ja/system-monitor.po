@@ -4,12 +4,12 @@
 # Shinichirou Yamada <yamada_strong_yamada_nice_64bit@yahoo.co.jp>, 2017.
 # sicklylife <translation@sicklylife.jp>, 2019.
 #
-#: extension.js:906
+#: base.js:615
 msgid ""
 msgstr ""
 "Project-Id-Version: system-monitor\n"
 "Report-Msgid-Bugs-To: paradoxxx.zero@gmail.com\n"
-"POT-Creation-Date: 2021-07-07 19:01+0200\n"
+"POT-Creation-Date: 2026-06-11 19:02-0700\n"
 "PO-Revision-Date: 2019-02-10 19:21+0900\n"
 "Last-Translator: sicklylife <translation@sicklylife.jp>\n"
 "Language-Team: \n"
@@ -27,31 +27,31 @@ msgstr ":"
 msgid "Display"
 msgstr "表示"
 
-#: prefs.js:357
+#: prefs.js:357 prefs.js:470
 msgid "Refresh Time"
 msgstr "更新間隔"
 
-#: prefs.js:362
+#: prefs.js:362 prefs.js:455
 msgid "Graph Width"
 msgstr "グラフの幅"
 
-#: prefs.js:348
+#: prefs.js:348 prefs.js:437
 msgid "Show Text"
 msgstr "テキストを表示"
 
-#: prefs.js:367
+#: prefs.js:367 prefs.js:444
 msgid "Display Style"
 msgstr "表示スタイル"
 
-#: prefs.js:490
+#: prefs.js:490 ui/prefsGeneralSettings.ui:23
 msgid "Display Icon"
 msgstr "アイコンを表示"
 
-#: prefs.js:495
+#: prefs.js:495 ui/prefsGeneralSettings.ui:43
 msgid "Display in the Middle"
 msgstr "中央に表示"
 
-#: prefs.js:516
+#: prefs.js:516 ui/prefsGeneralSettings.ui:13
 msgid "Background Color"
 msgstr "背景色"
 
@@ -59,7 +59,7 @@ msgstr "背景色"
 msgid "Display Individual Cores"
 msgstr "各コアを表示"
 
-#: prefs.js:419
+#: prefs.js:419 prefs.js:537
 msgid "Show network speed in bits"
 msgstr "ネットワークの速度をビット単位で表示"
 
@@ -71,11 +71,11 @@ msgstr "センサー"
 msgid "Please install lm-sensors"
 msgstr "lm-sensors をインストールしてください"
 
-#: prefs.js:511
+#: prefs.js:511 ui/prefsGeneralSettings.ui:33
 msgid "Move the clock"
 msgstr "時計を移動"
 
-#: prefs.js:500
+#: prefs.js:500 ui/prefsGeneralSettings.ui:38
 msgid "Compact Display"
 msgstr "コンパクト表示"
 
@@ -118,7 +118,7 @@ msgstr "スワップ"
 msgid "Used"
 msgstr "使用済み"
 
-#: extension.js:1781
+#: extension.js:1781 widgets/network.js:61
 msgid "Net"
 msgstr "ネット"
 
@@ -143,7 +143,7 @@ msgstr "コリジョン"
 msgid "Collisions"
 msgstr "コリジョン"
 
-#: extension.js:1490
+#: extension.js:1490 widgets/disk.js:36
 msgid "Disk"
 msgstr "ディスク"
 
@@ -191,11 +191,11 @@ msgstr "ネット"
 msgid "disk"
 msgstr ""
 
-#: extension.js:2536
+#: extension.js:2536 extension.js:354
 msgid "Preferences..."
 msgstr "設定..."
 
-#: extension.js:2530
+#: extension.js:2530 extension.js:347
 msgid "System Monitor..."
 msgstr "システムモニター..."
 
@@ -257,20 +257,23 @@ msgid "read"
 msgstr ""
 
 #: extension.js:211 extension.js:1805 extension.js:1900 extension.js:1912
-#: extension.js:1942 extension.js:1953 extension.js:1964
+#: extension.js:1942 extension.js:1953 extension.js:1964 base.js:167
+#: widgets/network.js:67 widgets/network.js:159
 msgid "KiB/s"
 msgstr "KiB/s"
 
 #: extension.js:210 extension.js:212 extension.js:1498 extension.js:1903
-#: extension.js:1915
+#: extension.js:1915 base.js:166 base.js:168 widgets/network.js:160
 msgid "MiB/s"
 msgstr "MiB/s"
 
-#: extension.js:214 extension.js:1875 extension.js:1887
+#: extension.js:214 extension.js:1875 extension.js:1887 base.js:170
+#: widgets/network.js:154
 msgid "kbit/s"
 msgstr "kbit/s"
 
-#: extension.js:215 extension.js:1878 extension.js:1890
+#: extension.js:215 extension.js:1878 extension.js:1890 base.js:171
+#: widgets/network.js:155
 msgid "Mbit/s"
 msgstr "Mbit/s"
 
@@ -282,15 +285,15 @@ msgstr "MiB"
 msgid "GiB"
 msgstr "GiB"
 
-#: extension.js:228
+#: extension.js:228 base.js:185
 msgid "kB"
 msgstr "kB"
 
-#: extension.js:227 extension.js:229
+#: extension.js:227 extension.js:229 base.js:184 base.js:186
 msgid "MB"
 msgstr "MB"
 
-#: extension.js:2089 extension.js:2094
+#: extension.js:2089 extension.js:2094 widgets/thermal.js:25
 msgid "Thermal"
 msgstr "温度"
 
@@ -298,31 +301,31 @@ msgstr "温度"
 msgid "thermal"
 msgstr "温度"
 
-#: prefs.js:352
+#: prefs.js:352 prefs.js:433
 msgid "Show In Menu"
 msgstr "メニュー内に表示"
 
-#: prefs.js:427
+#: prefs.js:427 prefs.js:549
 msgid "Show Time Remaining"
 msgstr "残り時間を表示"
 
-#: prefs.js:431
+#: prefs.js:431 prefs.js:559
 msgid "Hide System Icon"
 msgstr "システムアイコンを隠す"
 
-#: prefs.js:435
+#: prefs.js:435 ui/prefsGeneralSettings.ui:91
 msgid "Usage Style"
 msgstr "使用量の表示スタイル"
 
-#: prefs.js:436
+#: prefs.js:436 ui/prefsGeneralSettings.ui:96
 msgid "pie"
 msgstr "円"
 
-#: prefs.js:436
+#: prefs.js:436 ui/prefsGeneralSettings.ui:97
 msgid "bar"
 msgstr "バー"
 
-#: prefs.js:436
+#: prefs.js:436 ui/prefsGeneralSettings.ui:98
 msgid "none"
 msgstr "なし"
 
@@ -330,7 +333,7 @@ msgstr "なし"
 msgid "System Monitor Extension"
 msgstr "システムモニター拡張機能"
 
-#: extension.js:316
+#: extension.js:316 prefs.js:773
 msgid "Cancel"
 msgstr "キャンセル"
 
@@ -349,7 +352,7 @@ msgstr ""
 msgid "freq"
 msgstr ""
 
-#: extension.js:2163
+#: extension.js:2163 widgets/fan.js:23
 msgid "Fan"
 msgstr "ファン"
 
@@ -361,23 +364,23 @@ msgstr "ファン"
 msgid "rpm"
 msgstr "rpm"
 
-#: prefs.js:505
+#: prefs.js:505 ui/prefsGeneralSettings.ui:28
 msgid "Show tooltip"
 msgstr "ツールチップを表示"
 
-#: extension.js:1287
+#: extension.js:1287 widgets/cpu.js:46 widgets/cpu.js:47 widgets/cpu.js:49
 msgid "CPU"
 msgstr "CPU"
 
-#: prefs.js:448
+#: prefs.js:448 prefs.js:511
 msgid "Display temperature in Fahrenheit"
 msgstr "華氏で温度を表示"
 
-#: prefs.js:452
+#: prefs.js:452 prefs.js:521
 msgid "Temperature threshold (0 to disable)"
 msgstr "温度のしきい値 (0 で無効)"
 
-#: prefs.js:34
+#: prefs.js:34 prefs.js:27
 #, javascript-format
 msgid "#%02x%02x%02x%02x"
 msgstr ""
@@ -398,7 +401,7 @@ msgstr " KiB/s"
 msgid " ↑"
 msgstr ""
 
-#: extension.js:2218 extension.js:2223
+#: extension.js:2218 extension.js:2223 widgets/gpu.js:26
 msgid "GPU"
 msgstr "GPU"
 
@@ -429,20 +432,240 @@ msgstr ""
 "\t    Arch: libgtop, networkmanager\n"
 "\t    openSUSE: typelib-1_0-GTop-2_0, typelib-1_0-NetworkManager-1_0\n"
 
-#: extension.js:213 extension.js:1907 extension.js:1919
+#: extension.js:213 extension.js:1907 extension.js:1919 base.js:169
+#: widgets/network.js:161
 #, fuzzy
 msgid "GiB/s"
 msgstr "KiB/s"
 
-#: extension.js:216 extension.js:1882 extension.js:1894
+#: extension.js:216 extension.js:1882 extension.js:1894 base.js:172
+#: widgets/network.js:156
 #, fuzzy
 msgid "Gbit/s"
 msgstr "kbit/s"
 
-#: extension.js:230
+#: extension.js:230 base.js:187
 #, fuzzy
 msgid "GB"
 msgstr "GiB"
+
+#: prefs.js:572
+msgid "Max across all cores"
+msgstr ""
+
+#: prefs.js:573
+msgid "Average across all cores"
+msgstr ""
+
+#: prefs.js:575
+#, fuzzy
+msgid "Display Mode"
+msgstr "アイコンを表示"
+
+#: prefs.js:588 prefs.js:736
+msgid "Exporter URL"
+msgstr ""
+
+#: prefs.js:598 prefs.js:738
+msgid "Metric (e.g. node_load1 or metric{label=\"val\"})"
+msgstr ""
+
+#: prefs.js:619
+msgid "Monitors"
+msgstr ""
+
+#: prefs.js:629
+#, fuzzy
+msgid "Active Monitors"
+msgstr "システムモニター..."
+
+#: prefs.js:630
+msgid "Drag to reorder. Changes apply immediately."
+msgstr ""
+
+#: prefs.js:647
+msgid "Add Monitor…"
+msgstr ""
+
+#: prefs.js:706
+msgid "Add Monitor"
+msgstr ""
+
+#: prefs.js:729
+msgid "Type"
+msgstr ""
+
+#: prefs.js:733
+msgid "Device"
+msgstr ""
+
+#: prefs.js:760
+msgid "No devices detected"
+msgstr ""
+
+#: prefs.js:778
+msgid "Add"
+msgstr ""
+
+#: prefs.js:812
+msgid "About"
+msgstr ""
+
+#: prefs.js:819
+msgid ""
+"Modular, config-driven system monitoring for your GNOME desktop. Add, "
+"remove, and reorder monitors freely — each with independent settings."
+msgstr ""
+
+#: prefs.js:824
+msgid "What's New"
+msgstr ""
+
+#: prefs.js:830
+msgid "Multi-Device Monitoring"
+msgstr ""
+
+#: prefs.js:831
+msgid ""
+"Add multiple instances of any monitor type. Track individual CPU cores, "
+"specific network interfaces, or separate GPU devices — each with its own "
+"colors and refresh rate."
+msgstr ""
+
+#: prefs.js:836
+msgid "Prometheus Metrics"
+msgstr ""
+
+#: prefs.js:837
+msgid ""
+"Graph any metric from a Prometheus-compatible exporter directly in your "
+"panel. Monitor custom application metrics, hardware sensors, or anything "
+"with a metrics endpoint — no code changes required."
+msgstr ""
+
+#: prefs.js:842
+msgid "Drag &amp; Drop Reordering"
+msgstr ""
+
+#: prefs.js:843
+msgid ""
+"Reorder monitors by dragging them in the Monitors tab. Changes apply "
+"instantly — no shell restart required."
+msgstr ""
+
+#: prefs.js:848
+msgid "Theme Integration"
+msgstr ""
+
+#: prefs.js:849
+msgid ""
+"Panel widgets automatically use your desktop theme's foreground color for "
+"text and labels, blending seamlessly with any theme."
+msgstr ""
+
+#: prefs.js:853
+msgid "Learn More"
+msgstr ""
+
+#: prefs.js:858
+msgid "Custom Metrics Guide"
+msgstr ""
+
+#: prefs.js:859
+msgid "Graph any metric using Prometheus exporters"
+msgstr ""
+
+#: prefs.js:864
+msgid "Widget Development"
+msgstr ""
+
+#: prefs.js:865
+msgid "Create new widget types for the extension"
+msgstr ""
+
+#: prefs.js:870
+msgid "Project Homepage"
+msgstr ""
+
+#: prefs.js:871
+msgid "Report issues, contribute, or star the project"
+msgstr ""
+
+#: prefs.js:920
+#, fuzzy
+msgid "System Monitor Next Preferences"
+msgstr "システムモニター拡張機能"
+
+#: widgets/battery.js:133
+#, javascript-format
+msgctxt "battery time remaining"
+msgid "%d:%02d"
+msgstr ""
+
+#: widgets/frequency.js:25
+msgid "F"
+msgstr ""
+
+#: widgets/frequency.js:26
+msgid "Freq Core "
+msgstr ""
+
+#: widgets/gpu.js:28
+#, fuzzy
+msgid "gpu"
+msgstr "CPU"
+
+#: ui/prefsGeneralSettings.ui:5
+msgid "General"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:9
+msgid "Configure the appearance of the extension"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:48
+#, fuzzy
+msgid "Display on the Left"
+msgstr "中央に表示"
+
+#: ui/prefsGeneralSettings.ui:53
+msgid "Rotate labels"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:58
+msgid "Tooltip delay"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:74
+msgid "Graph scale reset cooldown period"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:75
+msgid ""
+"Minutes to wait before downscaling graph scale (helps contextualize new data "
+"in terms of recent spikes)"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:92
+msgid "How disk usage is shown in the dropdown menu"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:106
+#, fuzzy
+msgid "Custom System Monitor Command"
+msgstr "システムモニター拡張機能"
+
+#: ui/prefsGeneralSettings.ui:107
+msgid "Use a custom command instead of GNOME System Monitor"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:112
+msgid "Command (e.g. 'missioncenter')"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:113
+msgid "Command to run instead of GNOME System Monitor"
+msgstr ""
 
 #~ msgid " R"
 #~ msgstr " R"
