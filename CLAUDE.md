@@ -114,6 +114,8 @@ make vm-test VM=gssmn-fedora42
 ./testing/vm/vm-test.sh --vm gssmn-fedora42 --screenshot-only --label check-ui
 ```
 
+**Important: JS module caching.** GNOME Shell caches extension JS modules in memory for the lifetime of the shell process. A `vm-test.sh` deploy (disable → install zip → enable) puts new files on disk but the shell keeps running the old cached modules. **You must reboot the VM** (`make vm-ssh VM=...` then `sudo reboot`) after deploying JS changes for them to take effect. Config-only changes via `vm-config.sh` (dconf/GSettings writes) work immediately without reboot.
+
 #### Pushing configs and visual testing
 
 ```bash
