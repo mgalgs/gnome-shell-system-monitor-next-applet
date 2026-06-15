@@ -28,45 +28,55 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
 
     }
     collectAsync(callback) {
+        let display_mode = this.config['display-mode'] || 'max';
+        let indices;
+        if (this.device_id !== 'all') {
+            indices = [parseInt(this.device_id)];
+        } else {
+            let num_cpus = GTop.glibtop_get_sysinfo().ncpu;
+            indices = Array.from({length: num_cpus}, (_v, i) => i);
+        }
+
         let total_frequency = 0;
         let max_frequency = 0;
-        let num_cpus = GTop.glibtop_get_sysinfo().ncpu;
-        let display_mode = this.config['display-mode'] || 'max';
+        let read_count = 0;
+        let pos = 0;
 
-        if (this.device_id !== 'all') {
-            let i = parseInt(this.device_id);
+        // Read each core's scaling_cur_freq sequentially, tolerating cores
+        // without cpufreq (common in VMs/containers). A throw from
+        // load_contents_finish here must not break the chain, or the
+        // callback would never fire and update() would time out every tick.
+        const readNext = () => {
+            if (pos >= indices.length) {
+                if (read_count === 0) {
+                    callback(null);
+                    return;
+                }
+                let freq = display_mode === 'average'
+                    ? Math.round(total_frequency / read_count / 1000)
+                    : Math.round(max_frequency / 1000);
+                callback(this._buildResult(freq));
+                return;
+            }
+            let i = indices[pos++];
             let file = Gio.file_new_for_path(`/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq`);
             file.load_contents_async(null, (source, result) => {
-                let as_r = source.load_contents_finish(result);
-                let freq = Math.round(parseInt(parse_bytearray(as_r[1])) / 1000);
-                callback(this._buildResult(freq));
-            });
-        } else {
-            let i = 0;
-            let file = Gio.file_new_for_path(`/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq`);
-            let that = this;
-
-            file.load_contents_async(null, function cb(source, result) {
-                let as_r = source.load_contents_finish(result);
-                let current_freq = parseInt(parse_bytearray(as_r[1]));
-
-                total_frequency += current_freq;
-                max_frequency = Math.max(max_frequency, current_freq);
-
-                if (++i >= num_cpus) {
-                    let freq;
-                    if (display_mode === 'max') {
-                        freq = Math.round(max_frequency / 1000);
-                    } else {
-                        freq = Math.round(total_frequency / num_cpus / 1000);
+                try {
+                    let [, contents] = source.load_contents_finish(result);
+                    let current_freq = parseInt(parse_bytearray(contents));
+                    if (!isNaN(current_freq)) {
+                        total_frequency += current_freq;
+                        max_frequency = Math.max(max_frequency, current_freq);
+                        read_count++;
                     }
-                    callback(that._buildResult(freq));
-                } else {
-                    file = Gio.file_new_for_path(`/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq`);
-                    file.load_contents_async(null, cb.bind(that));
+                } catch {
+                    // cpufreq unavailable for this core; skip it
                 }
+                readNext();
             });
-        }
+        };
+
+        readNext();
     }
     _buildResult(freq) {
         let value = freq.toString();
