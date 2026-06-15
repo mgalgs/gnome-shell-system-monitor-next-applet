@@ -457,6 +457,7 @@ export const TipBox = class SystemMonitor_TipBox {
         }
     }
     show_tip() {
+        this.in_to = 0;
         if (this.tipmenu)
             this.tipmenu.open();
         return GLib.SOURCE_REMOVE;
