@@ -65,6 +65,7 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
             let symbol = this._symbol();
             this.temp_over_threshold = this._temperature !== null &&
                 this._temperature > (this.config.threshold || 0);
+            this.threshold();
             callback({
                 metrics: {tz0: this._temperature},
                 display: this._formatTemp(),
@@ -72,12 +73,6 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
                 tipUnits: [_(symbol)],
             });
         });
-    }
-
-    update() {
-        let result = ElementBase.prototype.update.call(this);
-        this.threshold();
-        return result;
     }
 
     reset_style() {
@@ -90,6 +85,8 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
                 this.text_items[0].set_style('color: rgba(255, 0, 0, 1)');
             else
                 this.text_items[0].set_style(null);
+        } else {
+            this.text_items[0].set_style(null);
         }
     }
 
