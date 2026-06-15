@@ -621,6 +621,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this.menu_visible = true;
         this.timeout = null;
         this._updateErrorLogged = false;
+        this._asyncGen = 0;
 
         // Maximum value preserved during cooldown period
         this.graph_scale_max_including_cooldown = 0;
@@ -928,18 +929,21 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
             } else if (this.collectAsync) {
                 if (!this._asyncPending) {
                     this._asyncPending = true;
+                    const gen = ++this._asyncGen;
                     if (this._asyncTimeoutId)
                         GLib.Source.remove(this._asyncTimeoutId);
                     this._asyncTimeoutId = GLib.timeout_add_seconds(
                         GLib.PRIORITY_DEFAULT, 30, () => {
                             this._asyncTimeoutId = null;
-                            if (this._asyncPending) {
+                            if (this._asyncPending && this._asyncGen === gen) {
                                 sm_log(`${this.elt}: async collect timed out`, 'warn');
                                 this._asyncPending = false;
                             }
                             return GLib.SOURCE_REMOVE;
                         });
                     this.collectAsync(data => {
+                        if (this._asyncGen !== gen)
+                            return;
                         this._asyncPending = false;
                         if (this._asyncTimeoutId) {
                             GLib.Source.remove(this._asyncTimeoutId);
