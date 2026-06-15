@@ -157,7 +157,9 @@ export default class SystemMonitorExtension extends Extension {
             return null;
         }
         try {
-            return new WidgetClass(this, config);
+            const widget = new WidgetClass(this, config);
+            widget._activateTimers();
+            return widget;
         } catch (e) {
             sm_log(`Skipping monitor ${config.uuid} (${config.type}): ${e}`, 'error');
             return null;

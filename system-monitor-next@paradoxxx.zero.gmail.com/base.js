@@ -650,8 +650,6 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
 
         this.actor.visible = this.config.display;
 
-        this.restart_update_timer(l_limit(this.config['refresh-time']));
-
         const panelLabel = meta?.label || meta?.name?.toLowerCase()?.slice(0, 4) || this.elt;
         this.label = new St.Label({text: _(panelLabel),
             style_class: Style.get('sm-status-label')});
@@ -696,7 +694,9 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         });
 
         this.tip_format(meta?.tooltipUnit ?? '');
-
+    }
+    _activateTimers() {
+        this.restart_update_timer(l_limit(this.config['refresh-time']));
         this._initialUpdateId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             this._initialUpdateId = null;
             this.update();
