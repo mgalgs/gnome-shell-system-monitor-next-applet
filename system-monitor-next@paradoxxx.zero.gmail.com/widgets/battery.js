@@ -102,6 +102,8 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
             }
         } else {
             this._proxy.GetDevicesRemote((devices, error) => {
+                if (this._destroyed)
+                    return;
                 if (error) {
                     sm_log('Power proxy error: ' + error, 'error');
                     this._hideBattery();
