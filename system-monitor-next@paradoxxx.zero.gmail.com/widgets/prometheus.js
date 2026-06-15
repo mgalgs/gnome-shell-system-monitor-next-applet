@@ -137,15 +137,13 @@ const Prometheus = class SystemMonitor_Prometheus extends ElementBase {
     }
 
     onSettingsChanged(newConfig) {
-        const oldConfig = this.config;
-        super.onSettingsChanged(newConfig);
-
-        if (oldConfig.server !== newConfig.server)
+        if (this.config.server !== newConfig.server)
             this._server = newConfig.server || 'http://localhost:9100';
-        if (oldConfig.metric !== newConfig.metric) {
+        if (this.config.metric !== newConfig.metric) {
             this._metric = newConfig.metric || 'up';
             this._setLabels();
         }
+        super.onSettingsChanged(newConfig);
     }
 
     destroy() {
