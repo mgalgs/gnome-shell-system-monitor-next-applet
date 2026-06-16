@@ -1,22 +1,7 @@
 import Gio from "gi://Gio";
+import GTop from "gi://GTop";
 
 import { sm_log } from './utils.js';
-import { check_sensors } from './common.js';
-
-function getCpuCoreCount() {
-    try {
-        const file = Gio.File.new_for_path('/proc/cpuinfo');
-        const [success, contents] = file.load_contents(null);
-        if (success) {
-            const contentStr = new TextDecoder().decode(contents);
-            const matches = contentStr.match(/^processor/gm);
-            return matches ? matches.length : 1;
-        }
-    } catch (e) {
-        sm_log(`Could not read /proc/cpuinfo: ${e.message}`, 'warn');
-    }
-    return 1;
-}
 
 function migrateSettings(extension) {
     const SCHEMA_VERSION_KEY = 'settings-schema-version';
@@ -50,7 +35,7 @@ function migrateFrom0(_extension, _settings) {
     return true;
 }
 
-function migrateFrom1(extension, settings) { // eslint-disable-line complexity
+function migrateFrom1(extension, settings) {
     sm_log('Migrating settings: v1 -> v2 (creating monitors config)');
 
     const monitors = [];
@@ -87,7 +72,7 @@ function migrateFrom1(extension, settings) { // eslint-disable-line complexity
     for (const { type } of widgetTypes) {
         let devices;
         if (type === 'cpu' && settings.get_boolean('cpu-individual-cores')) {
-            const coreCount = getCpuCoreCount();
+            const coreCount = GTop.glibtop_get_sysinfo().ncpu;
             devices = Array.from({ length: coreCount }, (_, i) => i.toString());
         } else if (type === 'cpu') {
             devices = ['all'];
@@ -96,14 +81,7 @@ function migrateFrom1(extension, settings) { // eslint-disable-line complexity
         } else if (singletonWidgets.includes(type)) {
             devices = ['default'];
         } else if (type === 'thermal' || type === 'fan') {
-            const selectedSensor = settings.get_string(`${type}-sensor-label`);
-            if (selectedSensor) {
-                devices = [selectedSensor];
-            } else {
-                const sensorType = type === 'thermal' ? 'temp' : 'fan';
-                const allSensors = Object.keys(check_sensors(sensorType) || {});
-                devices = allSensors.length > 0 ? [allSensors[0]] : [''];
-            }
+            devices = [settings.get_string(`${type}-sensor-label`) || ''];
         } else {
             // net, disk, gpu: default to 'all' or '0'
             if (type === 'gpu') {
