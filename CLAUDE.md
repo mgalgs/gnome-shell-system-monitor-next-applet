@@ -114,7 +114,7 @@ make vm-test VM=gssmn-fedora42
 ./testing/vm/vm-test.sh --vm gssmn-fedora42 --screenshot-only --label check-ui
 ```
 
-**Important: JS module caching.** GNOME Shell caches extension JS modules in memory for the lifetime of the shell process. A `vm-test.sh` deploy (disable → install zip → enable) puts new files on disk but the shell keeps running the old cached modules. **You must reboot the VM** (`make vm-ssh VM=...` then `sudo reboot`) after deploying JS changes for them to take effect. Config-only changes via `vm-config.sh` (dconf/GSettings writes) work immediately without reboot.
+**Important: JS module caching.** GNOME Shell caches extension JS modules in memory for the lifetime of the shell process. A `vm-test.sh` deploy (disable → install zip → enable) puts new files on disk but the shell keeps running the old cached modules. **You must reboot the VM** (`./testing/vm/vm-ssh.sh --vm ... -- sudo reboot`) after deploying JS changes for them to take effect. Config-only changes via `vm-config.sh` (dconf/GSettings writes) work immediately without reboot.
 
 #### Pushing configs and visual testing
 
@@ -131,8 +131,11 @@ make vm-test VM=gssmn-fedora42
 # Open interactive graphical session (virt-viewer)
 make vm-viewer VM=gssmn-fedora42
 
-# SSH into the VM
+# SSH into the VM (interactive)
 make vm-ssh VM=gssmn-fedora42
+
+# Run a command on the VM
+./testing/vm/vm-ssh.sh --vm gssmn-fedora42 -- journalctl --user -b --no-pager
 ```
 
 Config presets live in `testing/vm/configs/*.json`. Each is a JSON file with a `monitors` array and optional `settings` for globals.
@@ -146,7 +149,7 @@ make vm-destroy VM=gssmn-fedora42
 
 **Output:** Screenshots (PNG) and logs are saved to `testing/vm/results/`. The test script prints absolute file paths for easy inspection.
 
-**For AI agents (Claude Code):** Run `vm-test.sh` with `run_in_background=true`, then `Read` the screenshot PNG and log file from the results.
+**For AI agents (Claude Code):** Run `vm-test.sh` with `run_in_background=true`, then `Read` the screenshot PNG and log file from the results. If a test fails and you need to debug, use `./testing/vm/vm-ssh.sh --vm NAME -- COMMAND` to run commands on the VM (e.g. `-- journalctl --user -b --no-pager`). Do not use raw `ssh` — the script handles port lookup, SSH key, and host key checking.
 
 ### Translation
 
