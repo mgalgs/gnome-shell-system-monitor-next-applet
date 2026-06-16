@@ -151,7 +151,10 @@ const Prometheus = class SystemMonitor_Prometheus extends ElementBase {
             this._cancellable.cancel();
             this._cancellable = null;
         }
-        this._session = null;
+        if (this._session) {
+            this._session.abort();
+            this._session = null;
+        }
         super.destroy();
     }
 };
