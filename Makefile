@@ -25,7 +25,8 @@ ZIPFILE = $(UUID).zip
 
 # Files that must be present in the release zip (sanity check)
 RELEASE_REQUIRED = metadata.json extension.js prefs.js base.js stylesheet.css \
-    schemas/gschemas.compiled widgets/cpu.js ui/prefsGeneralSettings.ui
+    schemas/org.gnome.shell.extensions.system-monitor-next-applet.gschema.xml \
+    widgets/cpu.js ui/prefsGeneralSettings.ui
 
 INSTALLBASE = $(PREFIX)/share/gnome-shell/extensions
 SCHEMAINSTALLBASE = $(PREFIX)/share/glib-2.0/schemas
@@ -111,7 +112,7 @@ uninstall:
 clean: zip-file.clean build.clean
 
 zip-file: clean build
-	$(Q)cd _build ; zip $(VV) -qr $(ZIPFILE) .
+	$(Q)cd _build ; zip $(VV) -qr $(ZIPFILE) . -x 'schemas/gschemas.compiled'
 	$(Q)mkdir -p dist
 	$(Q)mv _build/$(ZIPFILE) ./dist/$(ZIPFILE)
 	$(call msg,$@,Zip file saved to ./dist/$(ZIPFILE))
