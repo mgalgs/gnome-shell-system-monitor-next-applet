@@ -22,6 +22,9 @@ const Icon = class SystemMonitor_Icon {
             this.extension._Schema.disconnect(this._sigId);
             this._sigId = null;
         }
+        this.actor.destroy();
+        this.actor = null;
+        this.extension = null;
     }
 }
 

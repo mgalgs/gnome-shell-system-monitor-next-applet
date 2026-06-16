@@ -403,6 +403,8 @@ export default class SystemMonitorExtension extends Extension {
             this._Style = null;
         }
 
+        this._Schema = null;
+
         sm_log('applet disable');
     }
 }
