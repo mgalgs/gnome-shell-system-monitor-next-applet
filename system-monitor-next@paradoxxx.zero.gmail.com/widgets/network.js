@@ -36,25 +36,8 @@ const Net = class SystemMonitor_Net extends ElementBase {
         this.client = NM.Client.new(null);
         this.update_iface_list();
 
-        if (!this.ifs.length) {
-            try {
-                let [, net_contents] = Gio.File.new_for_path('/proc/net/dev').load_contents(null);
-                let net_lines = new TextDecoder().decode(net_contents).split('\n');
-                for (let i = 2; i < net_lines.length - 1; i++) {
-                    let ifc = net_lines[i].replace(/^\s+/g, '').split(':')[0];
-                    try {
-                        let [, op_contents] = Gio.File.new_for_path(
-                            '/sys/class/net/' + ifc + '/operstate').load_contents(null);
-                        if (new TextDecoder().decode(op_contents).replace(/\s/g, '') === 'up' &&
-                            ifc.indexOf('br') < 0 &&
-                            ifc.indexOf('lo') < 0) {
-                            if (this.device_id === 'all' || this.device_id === ifc)
-                                this.ifs.push(ifc);
-                        }
-                    } catch { /* operstate file may not exist */ }
-                }
-            } catch { /* /proc/net/dev unavailable */ }
-        }
+        if (!this.ifs.length)
+            this._detectInterfacesAsync();
 
         if (this.device_id !== 'all') {
             this.label.text = this.device_id;
@@ -76,6 +59,34 @@ const Net = class SystemMonitor_Net extends ElementBase {
         } catch (e) {
             console.error('Please install Network Manager Gobject Introspection Bindings: ' + e);
         }
+    }
+
+    _detectInterfacesAsync() {
+        Gio.File.new_for_path('/proc/net/dev').load_contents_async(null, (file, result) => {
+            try {
+                let [, contents] = file.load_contents_finish(result);
+                let lines = new TextDecoder().decode(contents).split('\n');
+                for (let i = 2; i < lines.length - 1; i++) {
+                    let ifc = lines[i].replace(/^\s+/g, '').split(':')[0];
+                    if (ifc.indexOf('br') >= 0 || ifc.indexOf('lo') >= 0)
+                        continue;
+                    this._checkOperstate(ifc);
+                }
+            } catch { /* /proc/net/dev unavailable */ }
+        });
+    }
+
+    _checkOperstate(ifc) {
+        Gio.File.new_for_path('/sys/class/net/' + ifc + '/operstate')
+            .load_contents_async(null, (opFile, opResult) => {
+                try {
+                    let [, opContents] = opFile.load_contents_finish(opResult);
+                    if (new TextDecoder().decode(opContents).replace(/\s/g, '') === 'up') {
+                        if (this.device_id === 'all' || this.device_id === ifc)
+                            this.ifs.push(ifc);
+                    }
+                } catch { /* operstate file may not exist */ }
+            });
     }
 
     update_iface_list() {
