@@ -47,7 +47,7 @@ After making changes to the extension code:
 
 ```bash
 # Reinstall
-make install
+make uninstall install
 ```
 
 Then reload GNOME Shell:

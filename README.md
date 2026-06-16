@@ -117,7 +117,7 @@ After installation, the extension will be available for enabling in GNOME Extens
 Now you can hack away on the extension in your clone of the repo and test
 your changes by running:
 
-    make uninstall install gschemas.install-and-compile
+    make uninstall install
 
 and reloading GNOME Shell.
 
