@@ -144,6 +144,32 @@ vm_wait_ssh() {
     return 1
 }
 
+# Wait for GNOME Shell to be running inside the VM (implies SSH is ready).
+# Usage: vm_wait_session <vm_name> [timeout_secs]
+vm_wait_session() {
+    local vm_name="$1"
+    local timeout="${2:-180}"
+
+    vm_wait_ssh "$vm_name" "$timeout" || return 1
+
+    local elapsed=0
+    local interval=3
+
+    log_info "Waiting for GNOME session on '$vm_name'..."
+
+    while [[ $elapsed -lt $timeout ]]; do
+        if vm_ssh "$vm_name" "pgrep -x gnome-shell" &>/dev/null; then
+            log_ok "GNOME session ready on '$vm_name' (${elapsed}s)"
+            return 0
+        fi
+        sleep "$interval"
+        elapsed=$((elapsed + interval))
+    done
+
+    log_error "GNOME session timeout after ${timeout}s for VM '$vm_name'"
+    return 1
+}
+
 # Check if VM exists in libvirt.
 vm_exists() {
     local vm_name="$1"
