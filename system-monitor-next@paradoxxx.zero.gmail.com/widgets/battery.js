@@ -73,6 +73,7 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
                     'g-properties-changed',
                     this._onBatteryChanged.bind(this),
                 );
+                this._onBatteryChanged();
                 this._poll_handler_id = undefined;
                 this._poll_attempts = 0;
                 return GLib.SOURCE_REMOVE;
