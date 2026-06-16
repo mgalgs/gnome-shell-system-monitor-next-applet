@@ -234,6 +234,7 @@ good option for a CI-based solution (more research on this is required).
 ## Authors
 
 - [paradoxxxzero](https://github.com/paradoxxxzero)
+- [mgalgs](https://github.com/mgalgs)
 - [yuyichao](https://github.com/yuyichao)
 - [darkxst](https://github.com/darkxst)
 - [And many contributors](https://github.com/mgalgs/gnome-shell-system-monitor-next-applet/contributors)
