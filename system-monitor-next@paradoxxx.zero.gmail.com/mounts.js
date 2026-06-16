@@ -51,7 +51,7 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
                 this.base_mounts.push(sMount);
             }
         });
-        this.connect();
+        this.startListening();
     }
     refresh() {
         // try check that number of volumes has changed
@@ -144,7 +144,7 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
             return false;
         }
     }
-    connect() {
+    startListening() {
         if (this.connected) {
             return;
         }
@@ -160,7 +160,7 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
         }
         this.refresh();
     }
-    disconnect() {
+    stopListening() {
         if (!this.connected) {
             return;
         }
@@ -169,7 +169,7 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
         this.connected = false;
     }
     destroy() {
-        this.disconnect();
+        this.stopListening();
     }
 }
 

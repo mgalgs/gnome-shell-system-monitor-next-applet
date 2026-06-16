@@ -257,7 +257,7 @@ export default class SystemMonitorExtension extends Extension {
             panel = Main.panel._leftBox;
         }
 
-        this._MountsMonitor.connect();
+        this._MountsMonitor.startListening();
 
         this.__sm = {
             tray: new PanelMenu.Button(0.5),
@@ -324,7 +324,7 @@ export default class SystemMonitorExtension extends Extension {
 
         tray.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-        tray.menu.connect(
+        this._menuOpenId = tray.menu.connect(
             'open-state-changed',
             (menu, isOpen) => {
                 if (isOpen) {
@@ -385,6 +385,10 @@ export default class SystemMonitorExtension extends Extension {
             Main.panel._addToPanelBox('dateMenu', dateMenu, Main.sessionMode.panel.center.indexOf('dateMenu'), Main.panel._centerBox);
         }
 
+        if (this._menuOpenId) {
+            this.__sm.tray.menu.disconnect(this._menuOpenId);
+            this._menuOpenId = null;
+        }
         for (let elt of this.__sm.widgetMap.values()) {
             elt.destroy();
         }
@@ -395,7 +399,7 @@ export default class SystemMonitorExtension extends Extension {
         this.__sm = null;
 
         if (this._MountsMonitor) {
-            this._MountsMonitor.disconnect();
+            this._MountsMonitor.stopListening();
             this._MountsMonitor = null;
         }
 
