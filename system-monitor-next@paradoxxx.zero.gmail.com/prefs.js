@@ -624,6 +624,12 @@ const SMMonitorsPage = GObject.registerClass({
         this._settings = settings;
         this._monitors = [];
         this._saveTimerId = null;
+        this.connect('destroy', () => {
+            if (this._saveTimerId) {
+                GLib.Source.remove(this._saveTimerId);
+                this._saveTimerId = null;
+            }
+        });
 
         let group = new Adw.PreferencesGroup({
             title: _('Active Monitors'),
