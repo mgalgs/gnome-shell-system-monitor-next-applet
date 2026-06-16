@@ -206,10 +206,10 @@ export default class SystemMonitorExtension extends Extension {
 
         // Re-order widgets in panel
         this.__sm.elts = newEltArray;
-        this.__sm.box.remove_all_children();
-        this.__sm.box.add_child(this.__sm.icon.actor);
+        this._box.remove_all_children();
+        this._box.add_child(this.__sm.icon.actor);
         for (const widget of this.__sm.elts) {
-            this.__sm.box.add_child(widget.actor);
+            this._box.add_child(widget.actor);
             widget.actor.visible = widget.config.display;
         }
 
@@ -266,7 +266,6 @@ export default class SystemMonitorExtension extends Extension {
             bar: new Bar(this),
             elts: [],
             widgetMap: new Map(),
-            box: null,
         };
         let tray = this.__sm.tray;
 
@@ -283,9 +282,9 @@ export default class SystemMonitorExtension extends Extension {
         Main.panel._addToPanelBox('system-monitor', tray, 1, panel);
 
         let spacing = this._Schema.get_boolean('compact-display') ? '1' : '4';
-        this.__sm.box = new St.BoxLayout({style: 'spacing: ' + spacing + 'px;'});
-        tray.add_child(this.__sm.box);
-        this.__sm.box.add_child(this.__sm.icon.actor);
+        this._box = new St.BoxLayout({style: 'spacing: ' + spacing + 'px;'});
+        tray.add_child(this._box);
+        this._box.add_child(this.__sm.icon.actor);
 
         // Create widgets from monitors config
         const monitorConfigs = parseMonitorConfigs(this._Schema.get_strv('monitors'));
@@ -294,7 +293,7 @@ export default class SystemMonitorExtension extends Extension {
             if (widget) {
                 this.__sm.elts.push(widget);
                 this.__sm.widgetMap.set(config.uuid, widget);
-                this.__sm.box.add_child(widget.actor);
+                this._box.add_child(widget.actor);
             }
         }
 
@@ -395,7 +394,10 @@ export default class SystemMonitorExtension extends Extension {
         this.__sm.pie.destroy();
         this.__sm.bar.destroy();
         this.__sm.icon.destroy();
+        this._box.destroy();
+        this._box = null;
         this.__sm.tray.destroy();
+        this.__sm.tray = null;
         this.__sm = null;
 
         if (this._MountsMonitor) {
