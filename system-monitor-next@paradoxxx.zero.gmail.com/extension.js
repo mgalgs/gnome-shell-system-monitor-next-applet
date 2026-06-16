@@ -388,6 +388,8 @@ export default class SystemMonitorExtension extends Extension {
         for (let elt of this.__sm.widgetMap.values()) {
             elt.destroy();
         }
+        this.__sm.pie.destroy();
+        this.__sm.bar.destroy();
         this.__sm.icon.destroy();
         this.__sm.tray.destroy();
         this.__sm = null;

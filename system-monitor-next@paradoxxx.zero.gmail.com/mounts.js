@@ -182,14 +182,14 @@ export const Graph = class SystemMonitor_Graph {
         this.height = height;
         this.gtop = new GTop.glibtop_fsusage();
 
-        let themeContext = St.ThemeContext.get_for_stage(global.stage);
-        themeContext.connect('notify::scale-factor', this.set_scale.bind(this));
-        this.scale_factor = themeContext.scale_factor;
-        let interfaceSettings = new Gio.Settings({
+        this._themeContext = St.ThemeContext.get_for_stage(global.stage);
+        this._scaleFactorSigId = this._themeContext.connect('notify::scale-factor', this.set_scale.bind(this));
+        this.scale_factor = this._themeContext.scale_factor;
+        this._interfaceSettings = new Gio.Settings({
             schema: 'org.gnome.desktop.interface'
         });
-        interfaceSettings.connect('changed', this.set_text_scaling.bind(this));
-        this.text_scaling = interfaceSettings.get_double('text-scaling-factor');
+        this._interfaceSettingsSigId = this._interfaceSettings.connect('changed', this.set_text_scaling.bind(this));
+        this.text_scaling = this._interfaceSettings.get_double('text-scaling-factor');
         if (!this.text_scaling) {
             this.text_scaling = 1;
         }
@@ -219,6 +219,16 @@ export const Graph = class SystemMonitor_Graph {
         this.actor.set_width(this.width * this.scale_factor * this.text_scaling);
         this.actor.set_height(this.height * this.scale_factor * this.text_scaling);
     }
+    destroy() {
+        if (this._scaleFactorSigId) {
+            this._themeContext.disconnect(this._scaleFactorSigId);
+            this._scaleFactorSigId = null;
+        }
+        if (this._interfaceSettingsSigId) {
+            this._interfaceSettings.disconnect(this._interfaceSettingsSigId);
+            this._interfaceSettingsSigId = null;
+        }
+    }
 }
 
 export const Bar = class SystemMonitor_Bar extends Graph {
@@ -226,7 +236,8 @@ export const Bar = class SystemMonitor_Bar extends Graph {
         // Height doesn't matter, it gets set on every draw.
         super(extension, extension._Style.bar_width(), 100);
         this.mounts = extension._MountsMonitor.get_mounts();
-        extension._MountsMonitor.add_listener(this.update_mounts.bind(this));
+        this._mountListener = this.update_mounts.bind(this);
+        extension._MountsMonitor.add_listener(this._mountListener);
     }
     _draw() {
         if (!this.actor.visible) {
@@ -271,13 +282,18 @@ export const Bar = class SystemMonitor_Bar extends Graph {
         this.mounts = mounts;
         this.actor.queue_repaint();
     }
+    destroy() {
+        this.extension._MountsMonitor?.remove_listener(this._mountListener);
+        super.destroy();
+    }
 }
 
 export const Pie = class SystemMonitor_Pie extends Graph {
     constructor(extension) {
         super(extension, extension._Style.pie_size(), extension._Style.pie_size());
         this.mounts = extension._MountsMonitor.get_mounts();
-        extension._MountsMonitor.add_listener(this.update_mounts.bind(this));
+        this._mountListener = this.update_mounts.bind(this);
+        extension._MountsMonitor.add_listener(this._mountListener);
     }
 
     _draw() {
@@ -340,5 +356,9 @@ export const Pie = class SystemMonitor_Pie extends Graph {
     update_mounts(mounts) {
         this.mounts = mounts;
         this.actor.queue_repaint();
+    }
+    destroy() {
+        this.extension._MountsMonitor?.remove_listener(this._mountListener);
+        super.destroy();
     }
 }
