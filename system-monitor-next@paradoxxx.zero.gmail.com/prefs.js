@@ -11,7 +11,7 @@ import Adw from "gi://Adw";
 
 import { ExtensionPreferences, gettext as _ } from "resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js";
 
-import { check_sensors } from './common.js';
+import { parse_bytearray } from './common.js';
 
 const N_ = function (e) {
     return e;
@@ -265,6 +265,43 @@ function getGpuDevices() {
     return ['0'];
 }
 
+function detectSensors(sensorType) {
+    const sensors = {};
+    try {
+        const hwmonDir = Gio.File.new_for_path('/sys/class/hwmon/');
+        const hwmonEnum = hwmonDir.enumerate_children(
+            'standard::name,standard::type', Gio.FileQueryInfoFlags.NONE, null);
+        let hwmonInfo;
+        while ((hwmonInfo = hwmonEnum.next_file(null))) {
+            if (hwmonInfo.get_file_type() !== Gio.FileType.DIRECTORY ||
+                !hwmonInfo.get_name().match(/^hwmon\d+$/))
+                continue;
+            const chip = hwmonEnum.get_child(hwmonInfo);
+            let chipLabel = chip.get_basename();
+            try {
+                let [ok, c] = chip.get_child('name').load_contents(null);
+                if (ok) chipLabel = parse_bytearray(c).trim();
+            } catch { /* no name file */ }
+
+            const chipEnum = chip.enumerate_children(
+                'standard::name,standard::type', Gio.FileQueryInfoFlags.NONE, null);
+            const regex = new RegExp(`^${sensorType}(\\d+)_input$`);
+            let fInfo;
+            while ((fInfo = chipEnum.next_file(null))) {
+                const m = fInfo.get_name().match(regex);
+                if (!m) continue;
+                let inputLabel = m[1];
+                try {
+                    let [ok, c] = chip.get_child(`${sensorType}${m[1]}_label`).load_contents(null);
+                    if (ok) inputLabel = parse_bytearray(c).trim();
+                } catch { /* no label file */ }
+                sensors[`${chipLabel} - ${inputLabel}`] = true;
+            }
+        }
+    } catch { /* hwmon unavailable */ }
+    return Object.keys(sensors);
+}
+
 function detectDevices(type) {
     switch (type) {
     case 'cpu':
@@ -281,9 +318,9 @@ function detectDevices(type) {
     case 'gpu':
         return getGpuDevices();
     case 'thermal':
-        return Object.keys(check_sensors('temp'));
+        return detectSensors('temp');
     case 'fan':
-        return Object.keys(check_sensors('fan'));
+        return detectSensors('fan');
     case 'prometheus':
         return ['default'];
     default:

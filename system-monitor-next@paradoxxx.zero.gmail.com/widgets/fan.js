@@ -2,7 +2,7 @@
 
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
 import { sm_log } from '../utils.js';
-import { check_sensors, read_sensor_async } from '../common.js';
+import { check_sensors_async, read_sensor_async } from '../common.js';
 import { ElementBase } from '../base.js';
 
 const Fan = class SystemMonitor_Fan extends ElementBase {
@@ -16,7 +16,10 @@ const Fan = class SystemMonitor_Fan extends ElementBase {
     constructor(extension, config) {
         super(extension, config);
         this.sensor_label = this.device_id;
-        this.sensors = check_sensors('fan');
+        this.sensors = null;
+        check_sensors_async('fan', sensors => {
+            this.sensors = sensors;
+        });
         this._display_error = true;
         this._rpm = 0;
 

@@ -10,166 +10,201 @@ function parse_bytearray(maybeBA) {
     return decoder.decode(maybeBA);
 }
 
-function _check_sensors_sysfs(sensor_type) {
+function _check_sensors_sysfs_async(sensor_type, callback) {
     const hwmon_path = '/sys/class/hwmon/';
     const hwmon_dir = Gio.file_new_for_path(hwmon_path);
 
     const sensors = {};
+    let pending_labels = 0;
+    let enumeration_done = false;
 
-    function get_label_from(file) {
-        if (file.query_exists(null)) {
-            // load_contents (and even cat) fails with "Invalid argument" for some label files
-            try {
-                let [success, contents] = file.load_contents(null);
-                if (success) {
-                    // NOTE: contents of "name" and "*_label" files have a trailing newline
-                    return parse_bytearray(contents).trim('\n');
-                }
-            } catch (e) {
-                console.log(`error loading label from file ${file.get_path()}: ${e}`);
-            }
-        }
-        return null;
+    function maybe_finish() {
+        if (enumeration_done && pending_labels === 0)
+            callback(sensors);
     }
 
-    function add_sensors_from(chip_dir, chip_label) {
+    function read_label_async(file, cb) {
+        if (!file.query_exists(null)) {
+            cb(null);
+            return;
+        }
+        pending_labels++;
+        file.load_contents_async(null, (source, result) => {
+            let label = null;
+            try {
+                let [success, contents] = source.load_contents_finish(result);
+                if (success)
+                    label = parse_bytearray(contents).trim('\n');
+            } catch { /* some label files fail with "Invalid argument" */ }
+            pending_labels--;
+            cb(label);
+            maybe_finish();
+        });
+    }
+
+    function add_sensors_from(chip_dir, chip_label, done) {
         const chip_children = chip_dir.enumerate_children(
             'standard::name,standard::type', Gio.FileQueryInfoFlags.NONE, null);
         if (!chip_children) {
-            console.log(`error enumerating children of chip ${chip_dir.get_path()}`);
-            return false;
+            done(false);
+            return;
         }
 
         const input_entry_regex = new RegExp(`^${sensor_type}(\\d+)_input$`);
         let info;
         let added = false;
         while ((info = chip_children.next_file(null))) {
-            if (info.get_file_type() !== Gio.FileType.REGULAR) {
+            if (info.get_file_type() !== Gio.FileType.REGULAR)
                 continue;
-            }
             const matches = info.get_name().match(input_entry_regex);
-            if (!matches) {
+            if (!matches)
                 continue;
-            }
             const input_ordinal = matches[1];
             const input = chip_children.get_child(info);
-            const input_label = get_label_from(chip_dir.get_child(`${sensor_type}${input_ordinal}_label`));
+            const label_file = chip_dir.get_child(`${sensor_type}${input_ordinal}_label`);
 
-            const label = `${chip_label} - ${input_label || input_ordinal}`;
-            sensors[label] = {sysfsPath: input.get_path()};
             added = true;
+            read_label_async(label_file, input_label => {
+                const label = `${chip_label} - ${input_label || input_ordinal}`;
+                sensors[label] = {sysfsPath: input.get_path()};
+            });
         }
-        return added;
+        done(added);
     }
 
     const hwmon_children = hwmon_dir.enumerate_children(
         'standard::name,standard::type', Gio.FileQueryInfoFlags.NONE, null);
     if (!hwmon_children) {
-        console.log('error enumerating hwmon children');
-        return {};
+        callback({});
+        return;
     }
 
-    let info;
-    while ((info = hwmon_children.next_file(null))) {
-        if (info.get_file_type() !== Gio.FileType.DIRECTORY || !info.get_name().match(/^hwmon\d+$/)) {
+    let chips_pending = 0;
+    let chips_done = false;
+
+    function chip_finished() {
+        chips_pending--;
+        if (chips_done && chips_pending === 0) {
+            enumeration_done = true;
+            maybe_finish();
+        }
+    }
+
+    let chip_info;
+    while ((chip_info = hwmon_children.next_file(null))) {
+        if (chip_info.get_file_type() !== Gio.FileType.DIRECTORY || !chip_info.get_name().match(/^hwmon\d+$/))
             continue;
-        }
-        const chip = hwmon_children.get_child(info);
-        const chip_label = get_label_from(chip.get_child('name')) || chip.get_basename();
-
-        if (!add_sensors_from(chip, chip_label)) {
-            // Some hwmon devices don't place their sensor files
-            // into their "/sys/hwmon/hwmonN" directory, but into
-            // the "device" sub directory instead. An example is the
-            // Apple System Management Controller (kernel module "applesmc")
-            // in Intel-based Macs.
-            const device = chip.get_child('device');
-            if (device.query_exists(null)) {
-                const device_label = get_label_from(device.get_child('name')) || chip_label;
-                add_sensors_from(device, device_label);
-            }
-        }
+        const chip = hwmon_children.get_child(chip_info);
+        chips_pending++;
+        read_label_async(chip.get_child('name'), chip_label => {
+            chip_label = chip_label || chip.get_basename();
+            add_sensors_from(chip, chip_label, added => {
+                if (!added) {
+                    const device = chip.get_child('device');
+                    if (device.query_exists(null)) {
+                        read_label_async(device.get_child('name'), dev_label => {
+                            add_sensors_from(device, dev_label || chip_label, () => chip_finished());
+                        });
+                        return;
+                    }
+                }
+                chip_finished();
+            });
+        });
     }
-    return sensors;
+    chips_done = true;
+    if (chips_pending === 0) {
+        enumeration_done = true;
+        maybe_finish();
+    }
 }
 
-// A full `sensors -jA` sweep forks a subprocess and can take hundreds of
-// milliseconds on slow SMBus hardware, and enumeration runs synchronously on
-// the compositor thread from every thermal/fan widget constructor. Share one
-// result across all of them (and across the temp/fan calls) instead of
-// spawning per caller.
 const SENSORS_ENUM_CACHE_US = 60 * 1e6;
 let _sensors_json_cache;
 let _sensors_json_cache_time = 0;
 
-function _run_sensors_json() {
-    const now = GLib.get_monotonic_time();
-    if (_sensors_json_cache !== undefined && now - _sensors_json_cache_time < SENSORS_ENUM_CACHE_US)
-        return _sensors_json_cache;
-    let data = null;
-    try {
-        let [, stdout] = GLib.spawn_command_line_sync('sensors -jA');
-        data = JSON.parse(new TextDecoder().decode(stdout));
-    } catch {
-        data = null;
-    }
-    _sensors_json_cache = data;
-    _sensors_json_cache_time = now;
-    return data;
-}
-
-function _check_sensors_lm(sensor_type) {
-    let data = _run_sensors_json();
-    if (!data)
-        return null;
-
-    const inputRegex = new RegExp(`^${sensor_type}\\d+_input$`);
-
-    const driverCounts = {};
-    for (let chipName of Object.keys(data)) {
-        let driver = chipName.split('-')[0];
-        driverCounts[driver] = (driverCounts[driver] || 0) + 1;
-    }
-
-    const sensors = {};
-    for (let [chipName, chipSensors] of Object.entries(data)) {
-        let driver = chipName.split('-')[0];
-        let chipLabel = driverCounts[driver] > 1 ? chipName : driver;
-
-        for (let [sensorLabel, sensorData] of Object.entries(chipSensors)) {
-            if (typeof sensorData !== 'object')
-                continue;
-            let inputKey = Object.keys(sensorData).find(k => inputRegex.test(k));
-            if (!inputKey)
-                continue;
-
-            let label = `${chipLabel} - ${sensorLabel}`;
-            sensors[label] = {
-                chip: chipName,
-                sensorLabel: sensorLabel,
-                rawKey: inputKey,
-            };
-        }
-    }
-
-    return Object.keys(sensors).length > 0 ? sensors : null;
-}
-
-function check_sensors(sensor_type) {
-    const lm_sensors = _check_sensors_lm(sensor_type);
-    const sysfs_sensors = _check_sensors_sysfs(sensor_type);
+function _merge_sensors(lm_sensors, sysfs_sensors) {
     if (!lm_sensors)
         return sysfs_sensors;
-    // lm-sensors labels can differ from the sysfs ones for the same sensor
-    // (e.g. "acpitz - temp1" vs "acpitz - 1"). Configs saved before
-    // lm-sensors was installed -- including everything produced by the
-    // v1->v2 settings migration -- store sysfs-style labels, so keep those
-    // resolvable alongside the preferred lm-sensors entries.
     for (const [label, info] of Object.entries(sysfs_sensors)) {
         if (!(label in lm_sensors))
             lm_sensors[label] = info;
     }
     return lm_sensors;
+}
+
+function _run_sensors_json_async(callback) {
+    const now = GLib.get_monotonic_time();
+    if (_sensors_json_cache !== undefined && now - _sensors_json_cache_time < SENSORS_ENUM_CACHE_US) {
+        callback(_sensors_json_cache);
+        return;
+    }
+    try {
+        let proc = new Gio.Subprocess({
+            argv: ['sensors', '-jA'],
+            flags: Gio.SubprocessFlags.STDOUT_PIPE,
+        });
+        proc.init(null);
+        proc.communicate_utf8_async(null, null, (p, result) => {
+            let data = null;
+            try {
+                let [, output] = p.communicate_utf8_finish(result);
+                data = JSON.parse(output);
+            } catch {
+                data = null;
+            }
+            _sensors_json_cache = data;
+            _sensors_json_cache_time = GLib.get_monotonic_time();
+            callback(data);
+        });
+    } catch {
+        _sensors_json_cache = null;
+        _sensors_json_cache_time = GLib.get_monotonic_time();
+        callback(null);
+    }
+}
+
+function _check_sensors_lm_async(sensor_type, callback) {
+    _run_sensors_json_async(data => {
+        if (!data) {
+            callback(null);
+            return;
+        }
+
+        const inputRegex = new RegExp(`^${sensor_type}\\d+_input$`);
+        const driverCounts = {};
+        for (let chipName of Object.keys(data)) {
+            let driver = chipName.split('-')[0];
+            driverCounts[driver] = (driverCounts[driver] || 0) + 1;
+        }
+
+        const sensors = {};
+        for (let [chipName, chipSensors] of Object.entries(data)) {
+            let driver = chipName.split('-')[0];
+            let chipLabel = driverCounts[driver] > 1 ? chipName : driver;
+
+            for (let [sensorLabel, sensorData] of Object.entries(chipSensors)) {
+                if (typeof sensorData !== 'object')
+                    continue;
+                let inputKey = Object.keys(sensorData).find(k => inputRegex.test(k));
+                if (!inputKey)
+                    continue;
+
+                let label = `${chipLabel} - ${sensorLabel}`;
+                sensors[label] = {chip: chipName, sensorLabel, rawKey: inputKey};
+            }
+        }
+
+        callback(Object.keys(sensors).length > 0 ? sensors : null);
+    });
+}
+
+function check_sensors_async(sensor_type, callback) {
+    _check_sensors_lm_async(sensor_type, lm_sensors => {
+        _check_sensors_sysfs_async(sensor_type, sysfs_sensors => {
+            callback(_merge_sensors(lm_sensors, sysfs_sensors));
+        });
+    });
 }
 
 // Several widgets polling sensors on the same chip would each fork their own
@@ -251,4 +286,4 @@ function read_sensor_async(sensorInfo, callback) {
     }
 }
 
-export { parse_bytearray, check_sensors, read_sensor_async };
+export { parse_bytearray, check_sensors_async, read_sensor_async };
