@@ -186,7 +186,7 @@ translate:
 	   | sed -e 's/^/  [$@   ] /;'; echo
 	$(call msg,$@,OK)
 
-check: check.whitespace check.lint
+check: check.whitespace check.lint check.shexli
 	$(call msg,$@,All checks passed)
 
 check.whitespace:
@@ -204,6 +204,11 @@ check.lint:
 	else \
 		echo "  [lint        ] WARNING: eslint not found, skipping"; \
 	fi
+	$(call msg,$@,OK)
+
+check.shexli: zip-file
+	$(call msg,$@,Running shexli...)
+	$(Q)uv run --with shexli --python 3.13 --managed-python shexli dist/$(ZIPFILE)
 	$(call msg,$@,OK)
 
 # VM variable: target a specific VM (default: first in vms.conf)
