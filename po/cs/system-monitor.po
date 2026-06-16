@@ -2,12 +2,12 @@
 # Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the PACKAGE package.
 # Jan Lipovský <janlipovsky@gmail.com>, 2011-2012.
-#: extension.js:906
+#: base.js:615
 msgid ""
 msgstr ""
 "Project-Id-Version: gnome-shell-system-monitor-applet\n"
 "Report-Msgid-Bugs-To: paradoxxx.zero@gmail.com\n"
-"POT-Creation-Date: 2021-07-07 19:01+0200\n"
+"POT-Creation-Date: 2026-06-11 19:02-0700\n"
 "PO-Revision-Date: 2012-09-15\n"
 "Last-Translator: Jan Lipovský <janlipovsky@gmail.com>\n"
 "Language-Team: \n"
@@ -24,31 +24,31 @@ msgstr ":"
 msgid "Display"
 msgstr "Zobrazit"
 
-#: prefs.js:357
+#: prefs.js:357 prefs.js:470
 msgid "Refresh Time"
 msgstr "Doba obnovy"
 
-#: prefs.js:362
+#: prefs.js:362 prefs.js:455
 msgid "Graph Width"
 msgstr "Šířka grafu"
 
-#: prefs.js:348
+#: prefs.js:348 prefs.js:437
 msgid "Show Text"
 msgstr "Zobrazit text"
 
-#: prefs.js:367
+#: prefs.js:367 prefs.js:444
 msgid "Display Style"
 msgstr "Styl zobrazení"
 
-#: prefs.js:490
+#: prefs.js:490 ui/prefsGeneralSettings.ui:23
 msgid "Display Icon"
 msgstr "Zobrazit ikonu"
 
-#: prefs.js:495
+#: prefs.js:495 ui/prefsGeneralSettings.ui:43
 msgid "Display in the Middle"
 msgstr "Zobrazit uprostřed"
 
-#: prefs.js:516
+#: prefs.js:516 ui/prefsGeneralSettings.ui:13
 msgid "Background Color"
 msgstr "Barva pozadí"
 
@@ -56,7 +56,7 @@ msgstr "Barva pozadí"
 msgid "Display Individual Cores"
 msgstr "Zobrazit jednotlivá jádra"
 
-#: prefs.js:419
+#: prefs.js:419 prefs.js:537
 msgid "Show network speed in bits"
 msgstr "Zobrazit rychlost sítě v bitech"
 
@@ -68,11 +68,11 @@ msgstr "Sensor"
 msgid "Please install lm-sensors"
 msgstr "Nainstalujte si lm-sensors, prosím."
 
-#: prefs.js:511
+#: prefs.js:511 ui/prefsGeneralSettings.ui:33
 msgid "Move the clock"
 msgstr "Posunout hodiny"
 
-#: prefs.js:500
+#: prefs.js:500 ui/prefsGeneralSettings.ui:38
 msgid "Compact Display"
 msgstr "Kompaktní zobrazení"
 
@@ -115,7 +115,7 @@ msgstr "Swap"
 msgid "Used"
 msgstr "Využito"
 
-#: extension.js:1781
+#: extension.js:1781 widgets/network.js:61
 msgid "Net"
 msgstr "Síť"
 
@@ -137,7 +137,7 @@ msgstr "kolize"
 msgid "Collisions"
 msgstr "Kolize"
 
-#: extension.js:1490
+#: extension.js:1490 widgets/disk.js:36
 msgid "Disk"
 msgstr "Disk"
 
@@ -183,11 +183,11 @@ msgstr "síť"
 msgid "disk"
 msgstr "disk"
 
-#: extension.js:2536
+#: extension.js:2536 extension.js:354
 msgid "Preferences..."
 msgstr "Možnosti..."
 
-#: extension.js:2530
+#: extension.js:2530 extension.js:347
 msgid "System Monitor..."
 msgstr "Sledování systému..."
 
@@ -240,20 +240,23 @@ msgid "read"
 msgstr "čtení"
 
 #: extension.js:211 extension.js:1805 extension.js:1900 extension.js:1912
-#: extension.js:1942 extension.js:1953 extension.js:1964
+#: extension.js:1942 extension.js:1953 extension.js:1964 base.js:167
+#: widgets/network.js:67 widgets/network.js:159
 msgid "KiB/s"
 msgstr "KiB/s"
 
 #: extension.js:210 extension.js:212 extension.js:1498 extension.js:1903
-#: extension.js:1915
+#: extension.js:1915 base.js:166 base.js:168 widgets/network.js:160
 msgid "MiB/s"
 msgstr "MiB/s"
 
-#: extension.js:214 extension.js:1875 extension.js:1887
+#: extension.js:214 extension.js:1875 extension.js:1887 base.js:170
+#: widgets/network.js:154
 msgid "kbit/s"
 msgstr ""
 
-#: extension.js:215 extension.js:1878 extension.js:1890
+#: extension.js:215 extension.js:1878 extension.js:1890 base.js:171
+#: widgets/network.js:155
 msgid "Mbit/s"
 msgstr ""
 
@@ -266,46 +269,46 @@ msgstr "MiB"
 msgid "GiB"
 msgstr "MiB"
 
-#: extension.js:228
+#: extension.js:228 base.js:185
 msgid "kB"
 msgstr "kB"
 
-#: extension.js:227 extension.js:229
+#: extension.js:227 extension.js:229 base.js:184 base.js:186
 msgid "MB"
 msgstr "MB"
 
-#: extension.js:2089 extension.js:2094
+#: extension.js:2089 extension.js:2094 widgets/thermal.js:25
 msgid "Thermal"
 msgstr "Teplota"
 
 msgid "thermal"
 msgstr "teplota"
 
-#: prefs.js:352
+#: prefs.js:352 prefs.js:433
 msgid "Show In Menu"
 msgstr "Zobrazit v menu"
 
-#: prefs.js:427
+#: prefs.js:427 prefs.js:549
 msgid "Show Time Remaining"
 msgstr "Zobrazit zbývající čas"
 
-#: prefs.js:431
+#: prefs.js:431 prefs.js:559
 msgid "Hide System Icon"
 msgstr "Skrýt systémovou ikonu"
 
-#: prefs.js:435
+#: prefs.js:435 ui/prefsGeneralSettings.ui:91
 msgid "Usage Style"
 msgstr "Styl zobrazení"
 
-#: prefs.js:436
+#: prefs.js:436 ui/prefsGeneralSettings.ui:96
 msgid "pie"
 msgstr "koláčový"
 
-#: prefs.js:436
+#: prefs.js:436 ui/prefsGeneralSettings.ui:97
 msgid "bar"
 msgstr "sloupcový"
 
-#: prefs.js:436
+#: prefs.js:436 ui/prefsGeneralSettings.ui:98
 msgid "none"
 msgstr "žádný"
 
@@ -313,7 +316,7 @@ msgstr "žádný"
 msgid "System Monitor Extension"
 msgstr "Sledování systému rozšíření"
 
-#: extension.js:316
+#: extension.js:316 prefs.js:773
 msgid "Cancel"
 msgstr "Zrušit"
 
@@ -331,7 +334,7 @@ msgstr "Frekvence"
 msgid "freq"
 msgstr "frekvence"
 
-#: extension.js:2163
+#: extension.js:2163 widgets/fan.js:23
 msgid "Fan"
 msgstr "Ventilátor"
 
@@ -342,23 +345,23 @@ msgstr "ventilátor"
 msgid "rpm"
 msgstr "ot/min"
 
-#: prefs.js:505
+#: prefs.js:505 ui/prefsGeneralSettings.ui:28
 msgid "Show tooltip"
 msgstr ""
 
-#: extension.js:1287
+#: extension.js:1287 widgets/cpu.js:46 widgets/cpu.js:47 widgets/cpu.js:49
 msgid "CPU"
 msgstr ""
 
-#: prefs.js:448
+#: prefs.js:448 prefs.js:511
 msgid "Display temperature in Fahrenheit"
 msgstr ""
 
-#: prefs.js:452
+#: prefs.js:452 prefs.js:521
 msgid "Temperature threshold (0 to disable)"
 msgstr ""
 
-#: prefs.js:34
+#: prefs.js:34 prefs.js:27
 #, javascript-format
 msgid "#%02x%02x%02x%02x"
 msgstr ""
@@ -380,7 +383,7 @@ msgstr "KiB/s"
 msgid " ↑"
 msgstr ""
 
-#: extension.js:2218 extension.js:2223
+#: extension.js:2218 extension.js:2223 widgets/gpu.js:26
 msgid "GPU"
 msgstr ""
 
@@ -411,19 +414,239 @@ msgstr ""
 "\t    Fedora: libgtop2-devel, NetworkManager-glib-devel \n"
 "\t    Arch: libgtop, networkmanager\n"
 
-#: extension.js:213 extension.js:1907 extension.js:1919
+#: extension.js:213 extension.js:1907 extension.js:1919 base.js:169
+#: widgets/network.js:161
 #, fuzzy
 msgid "GiB/s"
 msgstr "KiB/s"
 
-#: extension.js:216 extension.js:1882 extension.js:1894
+#: extension.js:216 extension.js:1882 extension.js:1894 base.js:172
+#: widgets/network.js:156
 msgid "Gbit/s"
 msgstr ""
 
-#: extension.js:230
+#: extension.js:230 base.js:187
 #, fuzzy
 msgid "GB"
 msgstr "MiB"
+
+#: prefs.js:572
+msgid "Max across all cores"
+msgstr ""
+
+#: prefs.js:573
+msgid "Average across all cores"
+msgstr ""
+
+#: prefs.js:575
+#, fuzzy
+msgid "Display Mode"
+msgstr "Zobrazit ikonu"
+
+#: prefs.js:588 prefs.js:736
+msgid "Exporter URL"
+msgstr ""
+
+#: prefs.js:598 prefs.js:738
+msgid "Metric (e.g. node_load1 or metric{label=\"val\"})"
+msgstr ""
+
+#: prefs.js:619
+msgid "Monitors"
+msgstr ""
+
+#: prefs.js:629
+#, fuzzy
+msgid "Active Monitors"
+msgstr "Sledování systému..."
+
+#: prefs.js:630
+msgid "Drag to reorder. Changes apply immediately."
+msgstr ""
+
+#: prefs.js:647
+msgid "Add Monitor…"
+msgstr ""
+
+#: prefs.js:706
+msgid "Add Monitor"
+msgstr ""
+
+#: prefs.js:729
+msgid "Type"
+msgstr ""
+
+#: prefs.js:733
+msgid "Device"
+msgstr ""
+
+#: prefs.js:760
+msgid "No devices detected"
+msgstr ""
+
+#: prefs.js:778
+msgid "Add"
+msgstr ""
+
+#: prefs.js:812
+msgid "About"
+msgstr ""
+
+#: prefs.js:819
+msgid ""
+"Modular, config-driven system monitoring for your GNOME desktop. Add, "
+"remove, and reorder monitors freely — each with independent settings."
+msgstr ""
+
+#: prefs.js:824
+msgid "What's New"
+msgstr ""
+
+#: prefs.js:830
+msgid "Multi-Device Monitoring"
+msgstr ""
+
+#: prefs.js:831
+msgid ""
+"Add multiple instances of any monitor type. Track individual CPU cores, "
+"specific network interfaces, or separate GPU devices — each with its own "
+"colors and refresh rate."
+msgstr ""
+
+#: prefs.js:836
+msgid "Prometheus Metrics"
+msgstr ""
+
+#: prefs.js:837
+msgid ""
+"Graph any metric from a Prometheus-compatible exporter directly in your "
+"panel. Monitor custom application metrics, hardware sensors, or anything "
+"with a metrics endpoint — no code changes required."
+msgstr ""
+
+#: prefs.js:842
+msgid "Drag &amp; Drop Reordering"
+msgstr ""
+
+#: prefs.js:843
+msgid ""
+"Reorder monitors by dragging them in the Monitors tab. Changes apply "
+"instantly — no shell restart required."
+msgstr ""
+
+#: prefs.js:848
+msgid "Theme Integration"
+msgstr ""
+
+#: prefs.js:849
+msgid ""
+"Panel widgets automatically use your desktop theme's foreground color for "
+"text and labels, blending seamlessly with any theme."
+msgstr ""
+
+#: prefs.js:853
+msgid "Learn More"
+msgstr ""
+
+#: prefs.js:858
+msgid "Custom Metrics Guide"
+msgstr ""
+
+#: prefs.js:859
+msgid "Graph any metric using Prometheus exporters"
+msgstr ""
+
+#: prefs.js:864
+msgid "Widget Development"
+msgstr ""
+
+#: prefs.js:865
+msgid "Create new widget types for the extension"
+msgstr ""
+
+#: prefs.js:870
+msgid "Project Homepage"
+msgstr ""
+
+#: prefs.js:871
+msgid "Report issues, contribute, or star the project"
+msgstr ""
+
+#: prefs.js:920
+#, fuzzy
+msgid "System Monitor Next Preferences"
+msgstr "Sledování systému rozšíření"
+
+#: widgets/battery.js:133
+#, javascript-format
+msgctxt "battery time remaining"
+msgid "%d:%02d"
+msgstr ""
+
+#: widgets/frequency.js:25
+msgid "F"
+msgstr ""
+
+#: widgets/frequency.js:26
+msgid "Freq Core "
+msgstr ""
+
+#: widgets/gpu.js:28
+#, fuzzy
+msgid "gpu"
+msgstr "Cpu"
+
+#: ui/prefsGeneralSettings.ui:5
+msgid "General"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:9
+msgid "Configure the appearance of the extension"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:48
+#, fuzzy
+msgid "Display on the Left"
+msgstr "Zobrazit uprostřed"
+
+#: ui/prefsGeneralSettings.ui:53
+msgid "Rotate labels"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:58
+msgid "Tooltip delay"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:74
+msgid "Graph scale reset cooldown period"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:75
+msgid ""
+"Minutes to wait before downscaling graph scale (helps contextualize new data "
+"in terms of recent spikes)"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:92
+msgid "How disk usage is shown in the dropdown menu"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:106
+#, fuzzy
+msgid "Custom System Monitor Command"
+msgstr "Sledování systému rozšíření"
+
+#: ui/prefsGeneralSettings.ui:107
+msgid "Use a custom command instead of GNOME System Monitor"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:112
+msgid "Command (e.g. 'missioncenter')"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:113
+msgid "Command to run instead of GNOME System Monitor"
+msgstr ""
 
 #~ msgid "System Monitor Applet Configurator"
 #~ msgstr "System Monitor Applet Konfigurátor"

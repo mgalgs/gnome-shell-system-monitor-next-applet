@@ -1,32 +1,35 @@
 #!/bin/bash
-# Build the extension locally and deploy it to a test VM via rsync.
-# Compiles schemas, enables the extension, and triggers a reload.
+# Build the extension zip and deploy it to a test VM via gnome-extensions install.
+# This mirrors the end-user install path (extensions.gnome.org / manual zip install).
 #
 # Usage: source vm-common.sh; deploy_extension <vm_name>
 
-# Build the extension and deploy to VM.
+# Build the extension zip and deploy to VM.
 # Returns 0 on success, 1 on failure.
 deploy_extension() {
     local vm_name="$1"
 
-    # Build locally
-    log_info "Building extension..."
-    make -C "$PROJECT_ROOT" clean build -j"$(nproc)" V=0 2>&1 | tail -3
-    log_ok "Build complete"
+    # Build zip locally
+    log_info "Building extension zip..."
+    make -C "$PROJECT_ROOT" zip-file V=0 2>&1 | tail -3
+    log_ok "Zip built"
 
-    # Ensure extension directory exists on VM
-    vm_ssh "$vm_name" "mkdir -p ~/.local/share/gnome-shell/extensions/"
+    local zipfile="$PROJECT_ROOT/dist/${EXT_UUID}.zip"
+    if [[ ! -f "$zipfile" ]]; then
+        log_err "Zip file not found: $zipfile"
+        return 1
+    fi
 
-    # rsync build output to VM
+    # Copy zip to VM and install
     log_info "Deploying extension to VM..."
-    vm_rsync "$vm_name" \
-        "$PROJECT_ROOT/_build/" \
-        "~/.local/share/gnome-shell/extensions/$EXT_UUID/"
-    log_ok "Extension deployed"
+    local port
+    port=$(vm_get_ssh_port "$vm_name")
+    scp $SSH_OPTS -i "$SSH_KEY" -P "$port" "$zipfile" "${SSH_USER}@localhost:/tmp/${EXT_UUID}.zip"
+    vm_ssh "$vm_name" "gnome-extensions install --force /tmp/${EXT_UUID}.zip"
+    log_ok "Extension installed from zip"
 
-    # Compile schemas on VM (in extension dir and system-wide)
+    # Compile schemas system-wide (some GNOME versions need this)
     log_info "Compiling schemas..."
-    vm_ssh "$vm_name" "glib-compile-schemas ~/.local/share/gnome-shell/extensions/$EXT_UUID/schemas/ 2>/dev/null" || true
     vm_ssh "$vm_name" "sudo cp ~/.local/share/gnome-shell/extensions/$EXT_UUID/schemas/*.gschema.xml /usr/share/glib-2.0/schemas/ 2>/dev/null && sudo glib-compile-schemas /usr/share/glib-2.0/schemas/ 2>/dev/null" || true
 
     # Check if extension is known to GNOME Shell

@@ -10,6 +10,8 @@
 #   --create           Create missing VMs before testing
 #   --no-restore       Skip snapshot restore (faster, uses current VM state)
 #   --vm NAME          Test only this VM (can be repeated)
+#   --presets           After deploy, screenshot each config preset
+#   --preset NAME       Add a specific preset (can be repeated; implies --presets)
 #
 # Output:
 #   testing/vm/results/<label>/           Per-VM screenshots and logs
@@ -27,6 +29,9 @@ BASELINE=""
 CREATE=false
 NO_RESTORE=false
 SELECTED_VMS=()
+USE_PRESETS=false
+SELECTED_PRESETS=()
+CONFIGS_DIR="$SCRIPT_DIR/configs"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -35,6 +40,8 @@ while [[ $# -gt 0 ]]; do
         --create) CREATE=true; shift ;;
         --no-restore) NO_RESTORE=true; shift ;;
         --vm) SELECTED_VMS+=("$2"); shift 2 ;;
+        --presets) USE_PRESETS=true; shift ;;
+        --preset) USE_PRESETS=true; SELECTED_PRESETS+=("$2"); shift 2 ;;
         -h|--help)
             echo "Usage: $0 [OPTIONS]"
             echo ""
@@ -46,11 +53,15 @@ while [[ $# -gt 0 ]]; do
             echo "  --create           Create missing VMs"
             echo "  --no-restore       Skip snapshot restore"
             echo "  --vm NAME          Test only specific VM (repeatable)"
+            echo "  --presets          Screenshot each config preset per VM"
+            echo "  --preset NAME      Add a specific preset (repeatable; implies --presets)"
             echo ""
             echo "Examples:"
             echo "  $0 --label master-baseline"
             echo "  $0 --label pr138 --baseline master-baseline"
             echo "  $0 --label pr138 --baseline master-baseline --vm gssmn-fedora42"
+            echo "  $0 --label visual --presets"
+            echo "  $0 --label visual --preset all-visible --preset digit-only"
             exit 0
             ;;
         *) log_error "Unknown option: $1"; exit 2 ;;
@@ -70,6 +81,18 @@ else
     readarray -t VM_NAMES < <(vm_list_names)
 fi
 
+# Determine which presets to use
+PRESET_NAMES=()
+if $USE_PRESETS; then
+    if [[ ${#SELECTED_PRESETS[@]} -gt 0 ]]; then
+        PRESET_NAMES=("${SELECTED_PRESETS[@]}")
+    else
+        for f in "$CONFIGS_DIR"/*.json; do
+            [[ -f "$f" ]] && PRESET_NAMES+=("$(basename "$f" .json)")
+        done
+    fi
+fi
+
 # Create output directory for this run
 RUN_DIR="$RESULTS_DIR/$LABEL"
 mkdir -p "$RUN_DIR"
@@ -78,6 +101,9 @@ echo ""
 log_info "============================================"
 log_info "Test Matrix Run: $LABEL"
 log_info "VMs: ${VM_NAMES[*]}"
+if [[ ${#PRESET_NAMES[@]} -gt 0 ]]; then
+    log_info "Presets: ${PRESET_NAMES[*]}"
+fi
 if [[ -n "$BASELINE" ]]; then
     log_info "Comparing against: $BASELINE"
 fi
@@ -144,6 +170,24 @@ for vm_name in "${VM_NAMES[@]}"; do
     if [[ -n "${LOGFILES[$vm_name]}" && -f "${LOGFILES[$vm_name]}" ]]; then
         cp "${LOGFILES[$vm_name]}" "$RUN_DIR/${vm_name}.log"
     fi
+
+    # Run preset configs if requested
+    if [[ ${#PRESET_NAMES[@]} -gt 0 && "${RESULTS[$vm_name]}" == "PASS" ]]; then
+        source "$SCRIPT_DIR/lib/vm-screenshot.sh"
+        for preset in "${PRESET_NAMES[@]}"; do
+            log_info "  Preset: $preset"
+            "$SCRIPT_DIR/vm-config.sh" --vm "$vm_name" --preset "$preset" 2>&1 | sed 's/^/    /'
+            sleep 3
+            local_screenshot=$(take_screenshot "$vm_name" "${LABEL}-${preset}")
+            if [[ -n "$local_screenshot" && -f "$local_screenshot" ]]; then
+                cp "$local_screenshot" "$RUN_DIR/${vm_name}_${preset}.png"
+            fi
+        done
+    fi
+
+    # Shut down VM to free resources for the next one
+    log_info "Shutting down $vm_name..."
+    $VIRSH shutdown "$vm_name" &>/dev/null || true
 done
 
 # --- Generate HTML report ---
@@ -262,6 +306,21 @@ EOF
       <div class="caption">Current ($LABEL)</div>
     </div>
 EOF
+    fi
+
+    # Preset screenshots
+    if [[ ${#PRESET_NAMES[@]} -gt 0 ]]; then
+        for preset in "${PRESET_NAMES[@]}"; do
+            preset_png="$RUN_DIR/${vm_name}_${preset}.png"
+            if [[ -f "$preset_png" ]]; then
+                cat >> "$REPORT" << EOF
+    <div class="screenshot-box">
+      <img src="${vm_name}_${preset}.png" alt="$preset">
+      <div class="caption">$preset</div>
+    </div>
+EOF
+            fi
+        done
     fi
 
     echo "  </div>" >> "$REPORT"

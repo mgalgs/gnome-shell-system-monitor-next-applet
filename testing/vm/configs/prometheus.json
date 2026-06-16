@@ -1,0 +1,59 @@
+{
+    "description": "Prometheus scraper widgets (requires node_exporter on VM)",
+    "monitors": [
+        {
+            "uuid": "cfg-cpu-all",
+            "type": "cpu",
+            "device": "all",
+            "display": true,
+            "style": "graph",
+            "graph-width": 80,
+            "refresh-time": 1500,
+            "show-text": true,
+            "show-menu": true,
+            "colors": {"user": "#0072b3", "system": "#0092e6", "nice": "#00a3ff", "iowait": "#002f3d", "other": "#001d26"}
+        },
+        {
+            "uuid": "cfg-prom-load1",
+            "type": "prometheus",
+            "device": "default",
+            "display": true,
+            "style": "both",
+            "graph-width": 100,
+            "refresh-time": 3000,
+            "show-text": true,
+            "show-menu": true,
+            "colors": {"value": "#00b3a4"},
+            "server": "http://localhost:9100",
+            "metric": "node_load1"
+        },
+        {
+            "uuid": "cfg-prom-memavail",
+            "type": "prometheus",
+            "device": "default",
+            "display": true,
+            "style": "both",
+            "graph-width": 100,
+            "refresh-time": 3000,
+            "show-text": true,
+            "show-menu": true,
+            "colors": {"value": "#ff6e00"},
+            "server": "http://localhost:9100",
+            "metric": "node_memory_MemAvailable_bytes"
+        },
+        {
+            "uuid": "cfg-prom-entropy",
+            "type": "prometheus",
+            "device": "default",
+            "display": true,
+            "style": "both",
+            "graph-width": 80,
+            "refresh-time": 5000,
+            "show-text": true,
+            "show-menu": true,
+            "colors": {"value": "#a46efa"},
+            "server": "http://localhost:9100",
+            "metric": "node_entropy_available_bits"
+        }
+    ]
+}

@@ -537,5 +537,10 @@
       <summary>Custom system monitor command</summary>
       <description>When set, this command will be executed instead of launching GNOME System Monitor</description>
     </key>
+    <key name="monitors" type="as">
+      <default>[]</default>
+      <summary>Monitor widget configurations</summary>
+      <description>JSON array of monitor configurations. Each entry defines a widget instance with type, device, display settings, colors, and refresh rate. Supports multiple instances of the same widget type for multi-device monitoring.</description>
+    </key>
   </schema>
 </schemalist>

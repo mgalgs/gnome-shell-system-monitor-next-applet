@@ -14,3 +14,5 @@ tmp
 # VM test results (screenshots, logs)
 /testing/vm/results/*
 !/testing/vm/results/.gitkeep
+/node_modules
+/package-lock.json

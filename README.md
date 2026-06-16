@@ -70,6 +70,8 @@ Before installing, ensure you have the necessary system packages (note that if y
 
 For NVIDIA graphics card memory monitoring, install `nvidia-smi`.
 
+For reliable thermal and fan monitoring (especially with multiple sensors of the same type, e.g. dual NVMe drives), install `lm-sensors` (`lm_sensors` on some distros). Without it, the extension falls back to direct sysfs enumeration which may not distinguish identically-named sensors.
+
 ## Installation
 
 There are three ways to install this extension: via the browser, via a package manager, or manually.
@@ -99,13 +101,13 @@ After installation, the extension will be available for enabling in GNOME Extens
    ```
    git clone https://github.com/mgalgs/gnome-shell-system-monitor-next-applet.git
    ```
-2. Install and rebuild gschemas:
+2. Install:
    ```
    cd gnome-shell-system-monitor-next-applet
-   make install gschemas.install-and-compile
+   make install
    ```
 3. Reload GNOME Shell:
-   - X11: Press `Alt+F2`, type `r`, and press Enter
+   - X11: Press `Alt+F2`, type `r`, press Enter
    - Wayland: Log out and log back in
 4. Enable the extension:
    ```
@@ -122,6 +124,8 @@ and reloading GNOME Shell.
 ## Usage
 
 After installation, the system monitor will appear in your top panel. You can configure its appearance and behavior through the GNOME Extensions app or by clicking on the panel and selecting "Preferences".
+
+You can also graph your own custom metrics using the Prometheus monitor and a simple script — see [Custom Metrics](docs/widget-authoring.md#custom-metrics-no-code-changes) for details.
 
 ## Screenshots
 
@@ -179,21 +183,27 @@ For automated testing across multiple GNOME Shell versions, the project includes
 **Prerequisites:** `libvirt`, `qemu`, `virt-install`, `passt`, `genisoimage`, `imagemagick`
 
 ```bash
-make vm-create                    # Create test VM (~10 min first time, cached after)
-make vm-test                      # Deploy + smoke test on default VM
-make vm-viewer                    # Open interactive graphical session
-make vm-ssh                       # SSH into the VM
-make vm-destroy                   # Tear down
-
-# Target a specific GNOME version:
+# One-time setup (~10 min, cached after)
 make vm-create VM=gssmn-fedora42
-make vm-test VM=gssmn-fedora42
-make vm-viewer VM=gssmn-fedora42
 
-# Full matrix test with before/after comparison:
+# Day-to-day workflow
+make vm-list                      # Show VMs and their status
+make vm-start VM=gssmn-fedora42   # Boot a VM
+make vm-test VM=gssmn-fedora42    # Deploy + smoke test
+make vm-viewer VM=gssmn-fedora42  # Open interactive graphical session
+make vm-ssh VM=gssmn-fedora42     # SSH into the VM
+make vm-stop VM=gssmn-fedora42    # Shut down when done
+
+# Push monitor configs for visual testing
+./testing/vm/vm-config.sh --vm gssmn-fedora42 --preset all-visible --screenshot
+./testing/vm/vm-config.sh --list-presets
+
+# Full matrix test with before/after comparison
 make vm-test-all LABEL=master-baseline
 make vm-test-all LABEL=my-feature BASELINE=master-baseline
 ```
+
+VMs are created once and reused across sessions — just start/stop as needed.
 
 See [`testing/vm/README.md`](testing/vm/README.md) for detailed usage, architecture, and available options.
 

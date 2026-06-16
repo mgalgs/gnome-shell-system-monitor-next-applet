@@ -25,8 +25,8 @@ The extension requires system libraries to function:
 ### Installation and Building
 
 ```bash
-# Install the extension locally
-make install gschemas.install-and-compile
+# Install the extension locally (builds, installs, compiles schemas)
+make install
 
 # Uninstall the extension
 make uninstall
@@ -46,8 +46,8 @@ make zip-file
 After making changes to the extension code:
 
 ```bash
-# Reinstall and recompile schemas
-make uninstall install gschemas.install-and-compile
+# Reinstall
+make install
 ```
 
 Then reload GNOME Shell:
@@ -79,10 +79,8 @@ G_MESSAGES_DEBUG=all MUTTER_DEBUG_DUMMY_MODE_SPECS=1366x768 dbus-run-session -- 
 ### Linting
 
 ```bash
-# Run ESLint on extension code
-./checkjs.sh
-# Or directly:
-eslint system-monitor-next@paradoxxx.zero.gmail.com
+# Run ESLint
+npm run lint
 ```
 
 ESLint configuration is in `eslint.config.js` (flat config format, ES2022, 4-space indent, single quotes, max line length 160).
@@ -93,21 +91,57 @@ Automated testing in an isolated VM with a real GNOME Shell session. Requires `l
 
 ```bash
 # First time: create a test VM from a Fedora cloud image (~10-15 min)
-make vm-create
-# Or: ./testing/vm/vm-create.sh --vm gssmn-fedora42
+make vm-create VM=gssmn-fedora42
 
+# List VMs and their status (running/shut off)
+make vm-list
+
+# Start/stop VMs (created once, reused across sessions)
+make vm-start VM=gssmn-fedora42
+make vm-stop VM=gssmn-fedora42
+```
+
+#### Testing workflow
+
+```bash
 # Run a full test cycle (deploy, screenshot, logs, health check)
-make vm-test
-# Or: ./testing/vm/vm-test.sh --vm gssmn-fedora42 --label my-change
+make vm-test VM=gssmn-fedora42
 
 # Fast iteration (skip snapshot restore, reuse current VM state)
-./testing/vm/vm-test.sh --no-restore --label quick-fix
+./testing/vm/vm-test.sh --vm gssmn-fedora42 --no-restore --label quick-fix
 
 # Just take a screenshot of the current VM state
-./testing/vm/vm-test.sh --screenshot-only --label check-ui
+./testing/vm/vm-test.sh --vm gssmn-fedora42 --screenshot-only --label check-ui
+```
 
+**Important: JS module caching.** GNOME Shell caches extension JS modules in memory for the lifetime of the shell process. A `vm-test.sh` deploy (disable → install zip → enable) puts new files on disk but the shell keeps running the old cached modules. **You must reboot the VM** (`make vm-ssh VM=...` then `sudo reboot`) after deploying JS changes for them to take effect. Config-only changes via `vm-config.sh` (dconf/GSettings writes) work immediately without reboot.
+
+#### Pushing configs and visual testing
+
+```bash
+# Push a preset monitor config and screenshot
+./testing/vm/vm-config.sh --vm gssmn-fedora42 --preset all-visible --screenshot
+
+# List available presets
+./testing/vm/vm-config.sh --list-presets
+
+# Push a custom JSON config file
+./testing/vm/vm-config.sh --vm gssmn-fedora42 my-config.json --screenshot
+
+# Open interactive graphical session (virt-viewer)
+make vm-viewer VM=gssmn-fedora42
+
+# SSH into the VM
+make vm-ssh VM=gssmn-fedora42
+```
+
+Config presets live in `testing/vm/configs/*.json`. Each is a JSON file with a `monitors` array and optional `settings` for globals.
+
+#### Cleanup
+
+```bash
 # Tear down test VMs (preserves cached cloud images)
-make vm-destroy
+make vm-destroy VM=gssmn-fedora42
 ```
 
 **Output:** Screenshots (PNG) and logs are saved to `testing/vm/results/`. The test script prints absolute file paths for easy inspection.
@@ -129,63 +163,76 @@ Translation files are in `po/<LANG>/system-monitor.po`.
 
 All extension source files are in `system-monitor-next@paradoxxx.zero.gmail.com/`:
 
-- **`extension.js`** (~2766 lines): Main extension logic
-  - Creates the panel button and status indicators
-  - Implements monitoring classes for CPU, memory, disk, network, GPU, battery, temperature
-  - Each metric type has its own class extending base monitoring classes
-  - Uses GTop library for system metrics
-  - Handles graph/digit/both display modes
-  - Manages popup menu with detailed statistics
-
-- **`prefs.js`**: Preferences UI implementation using GTK4/Adw
-  - Uses `.ui` files from `ui/` directory for interface definition
-  - Implements multiple preferences pages for different metric types
-  - Binds GSettings to UI widgets
-
-- **`common.js`**: Shared utilities
-  - `parse_bytearray()`: Decodes byte arrays to UTF-8 strings
-  - `check_sensors()`: Scans `/sys/class/hwmon/` for temperature/fan sensors
-
-- **`utils.js`**: Logging utility
-  - `sm_log()`: Prefixed logging function
-
-- **`migration.js`**: Settings schema migration logic
-  - Handles version upgrades of settings schema
-  - Tracks schema version in `settings-schema-version` key
+- **`extension.js`** (~300 lines): Extension lifecycle (enable/disable), config-driven widget instantiation
+  - `WIDGET_CLASSES` lookup table maps type strings to constructors
+  - `_syncMonitors()` handles live add/remove/reorder when `monitors` setting changes
+- **`base.js`** (~900 lines): Widget framework
+  - `ElementBase` — base class for all monitoring widgets; accepts `(extension, config)` constructor
+  - `onSettingsChanged(newConfig)` for live config updates without recreating widgets
+  - `collect()` API — widgets return `{metricKey: value}`, framework auto-updates display
+  - `Chart` — stacked area graph rendering (Cairo)
+  - `TipBox`/`TipMenu`/`TipItem` — tooltip system
+  - `smStyleManager` — display styling and compact mode
+  - Color helpers
+- **`mounts.js`** (~340 lines): Filesystem monitoring and disk visualization
+  - `smMountsMonitor` — tracks mounted filesystems
+  - `Graph`/`Bar`/`Pie` — disk usage visualization for popup menu
+- **`widgets/`**: Individual monitoring widgets (one file per metric type)
+  - `cpu.js`, `memory.js`, `swap.js`, `network.js`, `disk.js`
+  - `gpu.js`, `thermal.js`, `fan.js`, `frequency.js`
+  - `battery.js`, `icon.js`
+  - Each widget extends `ElementBase`, declares `static metadata`, and implements data collection
+  - Widgets receive a `config` object with per-instance settings (device, colors, display, etc.)
+  - `device_id` enables multi-device: multiple instances of same type monitoring different devices
+- **`prefs.js`**: Preferences UI (GTK4/Adw)
+  - General settings page (uses `ui/prefsGeneralSettings.ui` template)
+  - Monitors page: dynamic monitor list with add/delete/reorder, reads/writes `monitors` GSettings key
+- **`common.js`**: Shared utilities (`parse_bytearray()`, `check_sensors()`)
+- **`utils.js`**: Logging (`sm_log()`)
+- **`migration.js`**: Settings schema migration (v0 → v1 → v2)
+  - v1→v2: converts per-widget GSettings keys into JSON `monitors` array
 
 ### Settings and Schemas
 
 - **Schema XML:** `schemas/org.gnome.shell.extensions.system-monitor-next-applet.gschema.xml`
-  - Defines all extension settings (refresh times, colors, display styles, etc.)
   - Must be compiled with `glib-compile-schemas` before use
-  - Settings IDs use pattern: `{metric}-{property}` (e.g., `memory-refresh-time`)
+  - **`monitors` key** (type `as`): JSON array of widget configurations — the primary config mechanism
+  - Legacy per-widget keys (`{metric}-{property}`) remain for backward compat
+
+- **Monitor config object shape** (each widget instance gets one):
+  ```json
+  {
+    "uuid": "unique-id",
+    "type": "cpu",
+    "device": "all",
+    "display": true,
+    "style": "graph",
+    "graph-width": 100,
+    "refresh-time": 1500,
+    "show-text": true,
+    "show-menu": true,
+    "colors": {"user": "#0072b3", "system": "#0092e6"}
+  }
+  ```
 
 - **Display styles:** Each metric supports `digit`, `graph`, or `both` modes
 - **Disk usage styles:** `pie`, `bar`, or `none`
 
-### UI Definition Files
-
-GTK4 interface definitions in `ui/`:
-- `prefsGeneralSettings.ui`: General preferences page
-- `prefsExpanderRow.ui`: Expandable preference rows
-- `prefsWidgetSettings.ui`: Per-widget settings
-- `prefsWidgetPositionList.ui`: Widget ordering interface
-- Other preference page components
-
 ### External Resources
 
-- **`gpu_usage.sh`**: Shell script for NVIDIA GPU monitoring (invoked via `nvidia-smi`)
+- **`gpu_usage.sh`**: Shell script for GPU monitoring (NVIDIA via `nvidia-smi`, AMD via sysfs); accepts GPU index as `$1`
 - **`stylesheet.css`**: Extension styling
 
 ### Monitoring Architecture
 
-The extension follows a modular pattern:
-1. Each system metric (CPU, memory, etc.) has its own class
-2. Classes implement data collection, visualization (graph/text), and menu items
-3. Metrics are registered in the extension's initialization
-4. Each metric respects user preferences for display style, refresh rate, colors
-5. Graph rendering uses Clutter/Cogl for efficient drawing
-6. Menu items provide detailed breakdown of each metric
+The extension follows a config-driven modular pattern:
+1. On startup, `migration.js` converts legacy per-widget GSettings into a JSON `monitors` array (if needed)
+2. `extension.js` reads `monitors`, looks up each config's `type` in `WIDGET_CLASSES`, and instantiates widgets with their config object
+3. Each widget class in `widgets/` extends `ElementBase` from `base.js`, declares `static metadata` (identity, metrics, units), and uses `this.config` for per-instance settings
+4. `ElementBase` handles shared concerns: config-driven initialization, update timers, chart rendering, tooltips, panel/menu item creation
+5. Simple widgets implement `collect()` returning `{metricKey: value}`; complex widgets use `refresh()` + `_apply()`
+6. `this.device_id` (from `config.device`) enables per-device monitoring — e.g. individual CPU cores, specific network interfaces, or GPU indices
+7. When the `monitors` GSettings key changes, `_syncMonitors()` dynamically adds/removes/updates widgets without restarting
 
 ### Build Process
 
@@ -193,6 +240,8 @@ The Makefile orchestrates:
 1. **Schema compilation:** Converts XML schema to binary format
 2. **Translation compilation:** Converts `.po` files to `.mo` binaries
 3. **Build assembly:** Copies source files + compiled assets to `_build/`
+
+Note: when adding new JS modules in nested directories (e.g. `widgets/`), ensure the Makefile `build` target copies those directories into `_build/` as well.
 4. **Version injection:** Replaces `"version": -1` with actual version in `metadata.json`
 5. **Installation:** Copies to `~/.local/share/gnome-shell/extensions/` (or `$PREFIX`)
 
@@ -204,10 +253,22 @@ GNOME Shell loads extensions from:
 
 Each extension directory must contain `metadata.json` with UUID matching the directory name.
 
+## Commit and Patch Standards
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for full details. Key rules for AI agents:
+
+- **One logical change per commit.** Don't mix bug fixes with refactors or features. If you find a pre-existing issue while working, fix it in a separate commit.
+- **Every commit must build and run.** `make clean build` and `npm run lint` must pass at each commit. No intermediate broken states.
+- **Subsystem prefix in commit messages:** `base:`, `widgets:`, `extension:`, `schemas:`, `prefs:`, `docs:`, `build:`. NOT project-phase tags like `widget-mod:`.
+- **Correct dependency order.** If commit B uses code from commit A, A comes first. The series should read like a tutorial.
+- **No intermediate scaffolding.** Don't add a file in one commit just to replace it later. No planning docs, AI logs, or task tracking files in commits.
+- **Clean patch series.** When preparing a branch for merge, rebase to produce a clean series: squash fixups, reorder for logical flow, ensure each commit tells a coherent story. The series should look like it was written by someone who knew the final design from the start.
+- **VM test before merging:** `./testing/vm/vm-test.sh --vm gssmn-fedora42 --label <name>`
+
 ## Important Notes
 
 - **Network disk usage monitoring is disabled by default** (`ENABLE_NETWORK_DISK_USAGE = false` in `extension.js:53`) because stale network shares can freeze the shell
 - The extension uses ES6 modules (import/export) introduced in GNOME Shell 45
-- Settings migration happens automatically on extension load via `migrateSettings()`
+- Settings migration happens automatically on extension load via `migrateSettings()` (current schema version: 2)
 - The extension UUID is hardcoded throughout and must match the directory name
 - Graph width, refresh times, and colors are all user-configurable per metric type

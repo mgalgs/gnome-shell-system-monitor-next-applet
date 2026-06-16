@@ -87,6 +87,21 @@
           </object>
         </child>
         <child>
+          <object class="AdwComboRow" id="disk_usage_style">
+            <property name="title" translatable="yes">Usage Style</property>
+            <property name="subtitle" translatable="yes">How disk usage is shown in the dropdown menu</property>
+            <property name="model">
+              <object class="GtkStringList">
+                <items>
+                  <item translatable="yes">pie</item>
+                  <item translatable="yes">bar</item>
+                  <item translatable="yes">none</item>
+                </items>
+              </object>
+            </property>
+          </object>
+        </child>
+        <child>
           <object class="AdwSwitchRow" id="custom_monitor_switch">
             <property name="title" translatable="yes">Custom System Monitor Command</property>
             <property name="subtitle" translatable="yes">Use a custom command instead of GNOME System Monitor</property>

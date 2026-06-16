@@ -6,6 +6,9 @@ import js from '@eslint/js';
 export default [
     js.configs.recommended,
     {
+        ignores: [
+            'system-monitor-next@paradoxxx.zero.gmail.com/extension.js',
+        ],
         languageOptions: {
             globals: {
                 ARGV: 'readonly',

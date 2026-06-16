@@ -1,0 +1,17 @@
+{
+    "description": "CPU only, graph style",
+    "monitors": [
+        {
+            "uuid": "cfg-cpu-min",
+            "type": "cpu",
+            "device": "all",
+            "display": true,
+            "style": "graph",
+            "graph-width": 100,
+            "refresh-time": 1500,
+            "show-text": false,
+            "show-menu": true,
+            "colors": {"user": "#0072b3", "system": "#0092e6", "nice": "#00a3ff", "iowait": "#002f3d", "other": "#001d26"}
+        }
+    ]
+}

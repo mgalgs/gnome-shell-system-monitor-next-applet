@@ -6,6 +6,8 @@ PREFIX ?= $(HOME)/.local
 
 BASE_MODULES = \
   $(UUID)/extension.js \
+  $(UUID)/base.js \
+  $(UUID)/mounts.js \
   $(UUID)/utils.js \
   $(UUID)/migration.js \
   $(UUID)/common.js \
@@ -20,6 +22,10 @@ GSCHEMA_COMPILED = $(UUID)/schemas/gschemas.compiled
 
 VERSION ?= 0
 ZIPFILE = $(UUID).zip
+
+# Files that must be present in the release zip (sanity check)
+RELEASE_REQUIRED = metadata.json extension.js prefs.js base.js stylesheet.css \
+    schemas/gschemas.compiled widgets/cpu.js ui/prefsGeneralSettings.ui
 
 INSTALLBASE = $(PREFIX)/share/gnome-shell/extensions
 SCHEMAINSTALLBASE = $(PREFIX)/share/glib-2.0/schemas
@@ -47,20 +53,19 @@ msg = @printf '  [%-12s] %s\n' '$(1)' '$(2)'
 # -------
 
 help:
-	@echo  'Install the extension to ~/.local/share/ (for the local user):'
+	@echo  'Install the extension locally (builds, installs, compiles schemas):'
 	@echo  ''
 	@echo  '  make install'
 	@echo  ''
-	@echo  'Install the extension to $${PREFIX}/share/ (for system-wide install/packaging):'
+	@echo  'Install for packaging (schemas compiled by package manager hooks):'
 	@echo  ''
-	@echo  '  sudo make PREFIX=/usr install       # as admin for all users'
-	@echo  '  make PREFIX=$${pkgdir}/usr install   # to another directory (for packaging)'
+	@echo  '  sudo make PREFIX=/usr install'
+	@echo  '  make PREFIX=$${pkgdir}/usr install'
 	@echo  ''
 	@echo  'Other targets:'
 	@echo  ''
-	@echo  '  zip-file  - build $(ZIPFILE)'
-	@echo  '              (which can be uploaded to extensions.gnome.org or installed'
-	@echo  '               with gnome-extensions install)'
+	@echo  '  release   - lint, build zip, verify contents (use this for EGO uploads)'
+	@echo  '  zip-file  - build zip only (no checks)'
 	@echo  '  check     - run code quality checks (whitespace, lint)'
 	@echo  '  clean     - remove most generated files'
 	@echo  ''
@@ -72,6 +77,8 @@ help:
 	@echo  '  vm-test-all     - run tests across full GNOME version matrix'
 	@echo  '  vm-viewer       - open interactive graphical session'
 	@echo  '  vm-ssh          - open SSH session to VM'
+	@echo  '  vm-start        - start a VM'
+	@echo  '  vm-stop         - gracefully shut down a VM'
 	@echo  '  vm-list         - list configured VMs and their status'
 	@echo  '  vm-destroy      - tear down test VM(s)'
 	@echo  ''
@@ -85,8 +92,18 @@ install: clean build gschemas.install
 	$(call msg,$@,Installing to $(INSTALLDIR))
 	$(Q) mkdir -p "$(INSTALLDIR)"
 	$(Q) cp $(VV) -r ./_build/* "$(INSTALLDIR)/"
+# Auto-compile schemas for local installs (package managers handle their own)
+ifeq ($(origin PREFIX),file)
+	$(Q)glib-compile-schemas "$(SCHEMAINSTALLBASE)"
+	$(call msg,gschemas,Compiled)
+endif
 	$(call msg,$@,OK)
-	$(call msg,$@,Please reload GNOME Shell and enable the extension)
+	@echo ''
+	@echo '  Installed to $(INSTALLDIR)'
+	@echo '  Reload GNOME Shell to activate:'
+	@echo '    X11:     Alt+F2, type r, press Enter'
+	@echo '    Wayland: Log out and back in'
+	@echo ''
 
 uninstall:
 	$(Q)gnome-extensions uninstall $(UUID)
@@ -94,7 +111,7 @@ uninstall:
 clean: zip-file.clean build.clean
 
 zip-file: clean build
-	$(Q)cd _build ; zip $(V) -qr $(ZIPFILE) .
+	$(Q)cd _build ; zip $(VV) -qr $(ZIPFILE) .
 	$(Q)mkdir -p dist
 	$(Q)mv _build/$(ZIPFILE) ./dist/$(ZIPFILE)
 	$(call msg,$@,Zip file saved to ./dist/$(ZIPFILE))
@@ -104,16 +121,36 @@ zip-file.clean:
 	$(Q)rm $(VV) -vf ./dist/$(ZIPFILE)
 	$(call msg,$@,OK)
 
+release: check zip-file
+	$(call msg,$@,Verifying zip contents...)
+	$(Q)contents=$$(unzip -l dist/$(ZIPFILE)); \
+	ok=true; \
+	for f in $(RELEASE_REQUIRED); do \
+		if ! echo "$$contents" | grep -q "$$f"; then \
+			printf '  [%-12s] MISSING: %s\n' '$@' "$$f" >&2; ok=false; \
+		fi; \
+	done; \
+	if ! $$ok; then \
+		echo '' >&2; \
+		printf '  [%-12s] %s\n' '$@' 'Verification FAILED! Do not upload this zip.' >&2; \
+		exit 1; \
+	fi
+	$(call msg,$@,All required files present)
+	@echo ''
+	@printf '  Release zip: dist/%s (%s)\n' '$(ZIPFILE)' "$$(du -h dist/$(ZIPFILE) | cut -f1)"
+	@echo '  Upload at:   https://extensions.gnome.org/upload/'
+	@echo ''
+
 gschemas: $(GSCHEMA_COMPILED)
 	$(call msg,$@,OK)
 
 gschemas.install: $(GSCHEMA_XML)
 	$(Q)mkdir -p "$(SCHEMAINSTALLBASE)"
 	$(Q)cp $(VV) $(GSCHEMA_XML) "$(SCHEMAINSTALLBASE)"
-	$(call msg,$@,gschema installed to $(SCHEMAINSTALLBASE). You might need to run "glib-compile-schemas $(SCHEMAINSTALLBASE)")
+	$(call msg,$@,gschema installed to $(SCHEMAINSTALLBASE))
 	$(call msg,$@,OK)
 
-# Not part of regular install since this is usually done by package manager hooks
+# Standalone target for backward compat; `make install` now auto-compiles for local installs
 gschemas.install-and-compile: gschemas.install
 	$(Q)glib-compile-schemas "$(SCHEMAINSTALLBASE)"
 	$(call msg,$@,OK)
@@ -127,6 +164,8 @@ build: gschemas translate
 	$(Q)cp $(VV) $(BASE_MODULES) _build
 	$(Q)mkdir -p _build/schemas
 	$(Q)cp $(VV) -r $(UUID)/schemas/* _build/schemas/
+	$(Q)mkdir -p _build/widgets
+	$(Q)cp $(VV) -r $(UUID)/widgets/* _build/widgets/
 	$(Q)mkdir -p _build/ui
 	$(Q)cp $(VV) -r $(UUID)/ui/* _build/ui/
 	$(Q)mkdir -p _build/locale
@@ -190,6 +229,23 @@ vm-test-all:
 	$(Q)./testing/vm/vm-test-matrix.sh $(if $(LABEL),--label $(LABEL),) $(if $(BASELINE),--baseline $(BASELINE),)
 	$(call msg,$@,OK)
 
+vm-start:
+ifndef VM
+	$(error Usage: make vm-start VM=<name>  (see: make vm-list))
+endif
+	$(Q)virsh -c qemu:///session start $(VM)
+
+vm-stop:
+ifndef VM
+	$(error Usage: make vm-stop VM=<name>  (see: make vm-list))
+endif
+	$(Q)virsh -c qemu:///session shutdown $(VM)
+
+vm-stop-all:
+	$(Q)for vm in $$(virsh -c qemu:///session list --name 2>/dev/null); do \
+		[ -n "$$vm" ] && echo "Shutting down $$vm..." && virsh -c qemu:///session shutdown "$$vm"; \
+	done
+
 vm-viewer:
 	$(Q)./testing/vm/vm-viewer.sh $(VM_ARGS)
 
@@ -206,6 +262,7 @@ vm-destroy:
 
 .PHONY: help \
 	install \
+	release \
 	zip-file \
 	zip-file.clean \
 	gschemas \
@@ -220,6 +277,9 @@ vm-destroy:
 	vm-create-all \
 	vm-test \
 	vm-test-all \
+	vm-start \
+	vm-stop \
+	vm-stop-all \
 	vm-viewer \
 	vm-ssh \
 	vm-list \

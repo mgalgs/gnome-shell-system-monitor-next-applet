@@ -2,12 +2,12 @@
 # Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the PACKAGE package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
-#: extension.js:906
+#: base.js:615
 msgid ""
 msgstr ""
 "Project-Id-Version: 1\n"
 "Report-Msgid-Bugs-To: paradoxxx.zero@gmail.com\n"
-"POT-Creation-Date: 2021-07-07 19:01+0200\n"
+"POT-Creation-Date: 2026-06-11 19:02-0700\n"
 "PO-Revision-Date: 2013-08-22 01:55+0200\n"
 "Last-Translator: Muhammad Fawwaz Orabi <mfawwaz93@gmail.com>\n"
 "Language-Team: Arabic <mfawwaz93@gmail.com>\n"
@@ -25,31 +25,31 @@ msgstr ":"
 msgid "Display"
 msgstr "اعرضه"
 
-#: prefs.js:357
+#: prefs.js:357 prefs.js:470
 msgid "Refresh Time"
 msgstr "حدّثه كلّ"
 
-#: prefs.js:362
+#: prefs.js:362 prefs.js:455
 msgid "Graph Width"
 msgstr "عرض المخطط"
 
-#: prefs.js:348
+#: prefs.js:348 prefs.js:437
 msgid "Show Text"
 msgstr "اعرض النص"
 
-#: prefs.js:367
+#: prefs.js:367 prefs.js:444
 msgid "Display Style"
 msgstr "نمط العرض"
 
-#: prefs.js:490
+#: prefs.js:490 ui/prefsGeneralSettings.ui:23
 msgid "Display Icon"
 msgstr "اعرض الرمز"
 
-#: prefs.js:495
+#: prefs.js:495 ui/prefsGeneralSettings.ui:43
 msgid "Display in the Middle"
 msgstr "اعرضه في المنتصف"
 
-#: prefs.js:516
+#: prefs.js:516 ui/prefsGeneralSettings.ui:13
 msgid "Background Color"
 msgstr "لون الخلفية"
 
@@ -57,7 +57,7 @@ msgstr "لون الخلفية"
 msgid "Display Individual Cores"
 msgstr "اعرض الأنوية مفردة"
 
-#: prefs.js:419
+#: prefs.js:419 prefs.js:537
 msgid "Show network speed in bits"
 msgstr "اعرض سرعة الشبكة بالبِتّات"
 
@@ -69,11 +69,11 @@ msgstr "الحساس"
 msgid "Please install lm-sensors"
 msgstr "(ثبّت lm-sensors أولاً)"
 
-#: prefs.js:511
+#: prefs.js:511 ui/prefsGeneralSettings.ui:33
 msgid "Move the clock"
 msgstr "انقل الساعة"
 
-#: prefs.js:500
+#: prefs.js:500 ui/prefsGeneralSettings.ui:38
 msgid "Compact Display"
 msgstr "عرض مصغّر"
 
@@ -116,7 +116,7 @@ msgstr "التبديل"
 msgid "Used"
 msgstr "مستخدَم"
 
-#: extension.js:1781
+#: extension.js:1781 widgets/network.js:61
 msgid "Net"
 msgstr "شبكة"
 
@@ -138,7 +138,7 @@ msgstr "التصادمات"
 msgid "Collisions"
 msgstr "التصادمات"
 
-#: extension.js:1490
+#: extension.js:1490 widgets/disk.js:36
 msgid "Disk"
 msgstr "قرص"
 
@@ -184,11 +184,11 @@ msgstr "شبكة"
 msgid "disk"
 msgstr "قرص"
 
-#: extension.js:2536
+#: extension.js:2536 extension.js:354
 msgid "Preferences..."
 msgstr "تفضيلات..."
 
-#: extension.js:2530
+#: extension.js:2530 extension.js:347
 msgid "System Monitor..."
 msgstr "مِرقاب النظام..."
 
@@ -241,20 +241,23 @@ msgid "read"
 msgstr "قراءة"
 
 #: extension.js:211 extension.js:1805 extension.js:1900 extension.js:1912
-#: extension.js:1942 extension.js:1953 extension.js:1964
+#: extension.js:1942 extension.js:1953 extension.js:1964 base.js:167
+#: widgets/network.js:67 widgets/network.js:159
 msgid "KiB/s"
 msgstr "ك.ب/ثا"
 
 #: extension.js:210 extension.js:212 extension.js:1498 extension.js:1903
-#: extension.js:1915
+#: extension.js:1915 base.js:166 base.js:168 widgets/network.js:160
 msgid "MiB/s"
 msgstr "م.ب/ثا"
 
-#: extension.js:214 extension.js:1875 extension.js:1887
+#: extension.js:214 extension.js:1875 extension.js:1887 base.js:170
+#: widgets/network.js:154
 msgid "kbit/s"
 msgstr ""
 
-#: extension.js:215 extension.js:1878 extension.js:1890
+#: extension.js:215 extension.js:1878 extension.js:1890 base.js:171
+#: widgets/network.js:155
 msgid "Mbit/s"
 msgstr ""
 
@@ -267,46 +270,46 @@ msgstr "م.ب"
 msgid "GiB"
 msgstr "م.ب"
 
-#: extension.js:228
+#: extension.js:228 base.js:185
 msgid "kB"
 msgstr "ك.ب"
 
-#: extension.js:227 extension.js:229
+#: extension.js:227 extension.js:229 base.js:184 base.js:186
 msgid "MB"
 msgstr "م.ب"
 
-#: extension.js:2089 extension.js:2094
+#: extension.js:2089 extension.js:2094 widgets/thermal.js:25
 msgid "Thermal"
 msgstr "حرارة"
 
 msgid "thermal"
 msgstr "حرارة"
 
-#: prefs.js:352
+#: prefs.js:352 prefs.js:433
 msgid "Show In Menu"
 msgstr "أظهره في القائمة"
 
-#: prefs.js:427
+#: prefs.js:427 prefs.js:549
 msgid "Show Time Remaining"
 msgstr "اعرض الوقت المتبقي"
 
-#: prefs.js:431
+#: prefs.js:431 prefs.js:559
 msgid "Hide System Icon"
 msgstr "أخفِ رمز النظام"
 
-#: prefs.js:435
+#: prefs.js:435 ui/prefsGeneralSettings.ui:91
 msgid "Usage Style"
 msgstr "نمط الاستخدام"
 
-#: prefs.js:436
+#: prefs.js:436 ui/prefsGeneralSettings.ui:96
 msgid "pie"
 msgstr "قرص"
 
-#: prefs.js:436
+#: prefs.js:436 ui/prefsGeneralSettings.ui:97
 msgid "bar"
 msgstr "أشرطة"
 
-#: prefs.js:436
+#: prefs.js:436 ui/prefsGeneralSettings.ui:98
 msgid "none"
 msgstr "لا شيء"
 
@@ -314,7 +317,7 @@ msgstr "لا شيء"
 msgid "System Monitor Extension"
 msgstr "ملحق مرقاب النظام"
 
-#: extension.js:316
+#: extension.js:316 prefs.js:773
 msgid "Cancel"
 msgstr "ألغِ"
 
@@ -332,7 +335,7 @@ msgstr "التردد"
 msgid "freq"
 msgstr "تردد"
 
-#: extension.js:2163
+#: extension.js:2163 widgets/fan.js:23
 msgid "Fan"
 msgstr "المروحة"
 
@@ -343,23 +346,23 @@ msgstr "مروحة"
 msgid "rpm"
 msgstr "دورة/د"
 
-#: prefs.js:505
+#: prefs.js:505 ui/prefsGeneralSettings.ui:28
 msgid "Show tooltip"
 msgstr ""
 
-#: extension.js:1287
+#: extension.js:1287 widgets/cpu.js:46 widgets/cpu.js:47 widgets/cpu.js:49
 msgid "CPU"
 msgstr ""
 
-#: prefs.js:448
+#: prefs.js:448 prefs.js:511
 msgid "Display temperature in Fahrenheit"
 msgstr ""
 
-#: prefs.js:452
+#: prefs.js:452 prefs.js:521
 msgid "Temperature threshold (0 to disable)"
 msgstr ""
 
-#: prefs.js:34
+#: prefs.js:34 prefs.js:27
 #, javascript-format
 msgid "#%02x%02x%02x%02x"
 msgstr ""
@@ -381,7 +384,7 @@ msgstr "ك.ب/ثا"
 msgid " ↑"
 msgstr ""
 
-#: extension.js:2218 extension.js:2223
+#: extension.js:2218 extension.js:2223 widgets/gpu.js:26
 msgid "GPU"
 msgstr ""
 
@@ -412,16 +415,236 @@ msgstr ""
 "\t    في Fedora: libgtop2-devel وNetworkManager-glib-devel \n"
 "\t    في Arch: libgtop وnetworkmanager\n"
 
-#: extension.js:213 extension.js:1907 extension.js:1919
+#: extension.js:213 extension.js:1907 extension.js:1919 base.js:169
+#: widgets/network.js:161
 #, fuzzy
 msgid "GiB/s"
 msgstr "ك.ب/ثا"
 
-#: extension.js:216 extension.js:1882 extension.js:1894
+#: extension.js:216 extension.js:1882 extension.js:1894 base.js:172
+#: widgets/network.js:156
 msgid "Gbit/s"
 msgstr ""
 
-#: extension.js:230
+#: extension.js:230 base.js:187
 #, fuzzy
 msgid "GB"
 msgstr "م.ب"
+
+#: prefs.js:572
+msgid "Max across all cores"
+msgstr ""
+
+#: prefs.js:573
+msgid "Average across all cores"
+msgstr ""
+
+#: prefs.js:575
+#, fuzzy
+msgid "Display Mode"
+msgstr "اعرض الرمز"
+
+#: prefs.js:588 prefs.js:736
+msgid "Exporter URL"
+msgstr ""
+
+#: prefs.js:598 prefs.js:738
+msgid "Metric (e.g. node_load1 or metric{label=\"val\"})"
+msgstr ""
+
+#: prefs.js:619
+msgid "Monitors"
+msgstr ""
+
+#: prefs.js:629
+#, fuzzy
+msgid "Active Monitors"
+msgstr "مِرقاب النظام..."
+
+#: prefs.js:630
+msgid "Drag to reorder. Changes apply immediately."
+msgstr ""
+
+#: prefs.js:647
+msgid "Add Monitor…"
+msgstr ""
+
+#: prefs.js:706
+msgid "Add Monitor"
+msgstr ""
+
+#: prefs.js:729
+msgid "Type"
+msgstr ""
+
+#: prefs.js:733
+msgid "Device"
+msgstr ""
+
+#: prefs.js:760
+msgid "No devices detected"
+msgstr ""
+
+#: prefs.js:778
+msgid "Add"
+msgstr ""
+
+#: prefs.js:812
+msgid "About"
+msgstr ""
+
+#: prefs.js:819
+msgid ""
+"Modular, config-driven system monitoring for your GNOME desktop. Add, "
+"remove, and reorder monitors freely — each with independent settings."
+msgstr ""
+
+#: prefs.js:824
+msgid "What's New"
+msgstr ""
+
+#: prefs.js:830
+msgid "Multi-Device Monitoring"
+msgstr ""
+
+#: prefs.js:831
+msgid ""
+"Add multiple instances of any monitor type. Track individual CPU cores, "
+"specific network interfaces, or separate GPU devices — each with its own "
+"colors and refresh rate."
+msgstr ""
+
+#: prefs.js:836
+msgid "Prometheus Metrics"
+msgstr ""
+
+#: prefs.js:837
+msgid ""
+"Graph any metric from a Prometheus-compatible exporter directly in your "
+"panel. Monitor custom application metrics, hardware sensors, or anything "
+"with a metrics endpoint — no code changes required."
+msgstr ""
+
+#: prefs.js:842
+msgid "Drag &amp; Drop Reordering"
+msgstr ""
+
+#: prefs.js:843
+msgid ""
+"Reorder monitors by dragging them in the Monitors tab. Changes apply "
+"instantly — no shell restart required."
+msgstr ""
+
+#: prefs.js:848
+msgid "Theme Integration"
+msgstr ""
+
+#: prefs.js:849
+msgid ""
+"Panel widgets automatically use your desktop theme's foreground color for "
+"text and labels, blending seamlessly with any theme."
+msgstr ""
+
+#: prefs.js:853
+msgid "Learn More"
+msgstr ""
+
+#: prefs.js:858
+msgid "Custom Metrics Guide"
+msgstr ""
+
+#: prefs.js:859
+msgid "Graph any metric using Prometheus exporters"
+msgstr ""
+
+#: prefs.js:864
+msgid "Widget Development"
+msgstr ""
+
+#: prefs.js:865
+msgid "Create new widget types for the extension"
+msgstr ""
+
+#: prefs.js:870
+msgid "Project Homepage"
+msgstr ""
+
+#: prefs.js:871
+msgid "Report issues, contribute, or star the project"
+msgstr ""
+
+#: prefs.js:920
+#, fuzzy
+msgid "System Monitor Next Preferences"
+msgstr "ملحق مرقاب النظام"
+
+#: widgets/battery.js:133
+#, javascript-format
+msgctxt "battery time remaining"
+msgid "%d:%02d"
+msgstr ""
+
+#: widgets/frequency.js:25
+msgid "F"
+msgstr ""
+
+#: widgets/frequency.js:26
+msgid "Freq Core "
+msgstr ""
+
+#: widgets/gpu.js:28
+#, fuzzy
+msgid "gpu"
+msgstr "معالج"
+
+#: ui/prefsGeneralSettings.ui:5
+msgid "General"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:9
+msgid "Configure the appearance of the extension"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:48
+#, fuzzy
+msgid "Display on the Left"
+msgstr "اعرضه في المنتصف"
+
+#: ui/prefsGeneralSettings.ui:53
+msgid "Rotate labels"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:58
+msgid "Tooltip delay"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:74
+msgid "Graph scale reset cooldown period"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:75
+msgid ""
+"Minutes to wait before downscaling graph scale (helps contextualize new data "
+"in terms of recent spikes)"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:92
+msgid "How disk usage is shown in the dropdown menu"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:106
+#, fuzzy
+msgid "Custom System Monitor Command"
+msgstr "ملحق مرقاب النظام"
+
+#: ui/prefsGeneralSettings.ui:107
+msgid "Use a custom command instead of GNOME System Monitor"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:112
+msgid "Command (e.g. 'missioncenter')"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:113
+msgid "Command to run instead of GNOME System Monitor"
+msgstr ""
