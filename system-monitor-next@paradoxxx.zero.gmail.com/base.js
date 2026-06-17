@@ -859,6 +859,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
                 GLib.PRIORITY_DEFAULT,
                 this.graph_scale_cooldown_delay_minutes * 60,
                 () => {
+                    if (this._destroyed) return GLib.SOURCE_REMOVE;
                     this.graph_scale_cooldown_timer_id = null;
                     this.restart_cooldown_timer();
                     return GLib.SOURCE_REMOVE;
@@ -917,6 +918,8 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
     //           }
     //           }
     update() {
+        if (this._destroyed)
+            return GLib.SOURCE_REMOVE;
         if (!this.menu_visible && !this.actor.visible) {
             return GLib.SOURCE_CONTINUE;
         }

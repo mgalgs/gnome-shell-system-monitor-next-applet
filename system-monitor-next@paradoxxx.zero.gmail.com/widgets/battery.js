@@ -51,7 +51,7 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
     }
 
     _poll_quickSettings() {
-        if (this._proxy)
+        if (this._destroyed || this._proxy)
             return GLib.SOURCE_REMOVE;
 
         try {

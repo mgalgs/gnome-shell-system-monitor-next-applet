@@ -49,6 +49,7 @@ const Fan = class SystemMonitor_Fan extends ElementBase {
             return;
         }
         read_sensor_async(sensorInfo, value => {
+            if (this._destroyed) { callback(null); return; }
             if (value === null) {
                 if (this._display_error) {
                     sm_log(`Error reading fan sensor: "${this.sensor_label}"`, 'error');

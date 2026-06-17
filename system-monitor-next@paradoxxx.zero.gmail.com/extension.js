@@ -333,6 +333,7 @@ export default class SystemMonitorExtension extends Extension {
                         GLib.PRIORITY_DEFAULT,
                         5,
                         () => {
+                            if (!this.__sm) return GLib.SOURCE_REMOVE;
                             this.__sm.pie.actor.queue_repaint();
                             return GLib.SOURCE_CONTINUE;
                         });

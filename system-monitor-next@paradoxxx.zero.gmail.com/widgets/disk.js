@@ -49,6 +49,7 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
     collectAsync(callback) {
         let file = Gio.file_new_for_path('/proc/diskstats');
         file.load_contents_async(null, (source, result) => {
+            if (this._destroyed) { callback(null); return; }
             let as_r = source.load_contents_finish(result);
             let lines = parse_bytearray(as_r[1]).toString().split('\n');
             let accum = [0, 0];

@@ -63,6 +63,7 @@ const Net = class SystemMonitor_Net extends ElementBase {
 
     _detectInterfacesAsync() {
         Gio.File.new_for_path('/proc/net/dev').load_contents_async(null, (file, result) => {
+            if (this._destroyed) return;
             try {
                 let [, contents] = file.load_contents_finish(result);
                 let lines = new TextDecoder().decode(contents).split('\n');
@@ -79,6 +80,7 @@ const Net = class SystemMonitor_Net extends ElementBase {
     _checkOperstate(ifc) {
         Gio.File.new_for_path('/sys/class/net/' + ifc + '/operstate')
             .load_contents_async(null, (opFile, opResult) => {
+                if (this._destroyed) return;
                 try {
                     let [, opContents] = opFile.load_contents_finish(opResult);
                     if (new TextDecoder().decode(opContents).replace(/\s/g, '') === 'up') {

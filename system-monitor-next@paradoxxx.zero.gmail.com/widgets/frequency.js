@@ -47,6 +47,7 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
         // load_contents_finish here must not break the chain, or the
         // callback would never fire and update() would time out every tick.
         const readNext = () => {
+            if (this._destroyed) { callback(null); return; }
             if (pos >= indices.length) {
                 if (read_count === 0) {
                     callback(null);
