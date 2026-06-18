@@ -39,6 +39,10 @@ make clean
 
 # Create distribution zip for extensions.gnome.org
 make zip-file
+
+# Cut a release (lint, build zip, verify contents — use for EGO uploads)
+make release VERSION=<N>   # e.g. VERSION=34 for v3.34
+# Tag first: git tag v3.<N>
 ```
 
 ### Development Workflow
