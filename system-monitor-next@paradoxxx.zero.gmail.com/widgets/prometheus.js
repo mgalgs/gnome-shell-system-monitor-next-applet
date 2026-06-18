@@ -5,12 +5,7 @@ import GLib from 'gi://GLib';
 import { ElementBase } from '../base.js';
 import { sm_log } from '../utils.js';
 
-let Soup = null;
-try {
-    Soup = (await import('gi://Soup?version=3.0')).default;
-} catch {
-    sm_log('libsoup3 not available — Prometheus widget disabled', 'warn');
-}
+import Soup from 'gi://Soup?version=3.0';
 
 const Prometheus = class SystemMonitor_Prometheus extends ElementBase {
     static metadata = {
@@ -24,10 +19,6 @@ const Prometheus = class SystemMonitor_Prometheus extends ElementBase {
 
     constructor(extension, config) {
         super(extension, config);
-        if (!Soup) {
-            sm_log('Prometheus widget requires libsoup3', 'error');
-            return;
-        }
         this._session = new Soup.Session({timeout: 10});
         this._cancellable = new Gio.Cancellable();
         this._server = config.server || 'http://localhost:9100';

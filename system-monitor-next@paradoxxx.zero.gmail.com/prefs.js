@@ -131,18 +131,7 @@ const SMGeneralPrefsPage = GObject.registerClass({
 
 // ** Monitor Configuration Constants **
 
-// The Prometheus widget needs libsoup3 at runtime; don't offer the type
-// here if monitors created with it could never appear.
-let _hasSoup3 = true;
-try {
-    await import('gi://Soup?version=3.0');
-} catch {
-    _hasSoup3 = false;
-}
-
-const MONITOR_TYPES = ['cpu', 'memory', 'swap', 'net', 'disk', 'gpu', 'thermal', 'fan', 'battery', 'freq'];
-if (_hasSoup3)
-    MONITOR_TYPES.push('prometheus');
+const MONITOR_TYPES = ['cpu', 'memory', 'swap', 'net', 'disk', 'gpu', 'thermal', 'fan', 'battery', 'freq', 'prometheus'];
 
 const COLOR_MAP = {
     cpu: ['user', 'system', 'nice', 'iowait', 'other'],
