@@ -3,7 +3,6 @@
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
 import GLib from "gi://GLib";
 import Gio from "gi://Gio";
-import GObject from "gi://GObject";
 import GTop from "gi://GTop";
 import NM from "gi://NM";
 import { ElementBase } from '../base.js';
@@ -50,11 +49,11 @@ const Net = class SystemMonitor_Net extends ElementBase {
         this.tip_format([_('KiB/s'), '/s', _('KiB/s'), '/s', '/s']);
         try {
             let iface_list = this.client.get_devices();
-            this._nmSignals = [];
+            this._nmDevices = [];
             for (let j = 0; j < iface_list.length; j++) {
                 let device = iface_list[j];
-                let sigId = device.connect('state-changed', this.update_iface_list.bind(this));
-                this._nmSignals.push({device, sigId});
+                device.connectObject('state-changed', this.update_iface_list.bind(this), this);
+                this._nmDevices.push(device);
             }
         } catch (e) {
             console.error('Please install Network Manager Gobject Introspection Bindings: ' + e);
@@ -188,10 +187,10 @@ const Net = class SystemMonitor_Net extends ElementBase {
     }
 
     destroy() {
-        if (this._nmSignals) {
-            for (const {device, sigId} of this._nmSignals)
-                GObject.signal_handler_disconnect(device, sigId);
-            this._nmSignals = null;
+        if (this._nmDevices) {
+            for (const device of this._nmDevices)
+                device.disconnectObject(this);
+            this._nmDevices = null;
         }
         super.destroy();
     }

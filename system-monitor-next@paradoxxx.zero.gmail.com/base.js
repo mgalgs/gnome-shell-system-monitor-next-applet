@@ -253,7 +253,7 @@ export const Chart = class SystemMonitor_Chart {
         for (let i = 0; i < this.parentC.colors.length; i++) {
             this.data[i] = [];
         }
-        this._scaleFactorSigId = themeContext.connect('notify::scale-factor', this.rescale.bind(this));
+        themeContext.connectObject('notify::scale-factor', this.rescale.bind(this), this);
         this.actor.connect('repaint', this._draw.bind(this));
     }
     update() {
@@ -344,11 +344,7 @@ export const Chart = class SystemMonitor_Chart {
         this.actor.set_width(this.width * this.scale_factor); // repaints
     }
     destroy() {
-        let themeContext = St.ThemeContext.get_for_stage(global.stage);
-        if (this._scaleFactorSigId) {
-            themeContext.disconnect(this._scaleFactorSigId);
-            this._scaleFactorSigId = null;
-        }
+        St.ThemeContext.get_for_stage(global.stage).disconnectObject(this);
     }
 }
 
@@ -443,8 +439,11 @@ export const TipBox = class SystemMonitor_TipBox {
         this.set_tip(new TipMenu(this.actor));
         this.in_to = 0;
         this.out_to = 0;
-        this.actor.connect('enter-event', this.on_enter.bind(this));
-        this.actor.connect('leave-event', this.on_leave.bind(this));
+        this.actor.connectObject(
+            'enter-event', this.on_enter.bind(this),
+            'leave-event', this.on_leave.bind(this),
+            this
+        );
     }
     set_tip(tipmenu) {
         if (this.tipmenu) {
@@ -673,7 +672,6 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
             }
         };
         change_rotate_labels();
-        this._rotateLabelsConnection = this.extension._Schema.connect('changed::rotate-labels', change_rotate_labels);
 
         this.actor.add_child(this.label_bin);
         this.text_box = new St.BoxLayout();
@@ -689,9 +687,14 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this.menu_items = this.create_menu_items();
 
         this.restart_cooldown_timer();
-        this._cooldownConnection = this.extension._Schema.connect('changed::graph-cooldown-delay-m', () => {
-            this.restart_cooldown_timer();
-        });
+
+        this.extension._Schema.connectObject(
+            'changed::rotate-labels', change_rotate_labels,
+            'changed::graph-cooldown-delay-m', () => {
+                this.restart_cooldown_timer();
+            },
+            this
+        );
 
         this.tip_format(meta?.tooltipUnit ?? '');
     }
@@ -1085,14 +1088,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
     }
     destroy() {
         this._destroyed = true;
-        if (this._rotateLabelsConnection) {
-            this.extension._Schema.disconnect(this._rotateLabelsConnection);
-            this._rotateLabelsConnection = null;
-        }
-        if (this._cooldownConnection) {
-            this.extension._Schema.disconnect(this._cooldownConnection);
-            this._cooldownConnection = null;
-        }
+        this.extension._Schema.disconnectObject(this);
         if (this.chart)
             this.chart.destroy();
         TipBox.prototype.destroy.call(this);

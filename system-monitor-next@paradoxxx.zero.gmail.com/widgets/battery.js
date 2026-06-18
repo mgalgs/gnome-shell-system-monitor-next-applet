@@ -69,9 +69,10 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
             if (proxy) {
                 sm_log('Battery proxy found!');
                 this._proxy = proxy;
-                this.powerSigID = this._proxy.connect(
+                this._proxy.connectObject(
                     'g-properties-changed',
                     this._onBatteryChanged.bind(this),
+                    this
                 );
                 this._onBatteryChanged();
                 this._poll_handler_id = undefined;
@@ -169,7 +170,7 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
 
     destroy() {
         if (this._proxy) {
-            this._proxy.disconnect(this.powerSigID);
+            this._proxy.disconnectObject(this);
             this._proxy = null;
         }
         if (this._poll_handler_id) {

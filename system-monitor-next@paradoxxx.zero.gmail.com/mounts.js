@@ -150,8 +150,11 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
         }
         try {
             this.manager = this._volumeMonitor;
-            this.mount_added_id = this.manager.connect('mount-added', this.refresh.bind(this));
-            this.mount_removed_id = this.manager.connect('mount-removed', this.refresh.bind(this));
+            this.manager.connectObject(
+                'mount-added', this.refresh.bind(this),
+                'mount-removed', this.refresh.bind(this),
+                this
+            );
             // need to add the other signals here
             this.connected = true;
         } catch (e) {
@@ -164,8 +167,7 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
         if (!this.connected) {
             return;
         }
-        this.manager.disconnect(this.mount_added_id);
-        this.manager.disconnect(this.mount_removed_id);
+        this.manager.disconnectObject(this);
         this.connected = false;
     }
     destroy() {
@@ -183,12 +185,12 @@ export const Graph = class SystemMonitor_Graph {
         this.gtop = new GTop.glibtop_fsusage();
 
         this._themeContext = St.ThemeContext.get_for_stage(global.stage);
-        this._scaleFactorSigId = this._themeContext.connect('notify::scale-factor', this.set_scale.bind(this));
         this.scale_factor = this._themeContext.scale_factor;
         this._interfaceSettings = new Gio.Settings({
             schema: 'org.gnome.desktop.interface'
         });
-        this._interfaceSettingsSigId = this._interfaceSettings.connect('changed', this.set_text_scaling.bind(this));
+        this._themeContext.connectObject('notify::scale-factor', this.set_scale.bind(this), this);
+        this._interfaceSettings.connectObject('changed', this.set_text_scaling.bind(this), this);
         this.text_scaling = this._interfaceSettings.get_double('text-scaling-factor');
         if (!this.text_scaling) {
             this.text_scaling = 1;
@@ -220,14 +222,8 @@ export const Graph = class SystemMonitor_Graph {
         this.actor.set_height(this.height * this.scale_factor * this.text_scaling);
     }
     destroy() {
-        if (this._scaleFactorSigId) {
-            this._themeContext.disconnect(this._scaleFactorSigId);
-            this._scaleFactorSigId = null;
-        }
-        if (this._interfaceSettingsSigId) {
-            this._interfaceSettings.disconnect(this._interfaceSettingsSigId);
-            this._interfaceSettingsSigId = null;
-        }
+        this._themeContext.disconnectObject(this);
+        this._interfaceSettings.disconnectObject(this);
     }
 }
 

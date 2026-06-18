@@ -269,9 +269,6 @@ export default class SystemMonitorExtension extends Extension {
             tray.clockMoved = true;
         }
 
-        this._bgConnection = this._Schema.connect('changed::background', (schema, key) => {
-            this._Background = color_from_string(this._Schema.get_string(key));
-        });
         Main.panel._addToPanelBox('system-monitor', tray, 1, panel);
 
         let spacing = this._Schema.get_boolean('compact-display') ? '1' : '4';
@@ -290,8 +287,14 @@ export default class SystemMonitorExtension extends Extension {
             }
         }
 
-        // Listen for config changes
-        this._settingsConnection = this._Schema.connect('changed::monitors', () => this._syncMonitors());
+        this._Schema.connectObject(
+            'changed::background', (schema, key) => {
+                this._Background = color_from_string(this._Schema.get_string(key));
+            },
+            'changed::monitors', () => this._syncMonitors(),
+            'changed::disk-usage-style', () => change_usage(this),
+            this
+        );
 
         // Build Menu Info Box Table
         let menu_info = new PopupMenu.PopupBaseMenuItem({reactive: false});
@@ -312,11 +315,10 @@ export default class SystemMonitorExtension extends Extension {
         tray.menu.addMenuItem(bar_item.menu_item);
 
         change_usage(this);
-        this._diskUsageConnection = this._Schema.connect('changed::disk-usage-style', () => change_usage(this));
 
         tray.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-        this._menuOpenId = tray.menu.connect(
+        tray.menu.connectObject(
             'open-state-changed',
             (menu, isOpen) => {
                 if (isOpen) {
@@ -333,7 +335,8 @@ export default class SystemMonitorExtension extends Extension {
                 } else {
                     GLib.Source.remove(this.menuTimeout);
                 }
-            }
+            },
+            this
         );
 
         let item;
@@ -359,18 +362,7 @@ export default class SystemMonitorExtension extends Extension {
             GLib.Source.remove(this.menuTimeout);
             this.menuTimeout = null;
         }
-        if (this._settingsConnection) {
-            this._Schema.disconnect(this._settingsConnection);
-            this._settingsConnection = null;
-        }
-        if (this._bgConnection) {
-            this._Schema.disconnect(this._bgConnection);
-            this._bgConnection = null;
-        }
-        if (this._diskUsageConnection) {
-            this._Schema.disconnect(this._diskUsageConnection);
-            this._diskUsageConnection = null;
-        }
+        this._Schema.disconnectObject(this);
         // restore clock
         if (this.__sm.tray.clockMoved) {
             let dateMenu = Main.panel.statusArea.dateMenu;
@@ -378,10 +370,7 @@ export default class SystemMonitorExtension extends Extension {
             Main.panel._addToPanelBox('dateMenu', dateMenu, Main.sessionMode.panel.center.indexOf('dateMenu'), Main.panel._centerBox);
         }
 
-        if (this._menuOpenId) {
-            this.__sm.tray.menu.disconnect(this._menuOpenId);
-            this._menuOpenId = null;
-        }
+        this.__sm.tray.menu.disconnectObject(this);
         for (let elt of this.__sm.widgetMap.values()) {
             elt.destroy();
         }

@@ -10,18 +10,16 @@ const Icon = class SystemMonitor_Icon {
             style_class: 'system-status-icon'
         });
         this.actor.visible = this.extension._Schema.get_boolean('icon-display');
-        this._sigId = this.extension._Schema.connect(
+        this.extension._Schema.connectObject(
             'changed::icon-display',
             () => {
                 this.actor.visible = this.extension._Schema.get_boolean('icon-display');
-            }
+            },
+            this
         );
     }
     destroy() {
-        if (this._sigId) {
-            this.extension._Schema.disconnect(this._sigId);
-            this._sigId = null;
-        }
+        this.extension._Schema.disconnectObject(this);
         this.actor.destroy();
         this.actor = null;
         this.extension = null;
