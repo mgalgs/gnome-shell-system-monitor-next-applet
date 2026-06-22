@@ -2,6 +2,8 @@
 
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
 import GTop from "gi://GTop";
+import St from "gi://St";
+import Clutter from "gi://Clutter";
 import { ElementBase } from '../base.js';
 
 const Cpu = class SystemMonitor_Cpu extends ElementBase {
@@ -19,6 +21,11 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
 
     constructor(extension, config) {
         super(extension, config);
+
+        this.avg_sum = 0;
+        this.avg_count = 0;
+        this.avg_history = [];
+
         this.max = 100;
 
         if (this.device_id === 'all') {
@@ -102,6 +109,16 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
             percent = Math.round((100 - this.usage[3]));
         }
 
+        let max_samples = this.chart.width;
+        this.avg_sum += percent;
+        this.avg_history.push(percent);
+        if (this.avg_count < max_samples) {
+            this.avg_count++;
+        } else {
+            this.avg_sum -= this.avg_history.shift();
+        }
+        let avg = Math.round(this.avg_sum / this.avg_count);
+
         let other = 100;
         for (let i = 0; i < this.usage.length; i++) {
             other -= this.usage[i];
@@ -117,6 +134,24 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
                 other: other,
             },
             display: percent.toString(),
+            extra: {
+                average: avg.toString(),
+            },
+        };
+    }
+    create_extra_text_items() {
+        const Style = this.extension._Style;
+        return {
+            average: new St.Label({
+                text: '',
+                style_class: Style.get('sm-status-value'),
+                y_align: Clutter.ActorAlign.CENTER
+            }),
+            unit: new St.Label({
+                text: '%',
+                style_class: Style.get('sm-perc-label'),
+                y_align: Clutter.ActorAlign.CENTER
+            })
         };
     }
 }

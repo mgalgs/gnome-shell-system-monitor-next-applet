@@ -681,8 +681,27 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         for (let item in this.text_items) {
             this.text_box.add_child(this.text_items[item]);
         }
-        this.actor.add_child(this.chart.actor);
+
+        if (this.create_extra_text_items) {
+            this.extra_text_items = this.create_extra_text_items();
+
+            this.extra_text_box = new St.BoxLayout();
+
+            // move chart into same box like old patch
+            this.extra_text_box.add_child(this.chart.actor);
+
+            for (let item in this.extra_text_items) {
+                this.extra_text_box.add_child(this.extra_text_items[item]);
+            }
+
+            this.actor.add_child(this.extra_text_box);
+        } else {
+            this.actor.add_child(this.chart.actor);
+        }
+
         change_style.call(this);
+
+        this.update_extra_visibility();
 
         this.menu_items = this.create_menu_items();
 
@@ -740,6 +759,10 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         if (oldConfig['show-menu'] !== newConfig['show-menu']) {
             this.menu_visible = newConfig['show-menu'];
             build_menu_info(this.extension);
+        }
+
+        if (oldConfig.averageDigit !== newConfig.averageDigit || oldConfig.style !== newConfig.style) {
+            this.update_extra_visibility();
         }
 
         this.update();
@@ -971,6 +994,13 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         }
         return GLib.SOURCE_CONTINUE;
     }
+    update_extra_visibility() {
+        if (this.extra_text_items) {
+            const v = this.config.averageDigit && this.chart.actor.visible;
+            this.extra_text_items.average.visible = v;
+            this.extra_text_items.unit.visible = v;
+        }
+    }
     _applyCollected(data) {
         try {
             if (data)
@@ -1013,6 +1043,11 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
             for (let i = 0; i < data.tipUnits.length; i++) {
                 if (this.tip_unit_labels[i])
                     this.tip_unit_labels[i].text = data.tipUnits[i];
+            }
+        }
+        if (data.extra) {
+            for (let key in data.extra) {
+                this.extra_text_items[key].text = data.extra[key].toString();
             }
         }
 

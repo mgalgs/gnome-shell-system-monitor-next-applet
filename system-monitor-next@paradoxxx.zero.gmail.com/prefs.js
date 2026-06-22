@@ -631,6 +631,19 @@ const SMMonitorRow = GObject.registerClass({
             this.add_row(metricRow);
             break;
         }
+        case 'cpu': {
+           let averageDigit = new Adw.SwitchRow({
+                title: _('Graph Average'),
+                subtitle: _('Show average CPU usage next to graph'),
+                active: c.averageDigit,
+            });
+            averageDigit.connect('notify::active', w => {
+                c.averageDigit = w.active;
+                this._emitChanged();
+            });
+            this.add_row(averageDigit);
+            break;
+        }
         }
     }
 });
