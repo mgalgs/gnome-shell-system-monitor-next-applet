@@ -48,6 +48,14 @@ Clutter.Actor.prototype.reparent = function reparent(newParent) {
     newParent.add_child(this);
 }
 
+// gettext('') returns the PO catalog header instead of an empty string, so
+// dynamic strings (widget metadata units/labels) that may be empty must be
+// guarded (issue #149). Only use this for dynamic values; string literals
+// must use _() directly so xgettext can extract them into the template.
+function tr(text) {
+    return text ? _(text) : '';
+}
+
 export function l_limit(t) {
     return (t > 0) ? t : 1000;
 }
@@ -612,7 +620,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         const meta = this.constructor.metadata;
 
         this.elt = meta?.id || meta?.name?.toLowerCase() || config.type;
-        this.item_name = meta ? _(meta.name) : '';
+        this.item_name = meta ? tr(meta.name) : '';
         this.color_name = meta ? meta.metrics.filter(m => m.color).map(m => m.key) : [];
         this.device_id = config.device;
         this.text_items = [];
@@ -650,7 +658,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this.actor.visible = this.config.display;
 
         const panelLabel = meta?.label || meta?.name?.toLowerCase()?.slice(0, 4) || this.elt;
-        this.label = new St.Label({text: _(panelLabel),
+        this.label = new St.Label({text: tr(panelLabel),
             style_class: Style.get('sm-status-label')});
         this.label.visible = this.config['show-text'];
 
@@ -764,7 +772,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
                         icon_name: icons[i]}));
                 } else {
                     items.push(new St.Label({
-                        text: _(labels[i]),
+                        text: tr(labels[i]),
                         style_class: Style.get('sm-status-label')}));
                 }
                 items.push(new St.Label({
@@ -772,7 +780,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
                     style_class: Style.get(valueStyle),
                     y_align: Clutter.ActorAlign.CENTER}));
                 items.push(new St.Label({
-                    text: _(unit),
+                    text: tr(unit),
                     style_class: Style.get(unitStyle),
                     y_align: Clutter.ActorAlign.CENTER}));
             }
@@ -790,7 +798,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
                     style_class: Style.get(valueStyle),
                     y_align: Clutter.ActorAlign.CENTER}),
                 new St.Label({
-                    text: _(unit),
+                    text: tr(unit),
                     style_class: Style.get(unitStyle),
                     y_align: Clutter.ActorAlign.CENTER}),
             ];
@@ -802,7 +810,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
                 style_class: Style.get(valueStyle),
                 y_align: Clutter.ActorAlign.CENTER}),
             new St.Label({
-                text: _(unit),
+                text: tr(unit),
                 style_class: Style.get(unitStyle),
                 y_align: Clutter.ActorAlign.CENTER}),
         ];
@@ -817,10 +825,10 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
             const detailUnit = meta?.detailUnit ?? '';
             return [
                 new St.Label({text: '', style_class: Style.get('sm-value')}),
-                new St.Label({text: _(unit), style_class: Style.get('sm-label')}),
+                new St.Label({text: tr(unit), style_class: Style.get('sm-label')}),
                 new St.Label({text: '', style_class: Style.get('sm-label')}),
                 new St.Label({text: '', style_class: Style.get('sm-value')}),
-                new St.Label({text: _(detailUnit), style_class: Style.get('sm-label')}),
+                new St.Label({text: tr(detailUnit), style_class: Style.get('sm-label')}),
             ];
         }
 
@@ -828,11 +836,11 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
             const labels = meta?.menuDualLabels ?? meta?.dualLabels ?? ['1', '2'];
             return [
                 new St.Label({text: '', style_class: Style.get('sm-value')}),
-                new St.Label({text: _(unit), style_class: Style.get('sm-label')}),
-                new St.Label({text: ' ' + _(labels[0]), style_class: Style.get('sm-label')}),
+                new St.Label({text: tr(unit), style_class: Style.get('sm-label')}),
+                new St.Label({text: ' ' + tr(labels[0]), style_class: Style.get('sm-label')}),
                 new St.Label({text: '', style_class: Style.get('sm-value')}),
-                new St.Label({text: _(unit), style_class: Style.get('sm-label')}),
-                new St.Label({text: ' ' + _(labels[1]), style_class: Style.get('sm-label')}),
+                new St.Label({text: tr(unit), style_class: Style.get('sm-label')}),
+                new St.Label({text: ' ' + tr(labels[1]), style_class: Style.get('sm-label')}),
             ];
         }
 
@@ -841,7 +849,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
                 text: '',
                 style_class: Style.get('sm-value')}),
             new St.Label({
-                text: _(unit),
+                text: tr(unit),
                 style_class: Style.get('sm-label')}),
         ];
     }
@@ -906,7 +914,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         for (let i = 0; i < this.color_name.length; i++) {
             let tipline = new TipItem();
             this.tipmenu.addMenuItem(tipline);
-            tipline.actor.add_child(new St.Label({text: _(this.color_name[i])}));
+            tipline.actor.add_child(new St.Label({text: tr(this.color_name[i])}));
             this.tip_labels[i] = new St.Label({text: ''});
             tipline.actor.add_child(this.tip_labels[i]);
 
