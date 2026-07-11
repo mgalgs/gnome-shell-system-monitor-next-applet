@@ -208,7 +208,7 @@ check.lint:
 
 check.shexli: zip-file
 	$(call msg,$@,Running shexli...)
-	$(Q)uv run --with shexli --python 3.13 --managed-python shexli dist/$(ZIPFILE)
+	$(Q)uv run --with shexli --with 'tree-sitter<0.26' --python 3.13 --managed-python shexli dist/$(ZIPFILE)
 	$(call msg,$@,OK)
 
 # VM variable: target a specific VM (default: first in vms.conf)
