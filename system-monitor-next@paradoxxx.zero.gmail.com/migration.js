@@ -140,7 +140,7 @@ function migrateFrom1(extension, settings) {
 }
 
 function migrateFrom2(settings) {
-    sm_log('Migrating settings: v2 -> v3 (adding averageDigit)');
+    sm_log('Migrating settings: v2 -> v3 (adding averageDigit and restoreAverage)');
 
     let monitors = settings.get_strv('monitors');
 
@@ -150,6 +150,7 @@ function migrateFrom2(settings) {
 
             if (monitor.type === 'cpu') {
                 monitor.averageDigit = false;
+                monitor.restoreAverage = false;
             }
 
             return JSON.stringify(monitor);

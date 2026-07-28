@@ -642,6 +642,16 @@ const SMMonitorRow = GObject.registerClass({
                 this._emitChanged();
             });
             this.add_row(averageDigit);
+            let restoreAverage = new Adw.SwitchRow({
+                title: _('Restore Graph Average'),
+                subtitle: _('Restore the graph average after the extension is recreated'),
+                active: c.restoreAverage,
+            });
+            restoreAverage.connect('notify::active', w => {
+                c.restoreAverage = w.active;
+                this._emitChanged();
+            });
+            this.add_row(restoreAverage);
             break;
         }
         }
