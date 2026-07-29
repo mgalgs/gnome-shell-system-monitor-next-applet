@@ -26,10 +26,6 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
         this.avg_sum = 0;
         this.avg_count = 0;
         this.avg_history = [];
-        if (this.config.restoreAverage)
-            // Restore the running average across enable/disable cycles
-            // (e.g. screen lock/unlock recreates the widget from scratch).
-            this._loadAvgState();
 
         this.max = 100;
 
@@ -53,6 +49,11 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
         }
         this.last_total = 0;
         this.usage = [0, 0, 0, 1, 0];
+
+        if (this.config.restoreAverage)
+            // Restore the running average across enable/disable cycles
+            // Must run after this.max/this.total_cores are finalized above,
+            this._loadAvgState();
 
         if (this.cpuid !== -1) {
             this.item_name = _('CPU') + ' ' + (this.cpuid + 1);
@@ -205,6 +206,17 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
                 for (let i = 0; i < remainder; i++) {
                     this.avg_history[i] += step;
                 }
+
+                // avg_history is on the normalized 0-100 percent scale (see `percent`
+                // in collect()), but the chart's raw data (this.vals fed via update())
+                // is on a 0-this.max scale, which is 100 * total_cores for the 'all'
+                // aggregate widget. Scale up to match, or the seeded line renders far
+                // too low (e.g. 20 on a max-400 chart draws at 5% height).
+                const chart_scale = this.max / 100;
+                const scaled_history = (chart_scale !== 1)
+                    ? this.avg_history.map(v => v * chart_scale)
+                    : this.avg_history;
+                this.chart.seed_flat(scaled_history);
 
                 GLib.unlink(path);
             }

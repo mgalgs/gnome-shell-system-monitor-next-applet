@@ -274,6 +274,22 @@ export const Chart = class SystemMonitor_Chart {
         }
         this.actor.queue_repaint();
     }
+
+    // Seed the chart with a restored flat/total history (e.g. after the widget is
+    // recreated) rather than starting empty. Since we only have a total per sample,
+    // not a per-metric breakdown, everything is attributed to the last series (the
+    // stacking anchor) and the rest are zero-filled so the cumulative total is correct.
+    seed_flat(values) {
+        const n = this.parentC.colors.length;
+        const trimmed = values.slice(-this.width);
+        for (let i = 0; i < n; i++) {
+            this.data[i] = (i === 0) ? trimmed.slice() : new Array(trimmed.length).fill(0);
+        }
+        if (this.actor.visible) {
+            this.actor.queue_repaint();
+        }
+    }
+
     _draw() {
         if (!this.actor.visible) {
             return;
