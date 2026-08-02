@@ -14,7 +14,6 @@ A GNOME Shell extension that displays system resource usage (CPU, memory, disk, 
 
 The extension requires system libraries to function:
 - `libgtop` (system metrics)
-- `NetworkManager` libraries (network monitoring)
 - `clutter` (rendering)
 - `gnome-system-monitor`
 - For NVIDIA GPU monitoring: `nvidia-smi`

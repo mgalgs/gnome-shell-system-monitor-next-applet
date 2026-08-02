@@ -30,12 +30,12 @@ Before installing, ensure you have the necessary system packages (note that if y
 
 - Ubuntu/Debian:
   ```
-  sudo apt install gir1.2-gtop-2.0 gir1.2-nm-1.0 gir1.2-clutter-1.0 gnome-system-monitor
+  sudo apt install gir1.2-gtop-2.0 gir1.2-clutter-1.0 gnome-system-monitor
   ```
 
 - Fedora:
   ```
-  sudo dnf install libgtop2-devel NetworkManager-libnm-devel gnome-system-monitor
+  sudo dnf install libgtop2-devel gnome-system-monitor
   ```
 
 - Arch Linux:
@@ -50,11 +50,11 @@ Before installing, ensure you have the necessary system packages (note that if y
 
 - Mageia 64-bit:
   ```
-  sudo urpmi lib64gtop-gir2.0 lib64nm-gir1.0 lib64clutter-gir1.0 gnome-system-monitor
+  sudo urpmi lib64gtop-gir2.0 lib64clutter-gir1.0 gnome-system-monitor
   ```
   or
   ```
-  sudo dnf install lib64gtop-gir2.0 lib64nm-gir1.0 lib64clutter-gir1.0 gnome-system-monitor
+  sudo dnf install lib64gtop-gir2.0 lib64clutter-gir1.0 gnome-system-monitor
   ```
 
 - NixOS:

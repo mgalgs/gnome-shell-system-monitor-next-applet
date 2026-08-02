@@ -1,12 +1,8 @@
 /* -*- mode: js2; js2-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
-import Gio from "gi://Gio";
-import NM from "gi://NM";
 import { sm_log } from '../utils.js';
 import { ElementBase } from '../base.js';
-
-const NetworkManager = NM;
 
 // The five counters, in the order this widget's metrics and tooltip already use.
 const FIELDS = ['bytes_in', 'errors_in', 'bytes_out', 'errors_out', 'collisions'];
@@ -33,13 +29,6 @@ const Net = class SystemMonitor_Net extends ElementBase {
 
     constructor(extension, config) {
         super(extension, config);
-        this.ifs = [];
-        this.client = NM.Client.new(null);
-        this.update_iface_list();
-
-        if (!this.ifs.length)
-            this._detectInterfacesAsync();
-
         if (this.device_id !== 'all') {
             this.label.text = this.device_id;
             this.item_name = _('Net') + ' ' + this.device_id;
@@ -49,64 +38,8 @@ const Net = class SystemMonitor_Net extends ElementBase {
         this._last = new Map();
         this._lastTime = 0;
         this._noEdgeLogged = false;
+        this._missingLogged = false;
         this.tip_format([_('KiB/s'), '/s', _('KiB/s'), '/s', '/s']);
-        try {
-            let iface_list = this.client.get_devices();
-            this._nmDevices = [];
-            for (let j = 0; j < iface_list.length; j++) {
-                let device = iface_list[j];
-                device.connectObject('state-changed', this.update_iface_list.bind(this), this);
-                this._nmDevices.push(device);
-            }
-        } catch (e) {
-            console.error('Please install Network Manager Gobject Introspection Bindings: ' + e);
-        }
-    }
-
-    _detectInterfacesAsync() {
-        Gio.File.new_for_path('/proc/net/dev').load_contents_async(null, (file, result) => {
-            if (this._destroyed) return;
-            try {
-                let [, contents] = file.load_contents_finish(result);
-                let lines = new TextDecoder().decode(contents).split('\n');
-                for (let i = 2; i < lines.length - 1; i++) {
-                    let ifc = lines[i].replace(/^\s+/g, '').split(':')[0];
-                    if (ifc.indexOf('br') >= 0 || ifc.indexOf('lo') >= 0)
-                        continue;
-                    this._checkOperstate(ifc);
-                }
-            } catch { /* /proc/net/dev unavailable */ }
-        });
-    }
-
-    _checkOperstate(ifc) {
-        Gio.File.new_for_path('/sys/class/net/' + ifc + '/operstate')
-            .load_contents_async(null, (opFile, opResult) => {
-                if (this._destroyed) return;
-                try {
-                    let [, opContents] = opFile.load_contents_finish(opResult);
-                    if (new TextDecoder().decode(opContents).replace(/\s/g, '') === 'up') {
-                        if (this.device_id === 'all' || this.device_id === ifc)
-                            this.ifs.push(ifc);
-                    }
-                } catch { /* operstate file may not exist */ }
-            });
-    }
-
-    update_iface_list() {
-        try {
-            this.ifs = [];
-            let iface_list = this.client.get_devices();
-            for (let j = 0; j < iface_list.length; j++) {
-                if (iface_list[j].state === NetworkManager.DeviceState.ACTIVATED) {
-                    let iface = iface_list[j].get_ip_iface() || iface_list[j].get_iface();
-                    if (this.device_id === 'all' || this.device_id === iface)
-                        this.ifs.push(iface);
-                }
-            }
-        } catch {
-            console.error('Please install Network Manager Gobject Introspection Bindings');
-        }
     }
 
     collectAsync(callback) {
@@ -124,14 +57,11 @@ const Net = class SystemMonitor_Net extends ElementBase {
             // sign of one.
             let totals = [0, 0, 0, 0, 0];
             let current = new Map();
-            for (const iface of this.ifs) {
-                const now = reading.data.get(iface);
-                if (!now)
-                    continue;
+            for (const [iface, now] of reading.data) {
                 // A total counts the machine's edge, once. Summing a tunnel and
                 // the wifi carrying it reports the same bytes twice. Naming an
                 // interface is an explicit request for it, edge or not.
-                if (this.device_id === 'all' && !now.edge)
+                if (this.device_id === 'all' ? !now.edge : iface !== this.device_id)
                     continue;
                 current.set(iface, now);
                 const prev = this._last.get(iface);
@@ -147,10 +77,13 @@ const Net = class SystemMonitor_Net extends ElementBase {
                     totals[i] += now[FIELDS[i]] - prev[FIELDS[i]];
             }
             this._last = current;
-            if (this.device_id === 'all' && current.size === 0)
+            if (current.size) {
+                this._noEdgeLogged = false;
+                this._missingLogged = false;
+            } else if (this.device_id === 'all')
                 this._reportNoEdge(reading.data);
             else
-                this._noEdgeLogged = false;
+                this._reportMissing(reading.data);
 
             // The reading's own instant, not the clock now: a reading taken for
             // a faster sibling and consumed here is older than this tick, and
@@ -179,6 +112,18 @@ const Net = class SystemMonitor_Net extends ElementBase {
         sm_log(`${this.item_name}: no physical interface among ` +
                `${[...interfaces.keys()].join(', ')} — showing 0. If your traffic is ` +
                'between local machines, pick the bridge or tunnel it uses in preferences.', 'warn');
+    }
+
+    // An interface can be selected and then removed, or renamed by udev between
+    // opening preferences and the panel reading it. The panel can only show 0;
+    // which interfaces do exist is the difference between a mystery and a
+    // one-line diagnosis.
+    _reportMissing(interfaces) {
+        if (this._missingLogged)
+            return;
+        this._missingLogged = true;
+        sm_log(`${this.item_name}: /proc/net/dev lists ${[...interfaces.keys()].join(', ')} — ` +
+               `nothing for "${this.device_id}". Showing 0.`, 'warn');
     }
 
     _present(usage) {
@@ -240,14 +185,6 @@ const Net = class SystemMonitor_Net extends ElementBase {
         return str;
     }
 
-    destroy() {
-        if (this._nmDevices) {
-            for (const device of this._nmDevices)
-                device.disconnectObject(this);
-            this._nmDevices = null;
-        }
-        super.destroy();
-    }
 }
 
 export { Net };
