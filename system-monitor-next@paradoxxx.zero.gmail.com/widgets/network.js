@@ -3,6 +3,7 @@
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
 import Gio from "gi://Gio";
 import NM from "gi://NM";
+import { sm_log } from '../utils.js';
 import { ElementBase } from '../base.js';
 
 const NetworkManager = NM;
@@ -47,6 +48,7 @@ const Net = class SystemMonitor_Net extends ElementBase {
         this.cursor = extension._Samplers.net.cursor();
         this._last = new Map();
         this._lastTime = 0;
+        this._noEdgeLogged = false;
         this.tip_format([_('KiB/s'), '/s', _('KiB/s'), '/s', '/s']);
         try {
             let iface_list = this.client.get_devices();
@@ -126,6 +128,11 @@ const Net = class SystemMonitor_Net extends ElementBase {
                 const now = reading.data.get(iface);
                 if (!now)
                     continue;
+                // A total counts the machine's edge, once. Summing a tunnel and
+                // the wifi carrying it reports the same bytes twice. Naming an
+                // interface is an explicit request for it, edge or not.
+                if (this.device_id === 'all' && !now.edge)
+                    continue;
                 current.set(iface, now);
                 const prev = this._last.get(iface);
                 // No previous reading means the interface has just appeared,
@@ -140,6 +147,10 @@ const Net = class SystemMonitor_Net extends ElementBase {
                     totals[i] += now[FIELDS[i]] - prev[FIELDS[i]];
             }
             this._last = current;
+            if (this.device_id === 'all' && current.size === 0)
+                this._reportNoEdge(reading.data);
+            else
+                this._noEdgeLogged = false;
 
             // The reading's own instant, not the clock now: a reading taken for
             // a faster sibling and consumed here is older than this tick, and
@@ -155,6 +166,19 @@ const Net = class SystemMonitor_Net extends ElementBase {
 
             callback(this._present(usage));
         });
+    }
+
+    // A total of zero while traffic flows is the one way this rule looks broken,
+    // and it happens on a host whose traffic never reaches a NIC -- between
+    // local VMs over a bridge, say. The picker says what the total excludes;
+    // this is for whoever never opens it.
+    _reportNoEdge(interfaces) {
+        if (this._noEdgeLogged)
+            return;
+        this._noEdgeLogged = true;
+        sm_log(`${this.item_name}: no physical interface among ` +
+               `${[...interfaces.keys()].join(', ')} — showing 0. If your traffic is ` +
+               'between local machines, pick the bridge or tunnel it uses in preferences.', 'warn');
     }
 
     _present(usage) {

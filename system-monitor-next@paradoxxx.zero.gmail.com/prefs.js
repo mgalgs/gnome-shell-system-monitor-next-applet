@@ -319,6 +319,10 @@ function detectSensors(sensorType) {
 // a member is one element; a singleton is neither, which is why it is its own
 // variant rather than an aggregate over an empty set -- there is nothing to
 // choose, so there is no picker.
+//
+// An aggregate may carry a `note`, which replaces the picker's default
+// subtitle. Only net needs one: every other aggregate really is a plain total
+// over the members listed under it, and net's is not.
 function catalogSet(aggregate, members) {
     return {kind: 'set', aggregate, members};
 }
@@ -339,7 +343,11 @@ function detectCatalog(type, extensionPath) {
             {id: 'all', name: _('All cores (total)')},
             getCpuCores().map((id, i) => ({id, name: _('Core %d').replace('%d', (i + 1).toString())})));
     case 'net':
-        return catalogSet({id: 'all', name: _('All interfaces (total)')}, named(getNetInterfaces()));
+        return catalogSet({
+            id: 'all',
+            name: _('All physical interfaces (total)'),
+            note: _('Excludes VPN, bridge and container interfaces — their traffic is already counted on the hardware carrying it'),
+        }, named(getNetInterfaces()));
     case 'disk':
         return catalogSet({id: 'all', name: _('All disks (total)')}, named(getDiskDevices()));
     case 'gpu':
@@ -515,7 +523,7 @@ class SMDeviceSelection {
         for (const device of this._devices) {
             const row = new Adw.ActionRow({title: device.name});
             if (device.aggregate)
-                row.subtitle = _('Combined figure for every device');
+                row.subtitle = device.note || _('Combined figure for every device');
 
             const select = new Gtk.CheckButton({valign: Gtk.Align.CENTER});
             select.connect('toggled', () => this._onSelect(device.id, select.active));
