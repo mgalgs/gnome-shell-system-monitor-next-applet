@@ -45,7 +45,7 @@ const Net = class SystemMonitor_Net extends ElementBase {
         }
 
         this.cursor = extension._Samplers.net.cursor();
-        this._last = [0, 0, 0, 0, 0];
+        this._last = new Map();
         this._lastTime = 0;
         this.tip_format([_('KiB/s'), '/s', _('KiB/s'), '/s', '/s']);
         try {
@@ -114,14 +114,32 @@ const Net = class SystemMonitor_Net extends ElementBase {
                 return;
             }
 
-            let accum = [0, 0, 0, 0, 0];
+            // Invariant: _last maps each interface summed at the previous tick
+            // to that interface's counters at _lastTime. Every term below is
+            // therefore a difference of two readings OF THE SAME INTERFACE, so
+            // no term is negative and neither is the total. An interface
+            // appearing or disappearing changes which terms exist, never the
+            // sign of one.
+            let totals = [0, 0, 0, 0, 0];
+            let current = new Map();
             for (const iface of this.ifs) {
-                const counters = reading.data.get(iface);
-                if (!counters)
+                const now = reading.data.get(iface);
+                if (!now)
+                    continue;
+                current.set(iface, now);
+                const prev = this._last.get(iface);
+                // No previous reading means the interface has just appeared,
+                // and how much traffic preceded it is not knowable. A counter
+                // that went backwards is that same interface destroyed and
+                // recreated under its own name -- the kernel zeroes the whole
+                // stats struct, so bytes_in witnesses it for all five. Either
+                // way it contributes nothing for one tick and re-baselines.
+                if (!prev || now.bytes_in < prev.bytes_in)
                     continue;
                 for (let i = 0; i < 5; i++)
-                    accum[i] += counters[FIELDS[i]];
+                    totals[i] += now[FIELDS[i]] - prev[FIELDS[i]];
             }
+            this._last = current;
 
             // The reading's own instant, not the clock now: a reading taken for
             // a faster sibling and consumed here is older than this tick, and
@@ -130,10 +148,8 @@ const Net = class SystemMonitor_Net extends ElementBase {
             let delta = time - this._lastTime;
             let usage = [0, 0, 0, 0, 0];
             if (delta > 0) {
-                for (let i = 0; i < 5; i++) {
-                    usage[i] = Math.round((accum[i] - this._last[i]) / delta);
-                    this._last[i] = accum[i];
-                }
+                for (let i = 0; i < 5; i++)
+                    usage[i] = Math.round(totals[i] / delta);
             }
             this._lastTime = time;
 
