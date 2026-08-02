@@ -56,6 +56,10 @@ function tr(text) {
     return text ? _(text) : '';
 }
 
+// A collect that never calls back is a bug in a widget, not a condition to
+// design around, so the recovery only has to be eventual rather than prompt.
+const ASYNC_STALL_US = 30 * 1e6;
+
 export function l_limit(t) {
     return (t > 0) ? t : 1000;
 }
@@ -932,33 +936,10 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
             if (this.collect) {
                 this._applyCollected(this.collect());
             } else if (this.collectAsync) {
-                if (!this._asyncPending) {
-                    this._asyncPending = true;
-                    const gen = ++this._asyncGen;
-                    if (this._asyncTimeoutId)
-                        GLib.Source.remove(this._asyncTimeoutId);
-                    this._asyncTimeoutId = GLib.timeout_add_seconds(
-                        GLib.PRIORITY_DEFAULT, 30, () => {
-                            this._asyncTimeoutId = null;
-                            if (this._asyncPending && this._asyncGen === gen) {
-                                sm_log(`${this.elt}: async collect timed out`, 'warn');
-                                this._asyncPending = false;
-                            }
-                            return GLib.SOURCE_REMOVE;
-                        });
-                    this.collectAsync(data => {
-                        if (this._asyncGen !== gen)
-                            return;
-                        this._asyncPending = false;
-                        if (this._asyncTimeoutId) {
-                            GLib.Source.remove(this._asyncTimeoutId);
-                            this._asyncTimeoutId = null;
-                        }
-                        if (this._destroyed)
-                            return;
-                        this._applyCollected(data);
-                    });
-                }
+                if (this._asyncPending)
+                    this._checkAsyncStall();
+                else
+                    this._startAsyncCollect();
             } else {
                 this.refresh();
                 this._apply();
@@ -968,6 +949,38 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         } catch (e) {
             this._logUpdateError(e);
         }
+    }
+    _startAsyncCollect() {
+        this._asyncPending = true;
+        this._asyncStartedAt = GLib.get_monotonic_time();
+        const gen = ++this._asyncGen;
+        try {
+            this.collectAsync(data => {
+                // A callback from a collect we already gave up on.
+                if (this._asyncGen !== gen)
+                    return;
+                this._asyncPending = false;
+                if (this._destroyed)
+                    return;
+                this._applyCollected(data);
+            });
+        } catch (e) {
+            // Nothing would ever clear the pending flag, and this widget would
+            // stop collecting for good.
+            this._asyncPending = false;
+            throw e;
+        }
+    }
+    // A collect that never calls back would leave this widget pending forever,
+    // so the stall is noticed at the next tick -- which costs nothing, where a
+    // GLib timeout armed and disarmed around every collect cost two source
+    // operations per widget per tick, paid forever to catch something that
+    // essentially never happens.
+    _checkAsyncStall() {
+        if (GLib.get_monotonic_time() - this._asyncStartedAt < ASYNC_STALL_US)
+            return;
+        sm_log(`${this.elt}: async collect did not finish; giving up on it`, 'warn');
+        this._asyncPending = false;
     }
     _applyCollected(data) {
         try {
@@ -1098,10 +1111,6 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         if (this.graph_scale_cooldown_timer_id) {
             GLib.Source.remove(this.graph_scale_cooldown_timer_id);
             this.graph_scale_cooldown_timer_id = null;
-        }
-        if (this._asyncTimeoutId) {
-            GLib.Source.remove(this._asyncTimeoutId);
-            this._asyncTimeoutId = null;
         }
     }
 }
