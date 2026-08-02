@@ -264,6 +264,45 @@ function readDiskstats(deliver) {
     return () => cancellable.cancel();
 }
 
+// One line per GPU: "<index> <total MiB> <used MiB> <busy %>". See gpu_usage.sh
+// for the contract; parsing it here once serves every GPU widget on the panel.
+function parseGpuUsage(output) {
+    const gpus = new Map();
+    for (const line of output.split('\n')) {
+        const field = line.trim().split(/\s+/);
+        if (field.length < 4)
+            continue;
+        const total = parseInt(field[1]), used = parseInt(field[2]), busy = parseInt(field[3]);
+        if (isNaN(total))
+            continue;
+        gpus.set(field[0], {
+            total,
+            used: isNaN(used) ? 0 : used,
+            busy: isNaN(busy) ? 0 : busy,
+        });
+    }
+    return gpus;
+}
+
+function readGpuUsage(extension) {
+    return deliver => {
+        const proc = new Gio.Subprocess({
+            argv: ['/usr/bin/env', 'bash', `${extension.path}/gpu_usage.sh`],
+            flags: Gio.SubprocessFlags.STDOUT_PIPE,
+        });
+        proc.init(null);
+        proc.communicate_utf8_async(null, null, (p, result) => {
+            try {
+                const [ok, output] = p.communicate_utf8_finish(result);
+                deliver(ok ? parseGpuUsage(output) : null);
+            } catch {
+                deliver(null);
+            }
+        });
+        return () => proc.force_exit();
+    };
+}
+
 // Reading a GTop array field crosses into C and copies the whole array, so a
 // reading touches each one at most once -- and not at all for a monitor that
 // only wants the total, which is what the default configuration asks for.
@@ -339,11 +378,17 @@ export class smSamplers {
         return this._disk;
     }
 
+    get gpu() {
+        this._gpu ??= this._add(new AsyncSampler('gpu', readGpuUsage(this._extension)));
+        return this._gpu;
+    }
+
     destroy() {
         for (const sampler of this._samplers)
             sampler.destroy();
         this._samplers = [];
         this._cpu = null;
         this._disk = null;
+        this._gpu = null;
     }
 }

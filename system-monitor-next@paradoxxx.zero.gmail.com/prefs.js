@@ -249,36 +249,31 @@ function gpuName(index) {
     return _('GPU %d').replace('%d', index.toString());
 }
 
-function getGpuDevices() {
+// Enumerate by running the script the panel reads, so a GPU the picker offers
+// is a GPU the panel can show. Counting DRM cards here instead used to disagree
+// with the script on any hybrid-graphics machine -- an Intel card0 with no vram
+// counters and an AMD card1 with them yielded two entries that both resolved to
+// the AMD.
+function getGpuDevices(extensionPath) {
     try {
-        let [success, stdout] = GLib.spawn_command_line_sync(
-            'nvidia-smi --query-gpu=count --format=csv,noheader');
-        if (success) {
-            let count = parseInt(new TextDecoder().decode(stdout).trim(), 10);
-            if (!isNaN(count) && count > 0)
-                return Array.from({length: count}, (_v, i) => ({id: i.toString(), name: gpuName(i)}));
+        if (extensionPath) {
+            let [success, stdout] = GLib.spawn_command_line_sync(
+                `/usr/bin/env bash ${extensionPath}/gpu_usage.sh`);
+            if (success) {
+                const ids = new TextDecoder().decode(stdout).split('\n')
+                    .map(line => line.trim().split(/\s+/))
+                    .filter(field => field.length >= 4 && !isNaN(parseInt(field[1])))
+                    .map(field => field[0]);
+                if (ids.length)
+                    return ids.map(id => ({id, name: gpuName(parseInt(id))}));
+            }
         }
     } catch {
-        // nvidia-smi not available
+        // fall through -- the script may be missing or unreadable
     }
-    try {
-        let drmDir = Gio.File.new_for_path('/sys/class/drm/');
-        let enumerator = drmDir.enumerate_children('standard::name', Gio.FileQueryInfoFlags.NONE, null);
-        let count = 0;
-        let fileInfo;
-        while ((fileInfo = enumerator.next_file(null)) !== null) {
-            if (/^card\d+$/.test(fileInfo.get_name()))
-                count++;
-        }
-        enumerator.close(null);
-        if (count > 0)
-            return Array.from({length: count}, (_v, i) => ({id: i.toString(), name: gpuName(i)}));
-    } catch {
-        // fall through
-    }
-    // Detection can fail here while gpu_usage.sh still works, so keep the entry
-    // rather than locking those users out -- but say that it was not found
-    // instead of presenting it as a GPU we saw.
+    // Detection can fail here while gpu_usage.sh still works on the shell side,
+    // so keep the entry rather than locking those users out -- but say that it
+    // was not found instead of presenting it as a GPU we saw.
     return [{id: '0', name: `${gpuName(0)} ${_('(not detected)')}`}];
 }
 
@@ -336,7 +331,7 @@ function named(ids) {
     return ids.map(id => ({id, name: id}));
 }
 
-function detectCatalog(type) {
+function detectCatalog(type, extensionPath) {
     switch (type) {
     case 'cpu':
     case 'freq':
@@ -348,7 +343,7 @@ function detectCatalog(type) {
     case 'disk':
         return catalogSet({id: 'all', name: _('All disks (total)')}, named(getDiskDevices()));
     case 'gpu':
-        return catalogSet(null, getGpuDevices());
+        return catalogSet(null, getGpuDevices(extensionPath));
     case 'thermal':
         return catalogSet(null, named(detectSensors('temp')));
     case 'fan':
@@ -636,14 +631,15 @@ const SMMonitorRow = GObject.registerClass({
         'delete-requested': {},
     },
 }, class SMMonitorRow extends Adw.ExpanderRow {
-    constructor(config, params = {}) {
+    constructor(config, extensionPath, params = {}) {
         super(params);
 
         this._config = config;
         this._colorDialog = new Gtk.ColorDialog({modal: true, with_alpha: true});
         this._dragX = 0;
         this._dragY = 0;
-        this._catalog = detectCatalog(config.type);
+        this._extensionPath = extensionPath;
+        this._catalog = detectCatalog(config.type, extensionPath);
         // An entry inherits any key it does not carry from the shared body, so a
         // config still holding show-text there (hand-authored, or written before
         // the device-set migration) must show its real value in the picker.
@@ -1037,7 +1033,7 @@ const SMMonitorRow = GObject.registerClass({
 const SMMonitorsPage = GObject.registerClass({
     GTypeName: 'SMMonitorsPage',
 }, class SMMonitorsPage extends Adw.PreferencesPage {
-    constructor(settings, params = {}) {
+    constructor(settings, extensionPath, params = {}) {
         super({
             title: _('Monitors'),
             icon_name: 'utilities-system-monitor-symbolic',
@@ -1045,6 +1041,7 @@ const SMMonitorsPage = GObject.registerClass({
         });
 
         this._settings = settings;
+        this._extensionPath = extensionPath;
         this._monitors = [];
         this._saveTimerId = null;
         this.connect('destroy', () => {
@@ -1111,7 +1108,7 @@ const SMMonitorsPage = GObject.registerClass({
     }
 
     _addRow(config) {
-        let row = new SMMonitorRow(config);
+        let row = new SMMonitorRow(config, this._extensionPath);
         row.connect('config-changed', () => this._saveMonitors());
         row.connect('delete-requested', () => {
             this._listBox.remove(row);
@@ -1179,7 +1176,7 @@ const SMMonitorsPage = GObject.registerClass({
                 deviceGroup.remove(row);
             deviceRows = [];
 
-            const catalog = detectCatalog(type);
+            const catalog = detectCatalog(type, this._extensionPath);
             // A singleton type has nothing to choose; the first device is
             // pre-ticked so the zero-thought path lands on today's behavior.
             const initial = catalog.kind === 'singleton'
@@ -1353,7 +1350,7 @@ export default class SystemMonitorExtensionPreferences extends ExtensionPreferen
         let generalSettingsPage = new SMGeneralPrefsPage(settings);
         window.add(generalSettingsPage);
 
-        let monitorsPage = new SMMonitorsPage(settings);
+        let monitorsPage = new SMMonitorsPage(settings, this.path);
         window.add(monitorsPage);
 
         let whatsNewPage = new SMWhatsNewPage();
