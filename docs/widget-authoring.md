@@ -243,7 +243,49 @@ After `super(extension, config)`, these are available:
 
 ## Multi-Device Support
 
-Widgets support monitoring specific devices via `this.device_id`. The config's `device` field determines which device to monitor:
+A monitor config covers a **set** of devices, and the framework expands it into one widget per device before any widget is constructed. Widgets are unaffected by this: each one still monitors exactly one device and reads it from `this.device_id`.
+
+```json
+{
+  "uuid": "a1b2c3", "type": "cpu",
+  "devices": ["all", "0", "1", "2", "3"],
+  "style": "graph", "graph-width": 20
+}
+```
+
+That is one entry in preferences and five widgets in the panel. `"all"` is a device id like the others, meaning *the aggregate* — the total across every core — so "total plus each core" is a single selection.
+
+A device entry may also be an object, in which case its extra keys override the shared body for that device alone:
+
+```json
+"devices": [
+  {"id": "all", "show-text": true},
+  {"id": "0", "show-text": false},
+  {"id": "1", "show-text": false}
+]
+```
+
+Preferences writes this longer form and only ever puts `show-text` in it, but any config key works — the override is a plain sparse patch applied over the shared settings.
+
+Writing configs by hand (for a test preset, say), the bare list of ids is enough. The older single-`device` form still loads too:
+
+```json
+{"uuid": "cfg-cpu", "type": "cpu", "device": "all"}
+```
+
+### What a widget sees
+
+Each expanded widget receives a config with `device` set to its own id, so nothing in a widget changes. Two extra fields identify where it came from:
+
+| Field         | Description                                                  |
+|---------------|--------------------------------------------------------------|
+| `device`      | This widget's device id — what `this.device_id` reads         |
+| `monitorUuid` | The uuid of the preferences entry that produced this widget    |
+| `uuid`        | Internal widget key; not addressable by the user, do not log it |
+
+A widget's device never changes over its lifetime. The widget key is derived from (monitor uuid, device id), so changing which devices a monitor covers adds and removes widgets rather than mutating one — which is why `device_id` can be cached in the constructor.
+
+The config's `device` field determines which device to monitor:
 
 ```javascript
 constructor(extension, config) {
@@ -266,7 +308,21 @@ Common device_id patterns:
 - `'0'`, `'1'`, ... — indexed device (CPU core, GPU index)
 - Sensor label string — named device (thermal/fan sensors)
 
-Users add multi-device instances through the preferences "Add Monitor" dialog.
+Users pick devices from a checklist in the preferences "Add Monitor" dialog, and can change the selection later from the monitor's row.
+
+### Declaring a new type's devices
+
+Preferences builds that checklist from `detectCatalog(type)` in `prefs.js`, which returns one of two shapes:
+
+```javascript
+// Nothing to choose: the source is the machine itself (memory, swap, battery)
+{kind: 'singleton', device: {id: 'default', name: 'Default'}}
+
+// A set of members, optionally with a total folded over them
+{kind: 'set', aggregate: {id: 'all', name: 'All cores (total)'}, members: [{id: '0', name: 'Core 1'}, ...]}
+```
+
+Use `aggregate: null` when the type has no meaningful total (GPUs, thermal sensors, fans). Members carry a display name because a checklist reading "0 1 2 3" is unusable — and if detection cannot confirm a device but the widget might still work with it, keep the entry and say so in its name rather than presenting it as found.
 
 ## Declarative Layouts
 
@@ -342,7 +398,7 @@ After writing the widget class, register it with the extension:
        loadavg: LoadAvg,
    };
    ```
-4. Add the type to `MONITOR_TYPES` in `prefs.js` and provide entries in `COLOR_MAP`, `DEFAULT_COLORS`, and `detectDevices()` for the new type
+4. Add the type to `MONITOR_TYPES` in `prefs.js` and provide entries in `TYPE_NAMES`, `COLOR_MAP`, `DEFAULT_COLORS`, and `detectCatalog()` for the new type
 5. Add color key(s) to the schema XML if the widget has configurable colors
 
 ## Examples by Complexity

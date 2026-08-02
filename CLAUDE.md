@@ -173,6 +173,9 @@ All extension source files are in `system-monitor-next@paradoxxx.zero.gmail.com/
 - **`extension.js`** (~300 lines): Extension lifecycle (enable/disable), config-driven widget instantiation
   - `WIDGET_CLASSES` lookup table maps type strings to constructors
   - `_syncMonitors()` handles live add/remove/reorder when `monitors` setting changes
+- **`monitors.js`** (~160 lines): The config boundary — the only place monitor configs are built
+  - `parseMonitorConfigs()` normalizes the `monitors` setting; skips what it cannot repair
+  - `expandMonitor()` turns one config into one derived config per selected device
 - **`base.js`** (~900 lines): Widget framework
   - `ElementBase` — base class for all monitoring widgets; accepts `(extension, config)` constructor
   - `onSettingsChanged(newConfig)` for live config updates without recreating widgets
@@ -206,21 +209,23 @@ All extension source files are in `system-monitor-next@paradoxxx.zero.gmail.com/
   - **`monitors` key** (type `as`): JSON array of widget configurations — the primary config mechanism
   - Legacy per-widget keys (`{metric}-{property}`) remain for backward compat
 
-- **Monitor config object shape** (each widget instance gets one):
+- **Monitor config object shape** (one per preferences entry; expands to one widget per device):
   ```json
   {
     "uuid": "unique-id",
     "type": "cpu",
-    "device": "all",
+    "devices": [{"id": "all", "show-text": true}, {"id": "0", "show-text": false}],
     "display": true,
     "style": "graph",
     "graph-width": 100,
     "refresh-time": 1500,
-    "show-text": true,
     "show-menu": true,
     "colors": {"user": "#0072b3", "system": "#0092e6"}
   }
   ```
+  `devices` also accepts a bare id list (`["all", "0", "1"]`) and the legacy scalar
+  `"device": "all"`; both normalize on load. An entry's keys beyond `id` are a sparse
+  override of the shared body for that device only.
 
 - **Display styles:** Each metric supports `digit`, `graph`, or `both` modes
 - **Disk usage styles:** `pie`, `bar`, or `none`
@@ -234,7 +239,7 @@ All extension source files are in `system-monitor-next@paradoxxx.zero.gmail.com/
 
 The extension follows a config-driven modular pattern:
 1. On startup, `migration.js` converts legacy per-widget GSettings into a JSON `monitors` array (if needed)
-2. `extension.js` reads `monitors`, looks up each config's `type` in `WIDGET_CLASSES`, and instantiates widgets with their config object
+2. `extension.js` reads `monitors`, normalizes and expands it via `monitors.js` into one config per device, looks up each config's `type` in `WIDGET_CLASSES`, and instantiates widgets with their config object
 3. Each widget class in `widgets/` extends `ElementBase` from `base.js`, declares `static metadata` (identity, metrics, units), and uses `this.config` for per-instance settings
 4. `ElementBase` handles shared concerns: config-driven initialization, update timers, chart rendering, tooltips, panel/menu item creation
 5. Simple widgets implement `collect()` returning `{metricKey: value}`; complex widgets use `refresh()` + `_apply()`
