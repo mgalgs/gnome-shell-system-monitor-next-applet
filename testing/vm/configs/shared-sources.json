@@ -1,0 +1,71 @@
+{
+    "description": "Twenty CPU widgets over one shared source, plus two disk widgets, for measuring steady-state cost. Four monitors covering the same device set is what a user writing four differently-styled CPU rows produces, and it is exactly the case the sampler collapses.",
+    "monitors": [
+        {
+            "uuid": "cfg-cpu-a",
+            "type": "cpu",
+            "devices": ["all", "0", "1", "2", "3"],
+            "display": true,
+            "style": "graph",
+            "graph-width": 20,
+            "refresh-time": 1500,
+            "show-menu": false,
+            "colors": {"user": "#0072b3", "system": "#0092e6", "nice": "#00a3ff", "iowait": "#002f3d", "other": "#001d26"}
+        },
+        {
+            "uuid": "cfg-cpu-b",
+            "type": "cpu",
+            "devices": ["all", "0", "1", "2", "3"],
+            "display": true,
+            "style": "graph",
+            "graph-width": 20,
+            "refresh-time": 1500,
+            "show-menu": false,
+            "colors": {"user": "#0072b3", "system": "#0092e6", "nice": "#00a3ff", "iowait": "#002f3d", "other": "#001d26"}
+        },
+        {
+            "uuid": "cfg-cpu-c",
+            "type": "cpu",
+            "devices": ["all", "0", "1", "2", "3"],
+            "display": true,
+            "style": "graph",
+            "graph-width": 20,
+            "refresh-time": 1500,
+            "show-menu": false,
+            "colors": {"user": "#0072b3", "system": "#0092e6", "nice": "#00a3ff", "iowait": "#002f3d", "other": "#001d26"}
+        },
+        {
+            "uuid": "cfg-cpu-d",
+            "type": "cpu",
+            "devices": ["all", "0", "1", "2", "3"],
+            "display": true,
+            "style": "graph",
+            "graph-width": 20,
+            "refresh-time": 1500,
+            "show-menu": false,
+            "colors": {"user": "#0072b3", "system": "#0092e6", "nice": "#00a3ff", "iowait": "#002f3d", "other": "#001d26"}
+        },
+        {
+            "uuid": "cfg-disk-all",
+            "type": "disk",
+            "devices": ["all"],
+            "display": true,
+            "style": "digit",
+            "graph-width": 40,
+            "refresh-time": 1500,
+            "show-menu": false,
+            "colors": {"read": "#c65000", "write": "#ff6700"}
+        },
+        {
+            "uuid": "cfg-disk-vda",
+            "type": "disk",
+            "devices": ["vda"],
+            "display": true,
+            "style": "digit",
+            "graph-width": 40,
+            "refresh-time": 1500,
+            "show-menu": false,
+            "colors": {"read": "#c65000", "write": "#ff6700"}
+        }
+    ]
+}
