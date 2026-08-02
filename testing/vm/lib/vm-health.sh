@@ -36,6 +36,35 @@ check_no_js_errors() {
     return 0
 }
 
+# Open the preferences window and check it actually came up.
+#
+# The shell-side checks above all pass while prefs is completely broken --
+# preferences runs in its own process that nothing else here ever starts. A
+# gettext call at module scope, a bad import, a typo in a widget property: none
+# of it touches gnome-shell, so every other check reports healthy.
+#
+# Shipped as a script rather than an inline command because vm_ssh joins its
+# arguments, which mangles anything multi-line.
+#
+# Returns 0 if preferences opened without error, 1 otherwise.
+check_prefs_open() {
+    local vm_name="$1"
+    local script="$SCRIPT_DIR/lib/prefs-smoke.sh"
+    [[ -f "$script" ]] || script="$(dirname "${BASH_SOURCE[0]}")/prefs-smoke.sh"
+
+    vm_rsync "$vm_name" "$script" "/tmp/_sm_prefs_smoke.sh" &>/dev/null
+
+    local out
+    out=$(vm_ssh "$vm_name" "bash /tmp/_sm_prefs_smoke.sh $EXT_UUID" 2>/dev/null)
+
+    if [[ "$out" == *PREFS_OK* ]]; then
+        return 0
+    fi
+    log_error "Preferences did not open cleanly:"
+    echo "$out" | grep -v '^PREFS_FAIL$' >&2
+    return 1
+}
+
 # Detect if GNOME Shell crashed and restarted by comparing PIDs.
 # Usage: detect_crash <vm_name> <pre_pid>
 # Returns 0 if no crash, 1 if crash detected.
@@ -101,6 +130,14 @@ check_health() {
         echo "JS Errors: none"
     else
         echo "JS Errors: FOUND (see logs)"
+        status=1
+    fi
+
+    # Check preferences opens (its own process; nothing above touches it)
+    if check_prefs_open "$vm_name"; then
+        echo "Preferences: opens"
+    else
+        echo "Preferences: FAILED TO OPEN"
         status=1
     fi
 

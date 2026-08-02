@@ -121,7 +121,7 @@ What it does:
 3. Deploys via rsync + compiles schemas (both in extension dir and system-wide)
 4. If first deploy: restarts GDM so GNOME Shell discovers the new extension
 5. Enables extension via `gnome-extensions enable`
-6. Runs health checks (gnome-shell alive, extension ACTIVE, no JS errors)
+6. Runs health checks (gnome-shell alive, extension ACTIVE, no JS errors, preferences opens)
 7. Captures screenshot via `virsh screenshot` (PPM -> PNG)
 8. Captures GNOME Shell journal logs
 9. Prints structured results
@@ -265,7 +265,8 @@ testing/vm/
     vm-deploy.sh            # Build + rsync + schema install + enable
     vm-screenshot.sh        # virsh screenshot -> PNG
     vm-logs.sh              # GNOME Shell journal capture
-    vm-health.sh            # Health checks (alive, active, no JS errors)
+    vm-health.sh            # Health checks (alive, active, no JS errors, prefs opens)
+    prefs-smoke.sh          # Opens preferences on the VM; runs in its own process
   results/                  # Screenshots and logs (gitignored)
 ```
 
