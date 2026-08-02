@@ -16,6 +16,7 @@ const Fan = class SystemMonitor_Fan extends ElementBase {
     constructor(extension, config) {
         super(extension, config);
         this.sensor_label = this.device_id;
+        this.cursor = extension._Samplers.sensors.cursor();
         this.sensors = null;
         check_sensors_async('fan', sensors => {
             this.sensors = sensors;
@@ -48,7 +49,7 @@ const Fan = class SystemMonitor_Fan extends ElementBase {
             callback(null);
             return;
         }
-        read_sensor_async(sensorInfo, value => {
+        read_sensor_async(this.cursor, sensorInfo, value => {
             if (this._destroyed) { callback(null); return; }
             if (value === null) {
                 if (this._display_error) {

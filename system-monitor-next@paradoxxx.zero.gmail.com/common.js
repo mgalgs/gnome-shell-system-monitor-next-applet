@@ -207,57 +207,13 @@ function check_sensors_async(sensor_type, callback) {
     });
 }
 
-// Several widgets polling sensors on the same chip would each fork their own
-// `sensors` subprocess every refresh tick. Coalesce concurrent reads and
-// briefly cache the result so one spawn serves all widgets on that chip.
-const CHIP_READ_CACHE_MS = 1000;
-const _chip_reads = new Map();
-
-function _read_chip_async(chip, callback) {
-    let entry = _chip_reads.get(chip);
-    if (entry) {
-        if (entry.pending) {
-            entry.pending.push(callback);
-            return;
-        }
-        if (GLib.get_monotonic_time() / 1000 - entry.time < CHIP_READ_CACHE_MS) {
-            callback(entry.data);
-            return;
-        }
-    }
-    entry = {pending: [callback]};
-    _chip_reads.set(chip, entry);
-    const finish = data => {
-        entry.time = GLib.get_monotonic_time() / 1000;
-        entry.data = data;
-        const callbacks = entry.pending;
-        entry.pending = null;
-        for (const cb of callbacks)
-            cb(data);
-    };
-    try {
-        let proc = new Gio.Subprocess({
-            argv: ['sensors', '-jA', chip],
-            flags: Gio.SubprocessFlags.STDOUT_PIPE,
-        });
-        proc.init(null);
-        proc.communicate_utf8_async(null, null, (p, result) => {
-            try {
-                let [, output] = p.communicate_utf8_finish(result);
-                finish(JSON.parse(output)[chip] ?? null);
-            } catch {
-                finish(null);
-            }
-        });
-    } catch {
-        finish(null);
-    }
-}
-
-function read_sensor_async(sensorInfo, callback) {
+// A sensor named by chip comes out of the shared `sensors -jA` reading, so one
+// spawn serves every widget on the panel however many chips they span. A sensor
+// named by sysfs path is genuinely one file per sensor and is read directly.
+function read_sensor_async(cursor, sensorInfo, callback) {
     if (sensorInfo.chip) {
-        _read_chip_async(sensorInfo.chip, chipData => {
-            let value = chipData?.[sensorInfo.sensorLabel]?.[sensorInfo.rawKey];
+        cursor.sample(reading => {
+            let value = reading?.data?.[sensorInfo.chip]?.[sensorInfo.sensorLabel]?.[sensorInfo.rawKey];
             if (value === undefined) {
                 callback(null);
                 return;

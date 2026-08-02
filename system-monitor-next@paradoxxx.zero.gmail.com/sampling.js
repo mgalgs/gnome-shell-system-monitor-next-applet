@@ -264,6 +264,27 @@ function readDiskstats(deliver) {
     return () => cancellable.cancel();
 }
 
+// `sensors -jA` with no chip argument returns every chip -- which is the form
+// common.js already uses to enumerate labels. libsensors reads every chip from
+// sysfs regardless and the chip argument only filters the output, so keying a
+// sampler by chip would spawn once per chip to no purpose.
+function readSensors(deliver) {
+    const proc = new Gio.Subprocess({
+        argv: ['sensors', '-jA'],
+        flags: Gio.SubprocessFlags.STDOUT_PIPE,
+    });
+    proc.init(null);
+    proc.communicate_utf8_async(null, null, (p, result) => {
+        try {
+            const [, output] = p.communicate_utf8_finish(result);
+            deliver(JSON.parse(output));
+        } catch {
+            deliver(null);
+        }
+    });
+    return () => proc.force_exit();
+}
+
 // One line per GPU: "<index> <total MiB> <used MiB> <busy %>". See gpu_usage.sh
 // for the contract; parsing it here once serves every GPU widget on the panel.
 function parseGpuUsage(output) {
@@ -383,6 +404,11 @@ export class smSamplers {
         return this._gpu;
     }
 
+    get sensors() {
+        this._sensors ??= this._add(new AsyncSampler('sensors', readSensors));
+        return this._sensors;
+    }
+
     destroy() {
         for (const sampler of this._samplers)
             sampler.destroy();
@@ -390,5 +416,6 @@ export class smSamplers {
         this._cpu = null;
         this._disk = null;
         this._gpu = null;
+        this._sensors = null;
     }
 }
