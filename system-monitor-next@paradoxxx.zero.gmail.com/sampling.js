@@ -17,6 +17,7 @@
 import Gio from "gi://Gio";
 import GLib from "gi://GLib";
 import GTop from "gi://GTop";
+import Soup from "gi://Soup?version=3.0";
 import { parse_bytearray } from './common.js';
 import { sm_log } from './utils.js';
 
@@ -135,7 +136,7 @@ export class AsyncSampler {
         this._waiting = null;
         this._watchdog = null;
         this._cancel = null;
-        this._wedgeLogged = false;
+        this._faultLogged = false;
         this._destroyed = false;
     }
 
@@ -162,10 +163,7 @@ export class AsyncSampler {
         this._waiting = [deliver];
         this._watchdog = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, SAMPLE_TIMEOUT_S, () => {
             this._watchdog = null;
-            if (!this._wedgeLogged) {
-                sm_log(`${this.name}: read did not complete in ${SAMPLE_TIMEOUT_S}s; abandoned it`, 'warn');
-                this._wedgeLogged = true;
-            }
+            this._reportFault(`read did not complete in ${SAMPLE_TIMEOUT_S}s; abandoned it`);
             // Killing rather than merely abandoning: a source that hangs would
             // otherwise leave one orphaned read behind every timeout, forever.
             this._abandonRead();
@@ -174,26 +172,42 @@ export class AsyncSampler {
         });
 
         try {
-            this._cancel = this._read(data => this._complete(data)) || null;
+            const cancel = this._read((data, reason) => this._complete(data, reason));
+            // A read that delivered synchronously has already flushed and cleared
+            // the handle; storing one now would leave a cancel for a completed
+            // read, to be called on the next timeout or teardown.
+            if (this._waiting)
+                this._cancel = cancel || null;
         } catch (e) {
-            this._complete(null);
-            sm_log(`${this.name}: read failed: ${e}`, 'warn');
+            this._complete(null, `read failed: ${e}`);
         }
     }
 
-    _complete(data) {
+    /**
+     * @param {*} data - the reading, or null if the source produced nothing
+     * @param {string} [reason] - why, when it produced nothing; logged once per
+     *   outage so that a source failing every tick does not fill the journal
+     */
+    _complete(data, reason) {
         // A late arrival, after the watchdog gave up: it describes an instant
         // SAMPLE_TIMEOUT_S gone, and the next tick reads fresh anyway.
         if (this._destroyed || !this._waiting)
             return;
-        // Recovered means producing readings again, not merely no longer
-        // hanging: a read that keeps completing with nothing has not recovered.
-        if (this._wedgeLogged && data !== null) {
+        if (data === null) {
+            this._reportFault(reason || 'read produced nothing');
+        } else if (this._faultLogged) {
             sm_log(`${this.name}: reads recovered`);
-            this._wedgeLogged = false;
+            this._faultLogged = false;
         }
         this._latest = {gen: ++_gen, time: GLib.get_monotonic_time(), data};
         this._flush(this._latest);
+    }
+
+    _reportFault(reason) {
+        if (this._faultLogged)
+            return;
+        this._faultLogged = true;
+        sm_log(`${this.name}: ${reason}`, 'warn');
     }
 
     // A read that completed with nothing is still a reading, and advances the
@@ -256,12 +270,53 @@ function readDiskstats(deliver) {
                     break;
                 stats.set(entry[2], [parseInt(entry[5]), parseInt(entry[9])]);
             }
-        } catch {
-            stats = null;
+        } catch (e) {
+            deliver(null, `could not read /proc/diskstats: ${e.message}`);
+            return;
         }
         deliver(stats);
     });
     return () => cancellable.cancel();
+}
+
+// A scrape is the whole exposition -- 100-500 KB for node_exporter -- and every
+// widget on that server greps one line out of the same text. Splitting it is as
+// much of the per-widget cost as fetching it, so the reading carries the split
+// and does it once, on first use.
+class ScrapeReading {
+    constructor(text) {
+        this.text = text;
+        this._lines = null;
+    }
+
+    lines() {
+        this._lines ??= this.text.split('\n');
+        return this._lines;
+    }
+}
+
+function readScrape(session, server) {
+    return deliver => {
+        const cancellable = new Gio.Cancellable();
+        const message = Soup.Message.new('GET', `${server}/metrics`);
+        if (!message) {
+            deliver(null);
+            return null;
+        }
+        session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, cancellable, (s, result) => {
+            try {
+                const bytes = s.send_and_read_finish(result);
+                if (message.get_status() !== Soup.Status.OK) {
+                    deliver(null, `scrape returned HTTP ${message.get_status()}`);
+                    return;
+                }
+                deliver(new ScrapeReading(new TextDecoder().decode(bytes.get_data())));
+            } catch (e) {
+                deliver(null, `scrape failed: ${e.message}`);
+            }
+        });
+        return () => cancellable.cancel();
+    };
 }
 
 // `sensors -jA` with no chip argument returns every chip -- which is the form
@@ -278,8 +333,8 @@ function readSensors(deliver) {
         try {
             const [, output] = p.communicate_utf8_finish(result);
             deliver(JSON.parse(output));
-        } catch {
-            deliver(null);
+        } catch (e) {
+            deliver(null, `could not read sensor chips: ${e.message}`);
         }
     });
     return () => proc.force_exit();
@@ -315,9 +370,9 @@ function readGpuUsage(extension) {
         proc.communicate_utf8_async(null, null, (p, result) => {
             try {
                 const [ok, output] = p.communicate_utf8_finish(result);
-                deliver(ok ? parseGpuUsage(output) : null);
-            } catch {
-                deliver(null);
+                deliver(ok ? parseGpuUsage(output) : null, 'gpu_usage.sh could not be run');
+            } catch (e) {
+                deliver(null, `gpu_usage.sh failed: ${e.message}`);
             }
         });
         return () => proc.force_exit();
@@ -382,6 +437,8 @@ export class smSamplers {
     constructor(extension) {
         this._extension = extension;
         this._samplers = [];
+        this._scrapes = new Map();
+        this._session = null;
     }
 
     _add(sampler) {
@@ -409,6 +466,23 @@ export class smSamplers {
         return this._sensors;
     }
 
+    /**
+     * Keyed by server: separate endpoints are separate reads, and there is no
+     * call that fetches several at once.
+     * @param {string} server - base URL
+     * @returns {AsyncSampler}
+     */
+    prometheus(server) {
+        let sampler = this._scrapes.get(server);
+        if (!sampler) {
+            this._session ??= new Soup.Session({timeout: 10});
+            sampler = this._add(new AsyncSampler(`prometheus ${server}`,
+                readScrape(this._session, server)));
+            this._scrapes.set(server, sampler);
+        }
+        return sampler;
+    }
+
     destroy() {
         for (const sampler of this._samplers)
             sampler.destroy();
@@ -417,5 +491,10 @@ export class smSamplers {
         this._disk = null;
         this._gpu = null;
         this._sensors = null;
+        this._scrapes.clear();
+        if (this._session) {
+            this._session.abort();
+            this._session = null;
+        }
     }
 }

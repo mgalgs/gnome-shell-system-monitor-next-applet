@@ -1,11 +1,6 @@
 /* -*- mode: js2; js2-basic-offset: 4; indent-tabs-mode: nil -*- */
 
-import Gio from 'gi://Gio';
-import GLib from 'gi://GLib';
 import { ElementBase } from '../base.js';
-import { sm_log } from '../utils.js';
-
-import Soup from 'gi://Soup?version=3.0';
 
 const Prometheus = class SystemMonitor_Prometheus extends ElementBase {
     static metadata = {
@@ -19,50 +14,28 @@ const Prometheus = class SystemMonitor_Prometheus extends ElementBase {
 
     constructor(extension, config) {
         super(extension, config);
-        this._session = new Soup.Session({timeout: 10});
-        this._cancellable = new Gio.Cancellable();
         this._server = config.server || 'http://localhost:9100';
         this._metric = config.metric || 'up';
+        this.cursor = extension._Samplers.prometheus(this._server).cursor();
         this._setLabels();
     }
 
     collectAsync(callback) {
-        if (!this._session) {
-            callback(this._failureData());
-            return;
-        }
-
-        let uri = this._server + '/metrics';
-        let message = Soup.Message.new('GET', uri);
-        if (!message) {
-            callback(this._failureData());
-            return;
-        }
-
-        this._session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, this._cancellable, (session, result) => {
-            try {
-                let bytes = session.send_and_read_finish(result);
-                if (message.get_status() !== Soup.Status.OK) {
-                    callback(this._failureData());
-                    return;
-                }
-                let text = new TextDecoder().decode(bytes.get_data());
-                let val = this._parseMetric(text);
-                if (val === null) {
-                    callback(this._failureData());
-                    return;
-                }
-                this._fetchErrorLogged = false;
-                let display = this._formatValue(val);
-                callback({metrics: {value: val}, display: display});
-            } catch (e) {
-                if (!this._fetchErrorLogged &&
-                    (!(e instanceof Gio.IOErrorEnum) || e.code !== Gio.IOErrorEnum.CANCELLED)) {
-                    sm_log(`Prometheus fetch error: ${e.message}`, 'warn');
-                    this._fetchErrorLogged = true;
-                }
-                callback(this._failureData());
+        this.cursor.sample(reading => {
+            if (this._destroyed) {
+                callback(null);
+                return;
             }
+            if (!reading?.data) {
+                callback(this._failureData());
+                return;
+            }
+            let val = this._parseMetric(reading.data.lines());
+            if (val === null) {
+                callback(this._failureData());
+                return;
+            }
+            callback({metrics: {value: val}, display: this._formatValue(val)});
         });
     }
 
@@ -73,7 +46,7 @@ const Prometheus = class SystemMonitor_Prometheus extends ElementBase {
         return {display: '--'};
     }
 
-    _parseMetric(text) {
+    _parseMetric(lines) {
         let needle = this._metric;
         let labelFilters = null;
         let braceIdx = needle.indexOf('{');
@@ -83,7 +56,6 @@ const Prometheus = class SystemMonitor_Prometheus extends ElementBase {
             labelFilters = labelStr.split(',').map(s => s.trim()).filter(s => s);
         }
 
-        let lines = text.split('\n');
         for (let line of lines) {
             if (line.startsWith('#') || line.length === 0)
                 continue;
@@ -128,8 +100,13 @@ const Prometheus = class SystemMonitor_Prometheus extends ElementBase {
     }
 
     onSettingsChanged(newConfig) {
-        if (this.config.server !== newConfig.server)
+        if (this.config.server !== newConfig.server) {
             this._server = newConfig.server || 'http://localhost:9100';
+            // A cursor is bound to its sampler, and a different server is a
+            // different sampler -- keeping the old one would keep scraping the
+            // old server.
+            this.cursor = this.extension._Samplers.prometheus(this._server).cursor();
+        }
         if (this.config.metric !== newConfig.metric) {
             this._metric = newConfig.metric || 'up';
             this._setLabels();
@@ -138,14 +115,8 @@ const Prometheus = class SystemMonitor_Prometheus extends ElementBase {
     }
 
     destroy() {
-        if (this._cancellable) {
-            this._cancellable.cancel();
-            this._cancellable = null;
-        }
-        if (this._session) {
-            this._session.abort();
-            this._session = null;
-        }
+        // The session and the scrape in flight belong to the sampler now, and
+        // are shared with every other widget on this server.
         super.destroy();
     }
 };
