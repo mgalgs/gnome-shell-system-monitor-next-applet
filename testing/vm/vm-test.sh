@@ -27,6 +27,7 @@ source "$SCRIPT_DIR/lib/vm-common.sh"
 source "$SCRIPT_DIR/lib/vm-snapshot.sh"
 source "$SCRIPT_DIR/lib/vm-deploy.sh"
 source "$SCRIPT_DIR/lib/vm-screenshot.sh"
+source "$SCRIPT_DIR/lib/vm-menu.sh"
 source "$SCRIPT_DIR/lib/vm-logs.sh"
 source "$SCRIPT_DIR/lib/vm-health.sh"
 
@@ -34,6 +35,7 @@ source "$SCRIPT_DIR/lib/vm-health.sh"
 TARGET_VM=""
 NO_RESTORE=false
 SCREENSHOT_ONLY=false
+OPEN_MENU=false
 LOGS_ONLY=false
 LABEL="test"
 TIMEOUT=180
@@ -44,6 +46,7 @@ while [[ $# -gt 0 ]]; do
         --vm) TARGET_VM="$2"; shift 2 ;;
         --no-restore) NO_RESTORE=true; shift ;;
         --screenshot-only) SCREENSHOT_ONLY=true; shift ;;
+        --open-menu) OPEN_MENU=true; shift ;;
         --logs-only) LOGS_ONLY=true; shift ;;
         --label) LABEL="$2"; shift 2 ;;
         --timeout) TIMEOUT="$2"; shift 2 ;;
@@ -57,6 +60,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --vm NAME          VM to use (default: first in vms.conf)"
             echo "  --no-restore       Skip snapshot restore (faster iteration)"
             echo "  --screenshot-only  Just take a screenshot"
+            echo "  --open-menu        Open the tray menu first (with --screenshot-only)"
             echo "  --logs-only        Just capture logs"
             echo "  --label LABEL      Label for output files (default: test)"
             echo "  --timeout SECS     SSH timeout (default: 180)"
@@ -100,6 +104,9 @@ if $SCREENSHOT_ONLY; then
     if ! vm_is_running "$VM_NAME"; then
         log_error "VM is not running"
         exit 2
+    fi
+    if $OPEN_MENU; then
+        open_tray_menu "$VM_NAME"
     fi
     SCREENSHOT_PATH=$(take_screenshot "$VM_NAME" "$LABEL")
     echo ""
