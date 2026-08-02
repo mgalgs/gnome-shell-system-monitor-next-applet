@@ -198,7 +198,8 @@ All extension source files are in `system-monitor-next@paradoxxx.zero.gmail.com/
   - Monitors page: dynamic monitor list with add/delete/reorder, reads/writes `monitors` GSettings key
 - **`sampling.js`** (~570 lines): One moment and one read, shared across widgets
   - `smTickClock` — one `GLib` timer per distinct refresh interval, so widgets sharing an interval update in the same callback instead of drifting apart. `base.js`'s `restart_update_timer` registers here
-  - `Sampler` / `AsyncSampler` — one read of a shared source (`/proc/stat`, `/proc/diskstats`, `gpu_usage.sh`, `sensors -jA`, a Prometheus scrape), taken by whichever widget ticks first
+  - `Sampler` / `AsyncSampler` — one read of a shared source (`/proc/stat`, `/proc/diskstats`, `/proc/net/dev`, `gpu_usage.sh`, `sensors -jA`, a Prometheus scrape), taken by whichever widget ticks first
+  - A sampler shares the *decode*, not just the I/O: the CPU reading carries per-core columns, a scrape carries its split lines, and the net reading carries each interface's `edge` flag — whether it is where traffic enters or leaves the machine, which is what `net`'s `all` sums
   - `Cursor` — one widget's position in a sampler's readings; it never consumes the same reading twice, which is what keeps delta-based metrics honest
   - `smSamplers` — the per-extension registry, `extension._Samplers`
 - **`common.js`**: Shared utilities (`parse_bytearray()`, `check_sensors()`)

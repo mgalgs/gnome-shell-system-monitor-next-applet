@@ -353,6 +353,14 @@ Preferences builds that checklist from `detectCatalog(type)` in `prefs.js`, whic
 
 Use `aggregate: null` when the type has no meaningful total (GPUs, thermal sensors, fans). Members carry a display name because a checklist reading "0 1 2 3" is unusable — and if detection cannot confirm a device but the widget might still work with it, keep the entry and say so in its name rather than presenting it as found.
 
+An aggregate may carry a `note`, which replaces the row's default subtitle ("Combined figure for every device"):
+
+```javascript
+{id: 'all', name: 'All physical interfaces (total)', note: 'Excludes VPN, bridge and container interfaces — …'}
+```
+
+Reach for it only when the total is *not* a plain fold over the members listed beneath it. `net` is the one such type: it sums the interfaces at the machine's edge, because counting a tunnel and the hardware carrying it reports the same bytes twice. A user who sees a checklist of eight interfaces under a row labelled "all" and gets the sum of two has been lied to unless the row says so.
+
 ## Declarative Layouts
 
 The framework builds panel and menu UI from metadata declarations. Widget authors declare layout intent; the framework builds the labels and populates them from `collect()` return keys.
