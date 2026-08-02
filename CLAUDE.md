@@ -197,6 +197,11 @@ All extension source files are in `system-monitor-next@paradoxxx.zero.gmail.com/
 - **`prefs.js`**: Preferences UI (GTK4/Adw)
   - General settings page (uses `ui/prefsGeneralSettings.ui` template)
   - Monitors page: dynamic monitor list with add/delete/reorder, reads/writes `monitors` GSettings key
+- **`sampling.js`** (~570 lines): One moment and one read, shared across widgets
+  - `smTickClock` — one `GLib` timer per distinct refresh interval, so widgets sharing an interval update in the same callback instead of drifting apart. `base.js`'s `restart_update_timer` registers here
+  - `Sampler` / `AsyncSampler` — one read of a shared source (`/proc/stat`, `/proc/diskstats`, `gpu_usage.sh`, `sensors -jA`, a Prometheus scrape), taken by whichever widget ticks first
+  - `Cursor` — one widget's position in a sampler's readings; it never consumes the same reading twice, which is what keeps delta-based metrics honest
+  - `smSamplers` — the per-extension registry, `extension._Samplers`
 - **`common.js`**: Shared utilities (`parse_bytearray()`, `check_sensors()`)
 - **`utils.js`**: Logging (`sm_log()`)
 - **`migration.js`**: Settings schema migration (v0 → v1 → v2)
@@ -232,7 +237,7 @@ All extension source files are in `system-monitor-next@paradoxxx.zero.gmail.com/
 
 ### External Resources
 
-- **`gpu_usage.sh`**: Shell script for GPU monitoring (NVIDIA via `nvidia-smi`, AMD via sysfs); accepts GPU index as `$1`
+- **`gpu_usage.sh`**: Shell script for GPU monitoring (NVIDIA via `nvidia-smi`, AMD via sysfs). Takes no arguments and prints one line per GPU: `<index> <total MiB> <used MiB> <busy %>`. Both the panel and the preferences GPU picker enumerate from it, so it is the single source of truth for which GPUs exist
 - **`stylesheet.css`**: Extension styling
 
 ### Monitoring Architecture
@@ -241,7 +246,7 @@ The extension follows a config-driven modular pattern:
 1. On startup, `migration.js` converts legacy per-widget GSettings into a JSON `monitors` array (if needed)
 2. `extension.js` reads `monitors`, normalizes and expands it via `monitors.js` into one config per device, looks up each config's `type` in `WIDGET_CLASSES`, and instantiates widgets with their config object
 3. Each widget class in `widgets/` extends `ElementBase` from `base.js`, declares `static metadata` (identity, metrics, units), and uses `this.config` for per-instance settings
-4. `ElementBase` handles shared concerns: config-driven initialization, update timers, chart rendering, tooltips, panel/menu item creation
+4. `ElementBase` handles shared concerns: config-driven initialization, chart rendering, tooltips, panel/menu item creation. It does not own a refresh timer — it registers with `smTickClock`, so every widget on the same interval updates in one callback
 5. Simple widgets implement `collect()` returning `{metricKey: value}`; complex widgets use `refresh()` + `_apply()`
 6. `this.device_id` (from `config.device`) enables per-device monitoring — e.g. individual CPU cores, specific network interfaces, or GPU indices
 7. When the `monitors` GSettings key changes, `_syncMonitors()` dynamically adds/removes/updates widgets without restarting

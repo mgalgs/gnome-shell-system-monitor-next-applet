@@ -206,6 +206,35 @@ Call `callback(data)` when the data is ready, or `callback(null)` if the read fa
 
 **Do not implement both `collect()` and `refresh()`** — the framework checks for `collect` first and ignores `refresh`/`_apply` if it exists.
 
+## Sharing a source between widgets
+
+If your source contains data for more than one device — `/proc/stat` holds every core, one `nvidia-smi` call covers every GPU, one scrape covers every metric on a server — do not read it per widget. Take a cursor on a shared sampler in `sampling.js`, and whichever widget's tick fires first pays for the read while the rest ride it.
+
+| Your widget uses | Take a cursor on | Where |
+|------------------|------------------|-------|
+| `collect()`      | `Sampler`        | `extension._Samplers.<name>.cursor()` |
+| `collectAsync()` | `AsyncSampler`   | same, then `cursor.sample(reading => …)` |
+
+```javascript
+constructor(extension, config) {
+    super(extension, config);
+    this.cursor = extension._Samplers.cpu.cursor();   // once, here
+}
+
+collect() {
+    const reading = this.cursor.sample();             // {gen, time, data}
+    return { load1: reading.data.core(this.cpuid).user };
+}
+```
+
+Three rules:
+
+- **Use `reading.time` for rate arithmetic, never the clock at delivery.** A reading taken for a faster sibling is older than your tick, and dividing a real counter delta by the wrong interval reports the wrong rate. This is the one every widget in the tree got wrong before sampling existed, so it is the one you will copy wrong from the file next door.
+- **Add a new shared source as a getter on `smSamplers`**, not as a module-level cache of its own. One place to look, one lifetime, one teardown.
+- **Do not add your own `GLib.timeout_add` for refreshing.** `refresh-time` is served by a timer shared with every other widget on that interval, so a private one puts your widget out of step with the rest of the panel.
+
+A sampler owns the read; it does not own a timer. Widgets keep their own tick and a cursor never repeats a reading, so a widget never sees data older than its own configured refresh interval.
+
 ## Constructor
 
 Most simple widgets don't need a constructor at all — the framework handles initialization and schedules the first data update automatically.
