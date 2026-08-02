@@ -31,6 +31,7 @@ import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 
 import { sm_log } from './utils.js';
 import { migrateSettings } from './migration.js';
+import { parseMonitorConfigs, expandMonitors } from './monitors.js';
 import { color_from_string, smStyleManager, build_menu_info } from './base.js';
 import { smMountsMonitor, Bar, Pie } from './mounts.js';
 import { Battery } from './widgets/battery.js';
@@ -61,20 +62,6 @@ const WIDGET_CLASSES = {
     freq: Freq,
     prometheus: Prometheus,
 };
-
-function parseMonitorConfigs(strv) {
-    let configs = [];
-    for (const s of strv) {
-        try {
-            let c = JSON.parse(s);
-            if (c && c.uuid && c.type)
-                configs.push(c);
-        } catch (e) {
-            sm_log(`Skipping malformed monitor config: ${e.message}`, 'warn');
-        }
-    }
-    return configs;
-}
 
 function change_usage(extension) {
     let usage = extension._Schema.get_string('disk-usage-style');
@@ -140,13 +127,20 @@ export default class SystemMonitorExtension extends Extension {
         }
     }
 
+    // A widget key addresses nothing the user can find, so every message names
+    // the monitor uuid and the device separately -- both of which they can look
+    // up in their settings and in preferences.
+    _describe(config) {
+        return `monitor ${config.monitorUuid} device "${config.device}" (${config.type})`;
+    }
+
     // One malformed entry in the user-editable monitors key must not take
     // down the whole extension (or abort a sync mid-way), so widget
     // construction failures are contained here and the entry skipped.
     _createWidget(config) {
         const WidgetClass = WIDGET_CLASSES[config.type];
         if (!WidgetClass) {
-            sm_log(`Skipping monitor ${config.uuid}: unknown type "${config.type}"`, 'warn');
+            sm_log(`Skipping ${this._describe(config)}: unknown type "${config.type}"`, 'warn');
             return null;
         }
         try {
@@ -154,14 +148,17 @@ export default class SystemMonitorExtension extends Extension {
             widget._activateTimers();
             return widget;
         } catch (e) {
-            sm_log(`Skipping monitor ${config.uuid} (${config.type}): ${e}`, 'error');
+            sm_log(`Skipping ${this._describe(config)}: ${e}`, 'error');
             return null;
         }
     }
 
     _syncMonitors() {
-        const newConfigs = parseMonitorConfigs(this._Schema.get_strv('monitors'));
-        const oldUUIDs = new Set(this.__sm.elts.map(elt => elt.config.uuid));
+        const newConfigs = expandMonitors(parseMonitorConfigs(this._Schema.get_strv('monitors')));
+        // widgetMap owns widget lifetime -- disable() destroys from it, so the
+        // diff must read from it too. Anything in the map but missing from the
+        // panel list would otherwise never be destroyed.
+        const oldUUIDs = new Set(this.__sm.widgetMap.keys());
         const newUUIDs = new Set(newConfigs.map(c => c.uuid));
 
         // Remove widgets no longer in config
@@ -169,7 +166,7 @@ export default class SystemMonitorExtension extends Extension {
         for (const uuid of removedUUIDs) {
             const widget = this.__sm.widgetMap.get(uuid);
             if (widget) {
-                sm_log(`Removing monitor ${uuid}`);
+                sm_log(`Removing ${this._describe(widget.config)}`);
                 widget.destroy();
                 this.__sm.widgetMap.delete(uuid);
             }
@@ -184,11 +181,11 @@ export default class SystemMonitorExtension extends Extension {
                 try {
                     widget.onSettingsChanged(config);
                 } catch (e) {
-                    sm_log(`Monitor ${config.uuid} (${config.type}) failed to apply new settings: ${e}`, 'error');
+                    sm_log(`Failed to apply new settings to ${this._describe(config)}: ${e}`, 'error');
                 }
                 newEltArray.push(widget);
             } else {
-                sm_log(`Adding new monitor ${config.uuid} (${config.type})`);
+                sm_log(`Adding ${this._describe(config)}`);
                 const newWidget = this._createWidget(config);
                 if (newWidget) {
                     this.__sm.widgetMap.set(config.uuid, newWidget);
@@ -277,7 +274,7 @@ export default class SystemMonitorExtension extends Extension {
         this._box.add_child(this.__sm.icon.actor);
 
         // Create widgets from monitors config
-        const monitorConfigs = parseMonitorConfigs(this._Schema.get_strv('monitors'));
+        const monitorConfigs = expandMonitors(parseMonitorConfigs(this._Schema.get_strv('monitors')));
         for (const config of monitorConfigs) {
             const widget = this._createWidget(config);
             if (widget) {
