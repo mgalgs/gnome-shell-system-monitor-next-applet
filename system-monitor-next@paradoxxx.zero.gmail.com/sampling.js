@@ -33,6 +33,73 @@ const SAMPLE_TIMEOUT_S = 15;
 const NEVER = {gen: 0, time: 0, data: null};
 
 /**
+ * Widgets that share a refresh interval share a heartbeat.
+ *
+ * One timer per widget, phased by whenever it happened to be constructed, made
+ * sixteen core graphs step at sixteen different moments and drift apart from
+ * there -- the strip ripples instead of moving, and once the phases scatter far
+ * enough a load spike appears on one core's graph and then the next, a
+ * migration that is not in the data.
+ *
+ * Grouping by interval rather than by source is deliberate: sharing a moment is
+ * grouping by refresh interval, sharing a reading is grouping by source, and
+ * two CPU widgets at 500ms and 3000ms must share the source and must not share
+ * the moment.
+ */
+export class smTickClock {
+    constructor() {
+        this._buckets = new Map();
+    }
+
+    /**
+     * @param {object} widget - anything with update(); joins that interval's bucket
+     * @param {number} interval - milliseconds
+     */
+    register(widget, interval) {
+        this.unregister(widget);
+        let bucket = this._buckets.get(interval);
+        if (!bucket) {
+            bucket = {widgets: new Set(), source: 0};
+            bucket.source = GLib.timeout_add(GLib.PRIORITY_DEFAULT_IDLE, interval, () => {
+                // A copy: a widget destroyed by its own update would otherwise
+                // mutate the set being walked.
+                for (const w of [...bucket.widgets]) {
+                    // update() contains its own error handling, but a throw
+                    // escaping here would remove the source and silently stop
+                    // every other widget on this interval, not just this one.
+                    try {
+                        w.update();
+                    } catch (e) {
+                        sm_log(`tick: widget update failed: ${e}`, 'error');
+                    }
+                }
+                return GLib.SOURCE_CONTINUE;
+            });
+            this._buckets.set(interval, bucket);
+        }
+        bucket.widgets.add(widget);
+    }
+
+    unregister(widget) {
+        for (const [interval, bucket] of this._buckets) {
+            if (!bucket.widgets.delete(widget))
+                continue;
+            if (bucket.widgets.size === 0) {
+                GLib.Source.remove(bucket.source);
+                this._buckets.delete(interval);
+            }
+            return;
+        }
+    }
+
+    destroy() {
+        for (const bucket of this._buckets.values())
+            GLib.Source.remove(bucket.source);
+        this._buckets.clear();
+    }
+}
+
+/**
  * One widget's position in one sampler's sequence of readings.
  *
  * The position lives here rather than in the widget so that it cannot advance

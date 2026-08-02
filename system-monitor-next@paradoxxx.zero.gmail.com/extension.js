@@ -33,7 +33,7 @@ import { sm_log } from './utils.js';
 import { migrateSettings } from './migration.js';
 import { parseMonitorConfigs, expandMonitors } from './monitors.js';
 import { color_from_string, smStyleManager, build_menu_info } from './base.js';
-import { smSamplers } from './sampling.js';
+import { smSamplers, smTickClock } from './sampling.js';
 import { smMountsMonitor, Bar, Pie } from './mounts.js';
 import { Battery } from './widgets/battery.js';
 import { Cpu } from './widgets/cpu.js';
@@ -234,6 +234,7 @@ export default class SystemMonitorExtension extends Extension {
 
         this._Style = new smStyleManager(this);
         this._MountsMonitor = new smMountsMonitor(this);
+        this._Ticks = new smTickClock();
         this._Samplers = new smSamplers(this);
 
         this._Background = color_from_string(this._Schema.get_string('background'));
@@ -387,8 +388,13 @@ export default class SystemMonitorExtension extends Extension {
             this._MountsMonitor = null;
         }
 
-        // After every widget is destroyed: a sampler may hold a read started on
-        // behalf of one of them, and nothing may outlive the extension.
+        // After every widget is destroyed: each unregisters its own tick, and a
+        // sampler may hold a read started on behalf of one of them. Nothing here
+        // may outlive the extension.
+        if (this._Ticks) {
+            this._Ticks.destroy();
+            this._Ticks = null;
+        }
         if (this._Samplers) {
             this._Samplers.destroy();
             this._Samplers = null;

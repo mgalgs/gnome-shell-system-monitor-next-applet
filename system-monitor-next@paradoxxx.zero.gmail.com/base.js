@@ -626,7 +626,6 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this.text_items = [];
         this.menu_items = [];
         this.menu_visible = true;
-        this.timeout = null;
         this._updateErrorLogged = false;
         this._asyncGen = 0;
 
@@ -877,21 +876,11 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
                 });
         }
     }
-    restart_update_timer(interval = null) {
-        interval = interval || this._lastInterval;
-        if (!interval) {
-            sm_log("Invalid call to restart_update_timer", 'error');
-            return;
-        }
-        if (this.timeout) {
-            GLib.Source.remove(this.timeout);
-        }
-        this.timeout = GLib.timeout_add(
-            GLib.PRIORITY_DEFAULT_IDLE,
-            interval,
-            this.update.bind(this),
-        );
-        this._lastInterval = interval;
+    // A widget does not own its refresh timer: it joins the one shared by every
+    // widget on the same interval, so siblings step together instead of drifting
+    // apart from whatever phase their construction order gave them.
+    restart_update_timer(interval) {
+        this.extension._Ticks.register(this, interval);
     }
     tip_format(unit) {
         if (typeof (unit) === 'undefined') {
@@ -928,15 +917,17 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
     //           this.tip_unit_labels[i].text = unit[i];
     //           }
     //           }
+    // Called by the shared tick for this widget's refresh interval, and once
+    // at construction so a newly added widget is not blank until that tick.
     update() {
         if (this._destroyed)
-            return GLib.SOURCE_REMOVE;
+            return;
+        // A hidden widget collects nothing, so it also forces no shared read.
         if (!this.menu_visible && !this.actor.visible) {
-            return GLib.SOURCE_CONTINUE;
+            return;
         }
-        // A throw escaping a GLib source callback removes the source, which
-        // would silently stop this widget's updates until shell restart —
-        // never let collection errors propagate out of here.
+        // A throw escaping here would take down every widget sharing this
+        // tick, not just this one -- never let collection errors propagate.
         try {
             if (this.collect) {
                 this._applyCollected(this.collect());
@@ -977,7 +968,6 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         } catch (e) {
             this._logUpdateError(e);
         }
-        return GLib.SOURCE_CONTINUE;
     }
     _applyCollected(data) {
         try {
@@ -1096,6 +1086,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
     }
     destroy() {
         this._destroyed = true;
+        this.extension._Ticks.unregister(this);
         this.extension._Schema.disconnectObject(this);
         if (this.chart)
             this.chart.destroy();
@@ -1103,10 +1094,6 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         if (this._initialUpdateId) {
             GLib.Source.remove(this._initialUpdateId);
             this._initialUpdateId = null;
-        }
-        if (this.timeout) {
-            GLib.Source.remove(this.timeout);
-            this.timeout = null;
         }
         if (this.graph_scale_cooldown_timer_id) {
             GLib.Source.remove(this.graph_scale_cooldown_timer_id);
