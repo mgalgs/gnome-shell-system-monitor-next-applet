@@ -1,9 +1,6 @@
 /* -*- mode: js2; js2-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
-import GLib from "gi://GLib";
-import Gio from "gi://Gio";
-import { parse_bytearray } from '../common.js';
 import { ElementBase } from '../base.js';
 
 const Disk = class SystemMonitor_Disk extends ElementBase {
@@ -28,6 +25,7 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
         this.mounts = extension._MountsMonitor.get_mounts();
         this._mountListener = this.update_mounts.bind(this);
         extension._MountsMonitor.add_listener(this._mountListener);
+        this.cursor = extension._Samplers.disk.cursor();
         this._last = [0, 0];
         this._lastTime = 0;
 
@@ -47,24 +45,21 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
     }
 
     collectAsync(callback) {
-        let file = Gio.file_new_for_path('/proc/diskstats');
-        file.load_contents_async(null, (source, result) => {
-            if (this._destroyed) { callback(null); return; }
-            let as_r = source.load_contents_finish(result);
-            let lines = parse_bytearray(as_r[1]).toString().split('\n');
+        this.cursor.sample(reading => {
+            if (this._destroyed || !reading?.data) { callback(null); return; }
             let accum = [0, 0];
 
-            for (let i = 0; i < lines.length; i++) {
-                let entry = lines[i].trim().split(/[\s]+/);
-                if (typeof entry[1] === 'undefined')
-                    break;
-                if (this.device_id !== 'all' && !this.device_id.includes(entry[2]))
+            for (const [device, counters] of reading.data) {
+                if (this.device_id !== 'all' && !this.device_id.includes(device))
                     continue;
-                accum[0] += parseInt(entry[5]);
-                accum[1] += parseInt(entry[9]);
+                accum[0] += counters[0];
+                accum[1] += counters[1];
             }
 
-            let time = GLib.get_monotonic_time() / 1000;
+            // The reading's own instant, not the clock now: a reading taken for
+            // a faster sibling and consumed here is older than this tick, and
+            // dividing by the wrong interval understates the rate.
+            let time = reading.time / 1000;
             let delta = (time - this._lastTime) / 1000;
             let usage = [0, 0];
             if (delta > 0) {

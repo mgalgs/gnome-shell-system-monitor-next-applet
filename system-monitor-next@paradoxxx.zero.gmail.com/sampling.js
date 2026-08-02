@@ -14,10 +14,18 @@
 
 'use strict';
 
+import Gio from "gi://Gio";
 import GLib from "gi://GLib";
 import GTop from "gi://GTop";
+import { parse_bytearray } from './common.js';
+import { sm_log } from './utils.js';
 
 let _gen = 0;
+
+// Deliberately shorter than base.js's own 30s guard on collectAsync, so that a
+// wedged read is recovered in one place rather than by two timers racing on
+// whichever happened to be armed first.
+const SAMPLE_TIMEOUT_S = 15;
 
 // The reading that was never taken. A cursor starts at generation 0 and so
 // always forces a first read, which means there is no null case to branch on.
@@ -83,6 +91,177 @@ export class Sampler {
     destroy() {
         this._latest = NEVER;
     }
+}
+
+/**
+ * One widget's position in an asynchronously read source.
+ */
+class AsyncCursor {
+    constructor(sampler) {
+        this._sampler = sampler;
+        this._seen = 0;
+    }
+
+    /**
+     * @param {Function} deliver - called with a reading, or with null if the
+     *   read could not be completed. May be called synchronously.
+     */
+    sample(deliver) {
+        this._sampler.take(this._seen, reading => {
+            if (reading)
+                this._seen = reading.gen;
+            deliver(reading);
+        });
+    }
+}
+
+/**
+ * A shared reading of a source that cannot be read synchronously.
+ *
+ * Callers arriving while a read is in flight join it rather than starting a
+ * second one -- which is what makes sharing work at all for a source whose
+ * read takes longer than the gap between two widgets' ticks.
+ */
+export class AsyncSampler {
+    /**
+     * @param {string} name - source name, used in log messages
+     * @param {Function} read - (deliver) => cancel, where deliver(data) reports
+     *   the result and the returned function, if any, abandons the read
+     */
+    constructor(name, read) {
+        this.name = name;
+        this._read = read;
+        this._latest = NEVER;
+        this._waiting = null;
+        this._watchdog = null;
+        this._cancel = null;
+        this._wedgeLogged = false;
+        this._destroyed = false;
+    }
+
+    cursor() {
+        return new AsyncCursor(this);
+    }
+
+    take(seen, deliver) {
+        if (this._destroyed) {
+            deliver(null);
+            return;
+        }
+        if (this._waiting) {
+            // Joining the read in flight beats taking the older reading: the
+            // one being fetched is fresher.
+            this._waiting.push(deliver);
+            return;
+        }
+        if (this._latest.gen !== seen) {
+            deliver(this._latest);
+            return;
+        }
+
+        this._waiting = [deliver];
+        this._watchdog = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, SAMPLE_TIMEOUT_S, () => {
+            this._watchdog = null;
+            if (!this._wedgeLogged) {
+                sm_log(`${this.name}: read did not complete in ${SAMPLE_TIMEOUT_S}s; abandoned it`, 'warn');
+                this._wedgeLogged = true;
+            }
+            // Killing rather than merely abandoning: a source that hangs would
+            // otherwise leave one orphaned read behind every timeout, forever.
+            this._abandonRead();
+            this._flush(null);
+            return GLib.SOURCE_REMOVE;
+        });
+
+        try {
+            this._cancel = this._read(data => this._complete(data)) || null;
+        } catch (e) {
+            this._complete(null);
+            sm_log(`${this.name}: read failed: ${e}`, 'warn');
+        }
+    }
+
+    _complete(data) {
+        // A late arrival, after the watchdog gave up: it describes an instant
+        // SAMPLE_TIMEOUT_S gone, and the next tick reads fresh anyway.
+        if (this._destroyed || !this._waiting)
+            return;
+        // Recovered means producing readings again, not merely no longer
+        // hanging: a read that keeps completing with nothing has not recovered.
+        if (this._wedgeLogged && data !== null) {
+            sm_log(`${this.name}: reads recovered`);
+            this._wedgeLogged = false;
+        }
+        this._latest = {gen: ++_gen, time: GLib.get_monotonic_time(), data};
+        this._flush(this._latest);
+    }
+
+    // A read that completed with nothing is still a reading, and advances the
+    // generation, so every sibling reports the same failure at the same instant
+    // instead of some riding stale data.
+    _flush(reading) {
+        this._abandonWatchdog();
+        this._cancel = null;
+        const waiting = this._waiting;
+        this._waiting = null;
+        for (const deliver of waiting) {
+            // One subscriber throwing must not strand the rest with their
+            // pending flag stuck set, which would silently stop their updates.
+            try {
+                deliver(reading);
+            } catch (e) {
+                sm_log(`${this.name}: subscriber failed: ${e}`, 'error');
+            }
+        }
+    }
+
+    _abandonWatchdog() {
+        if (this._watchdog) {
+            GLib.Source.remove(this._watchdog);
+            this._watchdog = null;
+        }
+    }
+
+    _abandonRead() {
+        if (this._cancel) {
+            try {
+                this._cancel();
+            } catch (e) {
+                sm_log(`${this.name}: could not abandon the read: ${e}`, 'warn');
+            }
+            this._cancel = null;
+        }
+    }
+
+    destroy() {
+        this._destroyed = true;
+        this._abandonWatchdog();
+        this._abandonRead();
+        this._waiting = null;
+        this._latest = NEVER;
+    }
+}
+
+function readDiskstats(deliver) {
+    const cancellable = new Gio.Cancellable();
+    Gio.File.new_for_path('/proc/diskstats').load_contents_async(cancellable, (file, result) => {
+        let stats = null;
+        try {
+            const [, contents] = file.load_contents_finish(result);
+            stats = new Map();
+            for (const line of parse_bytearray(contents).split('\n')) {
+                const entry = line.trim().split(/[\s]+/);
+                // A blank line ends the table; anything after it is not a device.
+                if (typeof entry[1] === 'undefined')
+                    break;
+                stats.set(entry[2], [parseInt(entry[5]), parseInt(entry[9])]);
+            }
+        } catch {
+            stats = null;
+        }
+        deliver(stats);
+    });
+    return () => cancellable.cancel();
 }
 
 // Reading a GTop array field crosses into C and copies the whole array, so a
@@ -155,10 +334,16 @@ export class smSamplers {
         return this._cpu;
     }
 
+    get disk() {
+        this._disk ??= this._add(new AsyncSampler('disk', readDiskstats));
+        return this._disk;
+    }
+
     destroy() {
         for (const sampler of this._samplers)
             sampler.destroy();
         this._samplers = [];
         this._cpu = null;
+        this._disk = null;
     }
 }
