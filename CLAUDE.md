@@ -204,8 +204,9 @@ All extension source files are in `system-monitor-next@paradoxxx.zero.gmail.com/
   - `smSamplers` — the per-extension registry, `extension._Samplers`
 - **`common.js`**: Shared utilities (`parse_bytearray()`, `check_sensors()`)
 - **`utils.js`**: Logging (`sm_log()`)
-- **`migration.js`**: Settings schema migration (v0 → v1 → v2)
+- **`migration.js`**: Settings schema migration (v0 → v1 → v2 → v3)
   - v1→v2: converts per-widget GSettings keys into JSON `monitors` array
+  - v2→v3: converts each monitor's single `device` into a `devices` set, coalescing adjacent monitors that differ only by device
 
 ### Settings and Schemas
 
@@ -286,6 +287,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full details. Key rules for AI agents
 
 - **Network disk usage monitoring is disabled by default** (`ENABLE_NETWORK_DISK_USAGE = false` in `extension.js:53`) because stale network shares can freeze the shell
 - The extension uses ES6 modules (import/export) introduced in GNOME Shell 45
-- Settings migration happens automatically on extension load via `migrateSettings()` (current schema version: 2)
+- Settings migration happens automatically on extension load via `migrateSettings()` (current schema version: 3)
 - The extension UUID is hardcoded throughout and must match the directory name
 - Graph width, refresh times, and colors are all user-configurable per metric type
