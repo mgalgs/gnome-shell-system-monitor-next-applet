@@ -401,6 +401,11 @@ function buildDefaultConfig(type, deviceIds) {
 
 // ** Device Selection **
 
+// Both hosts of the picker -- the Add dialog and the row's Devices dialog -- say
+// the same thing, because they are the same picker.
+const DEVICE_PICKER_HINT =
+    _('Tick a device to monitor it. The check on the right shows that device\'s text label in the panel.');
+
 function setTriState(check, values) {
     const on = values.filter(Boolean).length;
     check.inconsistent = on > 0 && on < values.length;
@@ -467,6 +472,10 @@ class SMDeviceSelection {
         return this._devices
             .filter(d => this._state.get(d.id).selected)
             .map(d => d.name);
+    }
+
+    get deviceCount() {
+        return this._devices.length;
     }
 
     getShowText(id) {
@@ -703,7 +712,73 @@ const SMMonitorRow = GObject.registerClass({
         // be a second, ignored answer to the same question.
         delete this._config['show-text'];
         this.subtitle = this._deviceSummary();
+        if (this._devicesRow)
+            this._devicesRow.subtitle = this._deviceCount();
         this._emitChanged();
+    }
+
+    _deviceCount() {
+        const total = this._selection.deviceCount;
+        const chosen = this._selection.entries.length;
+        // The total beside the count: "did I get them all?" is the question this
+        // row exists to answer without opening anything.
+        return _('%d of %d selected').replace('%d', chosen.toString()).replace('%d', total.toString());
+    }
+
+    // Choosing devices is a pick-then-done task, and the rarest reason to open
+    // this row -- creating a monitor picks them in the Add dialog, and everything
+    // else here is a setting you nudge. So it gets an entry point rather than the
+    // top third of the row, and the list gets a window of its own instead of
+    // scrolling inside a row inside a page.
+    _openDevicePicker() {
+        const dialog = new Adw.Window({
+            modal: true,
+            title: _('Devices'),
+            default_width: 460,
+            default_height: 620,
+            transient_for: this.get_root(),
+        });
+
+        const toolbar = new Adw.ToolbarView();
+        toolbar.add_top_bar(new Adw.HeaderBar());
+        dialog.set_content(toolbar);
+
+        const box = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 12,
+            margin_top: 12, margin_bottom: 12,
+            margin_start: 12, margin_end: 12,
+        });
+        toolbar.set_content(box);
+
+        const group = new Adw.PreferencesGroup({description: DEVICE_PICKER_HINT});
+        const rows = this._selection.rows;
+        for (const row of rows)
+            group.add(row);
+        box.append(new Gtk.ScrolledWindow({
+            hscrollbar_policy: Gtk.PolicyType.NEVER,
+            vexpand: true,
+            child: group,
+        }));
+
+        // Changes apply immediately here as everywhere else on this page -- a
+        // ticked device appears in the panel at once -- so there is nothing to
+        // cancel, only a way out.
+        const buttons = new Gtk.Box({halign: Gtk.Align.END});
+        const close = new Gtk.Button({label: _('Close'), css_classes: ['suggested-action']});
+        close.connect('clicked', () => dialog.close());
+        buttons.append(close);
+        box.append(buttons);
+
+        // The selection outlives the dialog, so hand its rows back before the
+        // group is destroyed or they could not be shown a second time.
+        dialog.connect('close-request', () => {
+            for (const row of rows)
+                group.remove(row);
+            return false;
+        });
+
+        dialog.present();
     }
 
     _onDragPrepare(_source, x, y) {
@@ -749,8 +824,19 @@ const SMMonitorRow = GObject.registerClass({
     _buildSettings() {
         let c = this._config;
 
-        for (const row of this._selection.rows)
-            this.add_row(row);
+        if (this._catalog.kind !== 'singleton') {
+            this._devicesRow = new Adw.ActionRow({
+                title: _('Devices'),
+                subtitle: this._deviceCount(),
+                activatable: true,
+            });
+            this._devicesRow.add_suffix(new Gtk.Image({
+                icon_name: 'go-next-symbolic',
+                valign: Gtk.Align.CENTER,
+            }));
+            this._devicesRow.connect('activated', () => this._openDevicePicker());
+            this.add_row(this._devicesRow);
+        }
 
         let showMenu = new Adw.SwitchRow({title: _('Show In Menu'), active: c['show-menu'] === true});
         showMenu.connect('notify::active', w => { c['show-menu'] = w.active; this._emitChanged(); });
@@ -1067,7 +1153,7 @@ const SMMonitorsPage = GObject.registerClass({
 
         let deviceGroup = new Adw.PreferencesGroup({
             title: _('Devices'),
-            description: _('Tick a device to monitor it. The check on the right shows that device\'s text label in the panel.'),
+            description: DEVICE_PICKER_HINT,
         });
         let scroller = new Gtk.ScrolledWindow({
             hscrollbar_policy: Gtk.PolicyType.NEVER,
@@ -1107,9 +1193,7 @@ const SMMonitorsPage = GObject.registerClass({
             // E.g. thermal/fan on a machine with no readable sensors; a monitor
             // saved without a real device could never resolve, so block the add.
             const haveDevices = catalog.kind === 'singleton' || deviceRows.length > 0;
-            deviceGroup.description = haveDevices
-                ? _('Tick a device to monitor it. The check on the right shows that device\'s text label in the panel.')
-                : _('No devices detected');
+            deviceGroup.description = haveDevices ? DEVICE_PICKER_HINT : _('No devices detected');
             addBtn.sensitive = haveDevices && selection.entries.length > 0;
         };
 
