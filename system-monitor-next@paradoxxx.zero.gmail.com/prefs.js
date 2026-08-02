@@ -402,9 +402,13 @@ function buildDefaultConfig(type, deviceIds) {
 // ** Device Selection **
 
 // Both hosts of the picker -- the Add dialog and the row's Devices dialog -- say
-// the same thing, because they are the same picker.
-const DEVICE_PICKER_HINT =
-    _('Tick a device to monitor it. The check on the right shows that device\'s text label in the panel.');
+// the same thing, because they are the same picker. It has to be a function: an
+// extension's gettext resolves which extension is asking from the call stack, so
+// calling it while the module is still being imported throws "gettext can only be
+// called from extensions".
+function devicePickerHint() {
+    return _('Tick a device to monitor it. The check on the right shows that device\'s text label in the panel.');
+}
 
 function setTriState(check, values) {
     const on = values.filter(Boolean).length;
@@ -751,7 +755,7 @@ const SMMonitorRow = GObject.registerClass({
         });
         toolbar.set_content(box);
 
-        const group = new Adw.PreferencesGroup({description: DEVICE_PICKER_HINT});
+        const group = new Adw.PreferencesGroup({description: devicePickerHint()});
         const rows = this._selection.rows;
         for (const row of rows)
             group.add(row);
@@ -1153,7 +1157,7 @@ const SMMonitorsPage = GObject.registerClass({
 
         let deviceGroup = new Adw.PreferencesGroup({
             title: _('Devices'),
-            description: DEVICE_PICKER_HINT,
+            description: devicePickerHint(),
         });
         let scroller = new Gtk.ScrolledWindow({
             hscrollbar_policy: Gtk.PolicyType.NEVER,
@@ -1193,7 +1197,7 @@ const SMMonitorsPage = GObject.registerClass({
             // E.g. thermal/fan on a machine with no readable sensors; a monitor
             // saved without a real device could never resolve, so block the add.
             const haveDevices = catalog.kind === 'singleton' || deviceRows.length > 0;
-            deviceGroup.description = haveDevices ? DEVICE_PICKER_HINT : _('No devices detected');
+            deviceGroup.description = haveDevices ? devicePickerHint() : _('No devices detected');
             addBtn.sensitive = haveDevices && selection.entries.length > 0;
         };
 
