@@ -21,7 +21,10 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
         super(extension, config);
 
         if (this.device_id !== 'all') {
+            // Core ids are zero-based and core names are one-based, here and in
+            // the preferences picker.
             let coreNum = parseInt(this.device_id) + 1;
+            this.device_name = String(coreNum);
             this.label.text = _('F') + coreNum;
             this.item_name = _('Freq Core ') + coreNum;
         }

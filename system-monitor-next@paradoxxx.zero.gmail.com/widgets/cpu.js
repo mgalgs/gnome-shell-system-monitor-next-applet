@@ -43,6 +43,9 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
         this.usage = [0, 0, 0, 1, 0];
 
         if (this.cpuid !== -1) {
+            // Core ids are zero-based and core names are one-based, here and in
+            // the preferences picker.
+            this.device_name = String(this.cpuid + 1);
             this.item_name = _('CPU') + ' ' + (this.cpuid + 1);
             this.label.text = _('CPU') + (this.cpuid + 1);
         } else {

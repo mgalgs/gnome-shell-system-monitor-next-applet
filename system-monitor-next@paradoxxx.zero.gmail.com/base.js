@@ -60,6 +60,18 @@ function tr(text) {
 // design around, so the recovery only has to be eventual rather than prompt.
 const ASYNC_STALL_US = 30 * 1e6;
 
+// The device id every widget already branches on to mean "the total over all of
+// them", named here so the menu can say it in the word preferences uses.
+const AGGREGATE_DEVICE = 'all';
+
+// What a device is called when its widget does not say otherwise. Right
+// wherever the id is already the name -- interfaces, block devices, sensor
+// labels, GPU indices -- and 'All' for the total, which is the word the
+// preferences picker uses, so the name resolves when a user goes looking.
+function default_device_name(deviceId) {
+    return deviceId === AGGREGATE_DEVICE ? _('All') : deviceId;
+}
+
 export function l_limit(t) {
     return (t > 0) ? t : 1000;
 }
@@ -626,6 +638,17 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
      * Constructor receives a config object with per-instance settings:
      *   { uuid, type, device, display, style, graph-width, refresh-time,
      *     show-text, show-menu, colors, ... }
+     *
+     * Three names. A widget may set the first two in its constructor; the third
+     * is the type's own name and is not a widget's to change:
+     *   item_name    - the popup menu row when this widget is a monitor's only
+     *                  device. Folds type and device together however the widget
+     *                  sees fit: 'CPU 4', but 'Package id 0' with no type at all.
+     *   device_name  - the cell when the monitor covers several devices, where
+     *                  the type is already written once beside them. Defaults to
+     *                  the device id, which is right wherever the id is already
+     *                  the name (interfaces, block devices, sensor labels).
+     *   monitor_name - the title over those cells.
      */
     constructor(extension, config) {
         super(extension);
@@ -634,9 +657,14 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         const meta = this.constructor.metadata;
 
         this.elt = meta?.id || meta?.name?.toLowerCase() || config.type;
-        this.item_name = meta ? tr(meta.name) : '';
+        this.monitor_name = meta ? tr(meta.name) : '';
+        this.item_name = this.monitor_name;
         this.color_name = meta ? meta.metrics.filter(m => m.color).map(m => m.key) : [];
         this.device_id = config.device;
+        // The device's own name, for when this widget is one of several in a
+        // monitor and item_name -- which folds the type and the device together
+        // however that widget sees fit -- is the wrong half to show.
+        this.device_name = default_device_name(config.device);
         this.text_items = [];
         this.menu_items = [];
         this.menu_visible = true;
