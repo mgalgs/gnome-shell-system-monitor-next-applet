@@ -74,20 +74,30 @@ export function change_style() {
     this.chart.actor.visible = style === 'graph' || style === 'both';
 }
 
+// A widget's menu cells belong to the widget for the widget's whole life; the
+// table only ever borrows them, and gives them back before it is torn down.
+// Re-creating them here instead threw away the values every widget had just
+// computed -- _syncMonitors updates each widget before it rebuilds the table --
+// so every synchronously collecting widget showed a blank value until its next
+// tick, which is a whole refresh interval away.
+function release_menu_cells(elts) {
+    for (const widget of elts) {
+        for (const item of widget.menu_items)
+            item.get_parent()?.remove_child(item);
+    }
+}
+
 export function build_menu_info(extension) {
     let elts = extension.__sm.elts;
     let tray_menu = extension.__sm.tray.menu;
 
     let firstItem = tray_menu._getMenuItems()[0];
     let lastChild = firstItem?.actor.get_last_child();
-    if (lastChild) {
-        lastChild.destroy_all_children();
-        for (let elt in elts) {
-            elts[elt].menu_items = elts[elt].create_menu_items();
-        }
-    } else {
+    if (!lastChild) {
         return;
     }
+    release_menu_cells(elts);
+    lastChild.destroy_all_children();
 
     let menu_info_box_table = new St.Widget({
         style: 'padding: 10px 0px 10px 0px; spacing-rows: 10px; spacing-columns: 15px;',
@@ -1101,6 +1111,11 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this._destroyed = true;
         this.extension._Ticks.unregister(this);
         this.extension._Schema.disconnectObject(this);
+        // The other half of the borrow: a cell whose owner is gone must not sit
+        // in the table showing a value nobody is computing any more.
+        for (const item of this.menu_items)
+            item.destroy();
+        this.menu_items = [];
         if (this.chart)
             this.chart.destroy();
         TipBox.prototype.destroy.call(this);
