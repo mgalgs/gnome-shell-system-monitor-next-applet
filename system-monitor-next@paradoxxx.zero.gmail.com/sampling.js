@@ -346,6 +346,47 @@ function readDiskstats(deliver) {
     return () => cancellable.cancel();
 }
 
+// /proc/net/dev holds every interface in one table, so this sampler needs no
+// key -- which is what makes it shareable at all. glibtop_get_netload reads one
+// interface per call, so an `all` monitor beside two member monitors made four
+// calls per tick over two interfaces.
+//
+// Column numbers are counted from after the interface's colon. Verified
+// field-for-field against glibtop_get_netload on every interface of a live
+// machine: all five are identical.
+const NET_COLUMNS = [
+    ['bytes_in', 0], ['errors_in', 2],
+    ['bytes_out', 8], ['errors_out', 10], ['collisions', 13],
+];
+
+function readNetDev(deliver) {
+    const cancellable = new Gio.Cancellable();
+    Gio.File.new_for_path('/proc/net/dev').load_contents_async(cancellable, (file, result) => {
+        let interfaces = null;
+        try {
+            const [, contents] = file.load_contents_finish(result);
+            interfaces = new Map();
+            // Two header lines name the columns; every line after them is an
+            // interface, and the colon is what separates its name from them.
+            for (const line of parse_bytearray(contents).split('\n').slice(2)) {
+                const colon = line.indexOf(':');
+                if (colon < 0)
+                    continue;
+                const field = line.slice(colon + 1).trim().split(/\s+/);
+                const counters = {};
+                for (const [key, column] of NET_COLUMNS)
+                    counters[key] = parseInt(field[column]);
+                interfaces.set(line.slice(0, colon).trim(), counters);
+            }
+        } catch (e) {
+            deliver(null, `could not read /proc/net/dev: ${e.message}`);
+            return;
+        }
+        deliver(interfaces);
+    });
+    return () => cancellable.cancel();
+}
+
 // A scrape is the whole exposition -- 100-500 KB for node_exporter -- and every
 // widget on that server greps one line out of the same text. Splitting it is as
 // much of the per-widget cost as fetching it, so the reading carries the split
@@ -528,6 +569,11 @@ export class smSamplers {
         return this._gpu;
     }
 
+    get net() {
+        this._net ??= this._add(new AsyncSampler('net', readNetDev));
+        return this._net;
+    }
+
     get sensors() {
         this._sensors ??= this._add(new AsyncSampler('sensors', readSensors));
         return this._sensors;
@@ -557,6 +603,7 @@ export class smSamplers {
         this._cpu = null;
         this._disk = null;
         this._gpu = null;
+        this._net = null;
         this._sensors = null;
         this._scrapes.clear();
         if (this._session) {

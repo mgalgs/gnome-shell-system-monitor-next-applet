@@ -1,13 +1,14 @@
 /* -*- mode: js2; js2-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
-import GLib from "gi://GLib";
 import Gio from "gi://Gio";
-import GTop from "gi://GTop";
 import NM from "gi://NM";
 import { ElementBase } from '../base.js';
 
 const NetworkManager = NM;
+
+// The five counters, in the order this widget's metrics and tooltip already use.
+const FIELDS = ['bytes_in', 'errors_in', 'bytes_out', 'errors_out', 'collisions'];
 
 const Net = class SystemMonitor_Net extends ElementBase {
     static metadata = {
@@ -43,7 +44,7 @@ const Net = class SystemMonitor_Net extends ElementBase {
             this.item_name = _('Net') + ' ' + this.device_id;
         }
 
-        this.gtop = new GTop.glibtop_netload();
+        this.cursor = extension._Samplers.net.cursor();
         this._last = [0, 0, 0, 0, 0];
         this._lastTime = 0;
         this.tip_format([_('KiB/s'), '/s', _('KiB/s'), '/s', '/s']);
@@ -106,28 +107,41 @@ const Net = class SystemMonitor_Net extends ElementBase {
         }
     }
 
-    collect() {
-        let accum = [0, 0, 0, 0, 0];
-        for (let ifn in this.ifs) {
-            GTop.glibtop_get_netload(this.gtop, this.ifs[ifn]);
-            accum[0] += this.gtop.bytes_in;
-            accum[1] += this.gtop.errors_in;
-            accum[2] += this.gtop.bytes_out;
-            accum[3] += this.gtop.errors_out;
-            accum[4] += this.gtop.collisions;
-        }
-
-        let time = GLib.get_monotonic_time() * 0.001024;
-        let delta = time - this._lastTime;
-        let usage = [0, 0, 0, 0, 0];
-        if (delta > 0) {
-            for (let i = 0; i < 5; i++) {
-                usage[i] = Math.round((accum[i] - this._last[i]) / delta);
-                this._last[i] = accum[i];
+    collectAsync(callback) {
+        this.cursor.sample(reading => {
+            if (this._destroyed || !reading?.data) {
+                callback(null);
+                return;
             }
-        }
-        this._lastTime = time;
 
+            let accum = [0, 0, 0, 0, 0];
+            for (const iface of this.ifs) {
+                const counters = reading.data.get(iface);
+                if (!counters)
+                    continue;
+                for (let i = 0; i < 5; i++)
+                    accum[i] += counters[FIELDS[i]];
+            }
+
+            // The reading's own instant, not the clock now: a reading taken for
+            // a faster sibling and consumed here is older than this tick, and
+            // dividing by the wrong interval understates the rate.
+            let time = reading.time * 0.001024;
+            let delta = time - this._lastTime;
+            let usage = [0, 0, 0, 0, 0];
+            if (delta > 0) {
+                for (let i = 0; i < 5; i++) {
+                    usage[i] = Math.round((accum[i] - this._last[i]) / delta);
+                    this._last[i] = accum[i];
+                }
+            }
+            this._lastTime = time;
+
+            callback(this._present(usage));
+        });
+    }
+
+    _present(usage) {
         const Style = this.extension._Style;
         let downVal = usage[0];
         let upVal = usage[2];
