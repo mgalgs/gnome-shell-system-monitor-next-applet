@@ -70,6 +70,13 @@ const AGGREGATE_DEVICE = 'all';
 // lines back without letting the menu grow sideways to pay for them.
 const MENU_ENTRY_WIDTH = 280;
 
+// ...but only until height is genuinely the thing running out. Past this many
+// lines an entry takes the width it needs instead, because a menu too tall to
+// show its own "Preferences..." is the fault this is all here to fix, and a
+// wide menu is not. Reached only near M01's 64-device cap, where the panel is
+// long past unusable anyway.
+const MENU_ENTRY_LINES = 6;
+
 // What a device is called when its widget does not say otherwise. Right
 // wherever the id is already the name -- interfaces, block devices, sensor
 // labels, GPU indices -- and 'All' for the total, which is the word the
@@ -189,8 +196,9 @@ function reflow_monitor_entry({grid, cells, columns}) {
     for (const cell of cells)
         widest = Math.max(widest, cell.get_preferred_width(-1)[1]);
     const cell_width = widest > 0 ? widest : 1;
-    const wrap = Math.max(1, Math.min(cells.length,
-        Math.floor(MENU_ENTRY_WIDTH * scale / cell_width)));
+    const fits = Math.floor(MENU_ENTRY_WIDTH * scale / cell_width);
+    const needed = Math.ceil(cells.length / MENU_ENTRY_LINES);
+    const wrap = Math.max(1, Math.min(cells.length, Math.max(fits, needed)));
     if (wrap === columns)
         return wrap;
 
