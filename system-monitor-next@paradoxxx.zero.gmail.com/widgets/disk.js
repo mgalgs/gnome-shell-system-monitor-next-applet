@@ -23,9 +23,6 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
 
     constructor(extension, config) {
         super(extension, config);
-        this.mounts = extension._MountsMonitor.get_mounts();
-        this._mountListener = this.update_mounts.bind(this);
-        extension._MountsMonitor.add_listener(this._mountListener);
         this.cursor = extension._Samplers.disk.cursor();
         this._last = new Map();
         this._lastTime = 0;
@@ -35,10 +32,6 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
             this.label.text = this.device_id.split('/').pop();
             this.item_name = _('Disk') + ' ' + this.device_id;
         }
-    }
-
-    update_mounts(mounts) {
-        this.mounts = mounts;
     }
 
     // A disk can be selected and then removed, or named in a config carried
@@ -51,11 +44,6 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
         this._missingLogged = true;
         sm_log(`${this.item_name}: /proc/diskstats lists ${[...devices.keys()].join(', ')} — ` +
                `nothing for "${this.device_id}". Showing --.`, 'warn');
-    }
-
-    destroy() {
-        this.extension._MountsMonitor.remove_listener(this._mountListener);
-        super.destroy();
     }
 
     collectAsync(callback) {
