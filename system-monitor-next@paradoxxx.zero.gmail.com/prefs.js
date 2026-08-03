@@ -380,7 +380,7 @@ function buildDefaultConfig(type, deviceIds) {
         style: 'graph',
         'graph-width': defaultGraphWidth(deviceIds.length),
         'refresh-time': type === 'cpu' || type === 'freq' ? 1500 : 5000,
-        'show-menu': deviceIds.length === 1,
+        'show-menu': true,
         colors: {...(DEFAULT_COLORS[type] || {})},
     };
     if (type === 'thermal') {
