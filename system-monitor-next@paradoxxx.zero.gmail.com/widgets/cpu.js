@@ -58,6 +58,16 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
         // The aggregate divides by the machine's total jiffies, a per-core
         // instance by that core's -- otherwise the same arithmetic.
         const counters = this.cpuid === -1 ? reading.data : reading.data.core(this.cpuid);
+        // A core this machine does not have, or one offlined since this widget
+        // was built: GTop's xcpu arrays are a fixed 1024 entries and zero-filled
+        // wherever a core's counters were not read. Jiffies are cumulative since
+        // boot, so any online core has thousands and a zero-filled slot has
+        // none. Without this the delta is exactly 0 on every tick, neither arm
+        // below fires, and the panel shows the value this.usage was initialised
+        // with -- a permanent 99%. A core brought online this second reads as no
+        // reading for one tick, which is honest.
+        if (!(counters.total > 0))
+            return null;
         const scale = this.cpuid === -1 ? 100 * this.total_cores : 100;
 
         this.current[0] = counters.user;
