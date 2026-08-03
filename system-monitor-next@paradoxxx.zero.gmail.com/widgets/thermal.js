@@ -40,8 +40,26 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
         this.reset_style();
     }
 
+    // Not a bad selection but a machine with nothing to select: no hwmon
+    // temperature inputs and no lm_sensors, which is ordinary on a virtual
+    // machine. The panel can only show "--", and without this there is nothing
+    // anywhere saying why.
+    _reportNoSensors() {
+        if (!this._display_error)
+            return;
+        this._display_error = false;
+        sm_log(`${this.item_name}: this machine reports no temperature sensors. Showing --. ` +
+               'Installing lm_sensors may expose more of them.', 'warn');
+    }
+
     collectAsync(callback) {
-        if (!this.sensors || Object.keys(this.sensors).length === 0) {
+        if (!this.sensors) {
+            // Enumeration has not come back yet, which is not a fault.
+            callback(null);
+            return;
+        }
+        if (Object.keys(this.sensors).length === 0) {
+            this._reportNoSensors();
             callback(null);
             return;
         }

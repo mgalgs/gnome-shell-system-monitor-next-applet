@@ -4,6 +4,7 @@ import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.j
 import Gio from "gi://Gio";
 import GTop from "gi://GTop";
 import { parse_bytearray } from '../common.js';
+import { sm_log } from '../utils.js';
 import { ElementBase } from '../base.js';
 
 const Freq = class SystemMonitor_Freq extends ElementBase {
@@ -29,7 +30,21 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
             this.item_name = _('Freq Core ') + coreNum;
         }
 
+        this._noFrequencyLogged = false;
     }
+
+    // No cpufreq at all, which is ordinary on a virtual machine and on some
+    // container hosts -- the kernel simply does not publish
+    // scaling_cur_freq. The panel can only show "--", and without this there is
+    // nothing anywhere saying why.
+    _reportNoFrequency() {
+        if (this._noFrequencyLogged)
+            return;
+        this._noFrequencyLogged = true;
+        sm_log(`${this.item_name}: no core published a frequency under ` +
+               '/sys/devices/system/cpu/*/cpufreq. Showing --.', 'warn');
+    }
+
     collectAsync(callback) {
         let display_mode = this.config['display-mode'] || 'max';
         let indices;
@@ -53,9 +68,11 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
             if (this._destroyed) { callback(null); return; }
             if (pos >= indices.length) {
                 if (read_count === 0) {
+                    this._reportNoFrequency();
                     callback(null);
                     return;
                 }
+                this._noFrequencyLogged = false;
                 let freq = display_mode === 'average'
                     ? Math.round(total_frequency / read_count / 1000)
                     : Math.round(max_frequency / 1000);
