@@ -55,7 +55,7 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
             // a difference of two readings OF THE SAME DEVICE, so no term is
             // negative and neither is the total. A device appearing or
             // disappearing changes which terms exist, never the sign of one.
-            let totals = [0, 0];
+            const totals = {read: 0, write: 0};
             const current = new Map();
             for (const [device, counters] of reading.data) {
                 if (this.device_id !== 'all' && device !== this.device_id)
@@ -69,10 +69,11 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
                 // the kernel zeroes the whole stats struct, so either counter
                 // witnesses it. Either way it contributes nothing for one tick
                 // and re-baselines.
-                if (!prev || counters[0] < prev[0] || counters[1] < prev[1])
+                if (!prev || counters.readSectors < prev.readSectors ||
+                    counters.writeSectors < prev.writeSectors)
                     continue;
-                totals[0] += counters[0] - prev[0];
-                totals[1] += counters[1] - prev[1];
+                totals.read += counters.readSectors - prev.readSectors;
+                totals.write += counters.writeSectors - prev.writeSectors;
             }
             // The counters and the instant they were read at advance together,
             // or the next tick divides one device set's delta by another's
@@ -94,18 +95,15 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
             }
             this._missingLogged = false;
 
-            let usage = [0, 0];
-            if (delta > 0) {
-                for (let i = 0; i < 2; i++)
-                    usage[i] = totals[i] / delta / 1024 / 8;
-            }
+            const rate = sectors => delta > 0 ? sectors / delta / 1024 / 8 : 0;
+            const read = rate(totals.read), write = rate(totals.write);
 
-            let r = usage[0] < 10 ? Math.round(10 * usage[0]) / 10 : Math.round(usage[0]);
-            let w = usage[1] < 10 ? Math.round(10 * usage[1]) / 10 : Math.round(usage[1]);
+            let r = read < 10 ? Math.round(10 * read) / 10 : Math.round(read);
+            let w = write < 10 ? Math.round(10 * write) / 10 : Math.round(write);
             const Locale = this.extension._Locale;
             const units = this.extension._Style.diskunits();
             callback({
-                metrics: {read: usage[0], write: usage[1]},
+                metrics: {read, write},
                 display: r.toLocaleString(Locale),
                 display2: w.toLocaleString(Locale),
                 unit: units, unit2: units,

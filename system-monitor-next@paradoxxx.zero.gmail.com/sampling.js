@@ -323,6 +323,9 @@ export class AsyncSampler {
     }
 }
 
+// The counters are in 512-byte sectors, which is what the kernel publishes
+// whatever the device's own sector size, so the names say so: a consumer that
+// reads `read` cannot tell whether it still owes itself the conversion.
 function readDiskstats(deliver) {
     const cancellable = new Gio.Cancellable();
     Gio.File.new_for_path('/proc/diskstats').load_contents_async(cancellable, (file, result) => {
@@ -335,7 +338,10 @@ function readDiskstats(deliver) {
                 // A blank line ends the table; anything after it is not a device.
                 if (typeof entry[1] === 'undefined')
                     break;
-                stats.set(entry[2], [parseInt(entry[5]), parseInt(entry[9])]);
+                stats.set(entry[2], {
+                    readSectors: parseInt(entry[5]),
+                    writeSectors: parseInt(entry[9]),
+                });
             }
         } catch (e) {
             deliver(null, `could not read /proc/diskstats: ${e.message}`);
