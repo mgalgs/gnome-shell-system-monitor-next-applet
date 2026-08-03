@@ -39,9 +39,7 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
             const gpu = reading?.data?.get(this.gpu_index);
             if (!gpu) {
                 this._reportMissing(reading?.data);
-                // Charting a 0 for a GPU nobody could read is indistinguishable
-                // from an idle one; say there is no reading instead.
-                callback({display: '--', detail: '', detailUnit: this._unitStr()});
+                callback(null);
                 return;
             }
             this._missingLogged = false;

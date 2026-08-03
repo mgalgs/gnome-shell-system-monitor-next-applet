@@ -27,23 +27,16 @@ const Prometheus = class SystemMonitor_Prometheus extends ElementBase {
                 return;
             }
             if (!reading?.data) {
-                callback(this._failureData());
+                callback(null);
                 return;
             }
             let val = this._parseMetric(reading.data.lines());
             if (val === null) {
-                callback(this._failureData());
+                callback(null);
                 return;
             }
             callback({metrics: {value: val}, display: this._formatValue(val)});
         });
-    }
-
-    // No metrics key: a failed scrape must not chart a fake 0
-    // (indistinguishable from a real zero reading) -- leave the chart at
-    // its last value and signal the failure via the panel text.
-    _failureData() {
-        return {display: '--'};
     }
 
     _parseMetric(lines) {

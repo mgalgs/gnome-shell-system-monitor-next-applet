@@ -96,8 +96,6 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
     }
 
     _formatTemp() {
-        if (this._temperature === null)
-            return '-- ';
         let t = this._temperature;
         if (this.fahrenheit_unit)
             t = Math.round(t * 1.8 + 32);
