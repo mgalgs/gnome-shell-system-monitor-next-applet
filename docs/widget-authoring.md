@@ -202,9 +202,32 @@ collectAsync(callback) {
 }
 ```
 
-Call `callback(data)` when the data is ready, or `callback(null)` if the read failed. The framework handles chart/tooltip updates after the callback fires.
+Call `callback(data)` when the data is ready. The framework handles chart/tooltip updates after the callback fires.
 
 **Do not implement both `collect()` and `refresh()`** — the framework checks for `collect` first and ignores `refresh`/`_apply` if it exists.
+
+### There is no reading
+
+A tick yields one of two things, and there is no third:
+
+| Return | Meaning |
+|--------|---------|
+| a data object | numbers, applied as above |
+| `null` | **there is no reading** |
+
+Return `null` whenever you have no numbers — the device you were configured to watch is not in the source, the source could not be read, the first reading has not landed yet. The framework writes `--` into the panel digits, the menu cells and the tooltip, and the chart takes a **hole** for that tick rather than a zero.
+
+Do not build your own `'--'`, and do not return a data object with the metrics left out. Three widgets each did that independently and each got it subtly wrong — a chart that kept drawing the last value under dashes, a menu unit with nothing in front of it.
+
+Two rules that come with it:
+
+- **An aggregate is never "no reading".** A device named `all` is a fold over a set, and the empty set folds to zero, which is a measurement. Only a *named* device can be absent.
+- **Say which one in the journal, once per outage.** `--` tells the user there is no number; only the journal can tell them why. Name the device the user asked for, name what the source did list, and say what is being shown instead — that last clause is what separates a bad selection from a bad machine:
+
+```javascript
+sm_log(`${this.item_name}: /proc/diskstats lists ${[...devices.keys()].join(', ')} — ` +
+       `nothing for "${this.device_id}". Showing --.`, 'warn');
+```
 
 ## Sharing a source between widgets
 
