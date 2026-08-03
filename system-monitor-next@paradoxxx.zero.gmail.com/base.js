@@ -60,6 +60,11 @@ function tr(text) {
 // design around, so the recovery only has to be eventual rather than prompt.
 const ASYNC_STALL_US = 30 * 1e6;
 
+// What the panel shows in place of a number it does not have. Not a zero: zero
+// is a measurement, and a device that is not on this machine has not been
+// measured.
+const NO_READING = '--';
+
 // The device id every widget already branches on to mean "the total over all of
 // them", named here so the menu can say it in the word preferences uses.
 const AGGREGATE_DEVICE = 'all';
@@ -1199,11 +1204,29 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         try {
             if (data)
                 this._autoApply(data);
-            this._postApply(this.vals);
+            else
+                this._showNoReading();
+            // This tick's values, or nothing at all: a tick with no reading is
+            // a hole in the series, never a zero.
+            this._postApply(data ? this.vals : null);
             this._updateErrorLogged = false;
         } catch (e) {
             this._logUpdateError(e);
         }
+    }
+    // A tick that produced no numbers: this widget's device is not in the
+    // source, the source could not be read, or the first reading has not landed
+    // yet. One form for all three, because which of them it was is a journal
+    // question and the panel's answer is the same either way -- there is no
+    // number. Units are left alone, since "-- KiB/s" still says what the number
+    // would have been.
+    _showNoReading() {
+        const meta = this.constructor.metadata;
+        const data = {display: NO_READING, display2: NO_READING, detail: NO_READING};
+        for (let i = 0; i < this.tip_vals.length; i++)
+            this.tip_vals[i] = NO_READING;
+        this._applyPanel(data, NO_READING, meta?.panelLayout ?? 'simple');
+        this._applyMenu(data, NO_READING, meta?.menuLayout ?? 'simple');
     }
     _logUpdateError(e) {
         if (this._updateErrorLogged)
