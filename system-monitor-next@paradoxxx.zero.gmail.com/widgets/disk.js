@@ -56,7 +56,7 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
             let totals = [0, 0];
             const current = new Map();
             for (const [device, counters] of reading.data) {
-                if (this.device_id !== 'all' && !this.device_id.includes(device))
+                if (this.device_id !== 'all' && device !== this.device_id)
                     continue;
                 current.set(device, counters);
                 const prev = this._last.get(device);
