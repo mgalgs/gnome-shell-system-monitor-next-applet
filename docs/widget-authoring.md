@@ -401,7 +401,12 @@ An aggregate may carry a `note`, which replaces the row's default subtitle ("Com
 {id: 'all', name: 'All physical interfaces (total)', note: 'Excludes VPN, bridge and container interfaces — …'}
 ```
 
-Reach for it only when the total is *not* a plain fold over the members listed beneath it. `net` is the one such type: it sums the interfaces at the machine's edge, because counting a tunnel and the hardware carrying it reports the same bytes twice. A user who sees a checklist of eight interfaces under a row labelled "all" and gets the sum of two has been lied to unless the row says so.
+Reach for it only when the total is *not* a plain fold over the members listed beneath it. Two types are like that, and for the same reason — both traffic and block I/O are layered, so the same bytes appear at more than one member:
+
+- `net` sums the interfaces at the machine's edge, because counting a tunnel and the hardware carrying it reports the same bytes twice.
+- `disk` sums the devices where I/O reaches physical storage, because the block layer accounts a request at every device it traverses — the logical volume, the encrypted device under it, the partition, and the disk.
+
+A user who sees a checklist of eight devices under a row labelled "all" and gets the sum of two has been lied to unless the row says so. Where the members are layered, order the summed ones first: the aggregate's claim then becomes checkable by looking, and the excluded devices stay one click away for whoever wants the view from inside the tunnel or the encrypted volume.
 
 ## Declarative Layouts
 

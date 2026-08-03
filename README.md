@@ -6,8 +6,12 @@ A GNOME Shell extension that displays system resource usage in the top panel.
 
 ![Standard View](screenshots/standard.png)
 
+**A figure on your panel changed after an update?** [CHANGELOG.md](CHANGELOG.md)
+says which way it moved and why.
+
 ## Table of Contents
 
+- [Changelog](CHANGELOG.md)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
   - [Browser Installation](#browser-installation)
