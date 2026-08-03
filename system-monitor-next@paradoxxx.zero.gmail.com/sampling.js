@@ -18,7 +18,7 @@ import Gio from "gi://Gio";
 import GLib from "gi://GLib";
 import GTop from "gi://GTop";
 import Soup from "gi://Soup?version=3.0";
-import { parse_bytearray } from './common.js';
+import { parse_bytearray, is_storage_medium } from './common.js';
 import { sm_log } from './utils.js';
 
 let _gen = 0;
@@ -326,6 +326,14 @@ export class AsyncSampler {
 // The counters are in 512-byte sectors, which is what the kernel publishes
 // whatever the device's own sector size, so the names say so: a consumer that
 // reads `read` cannot tell whether it still owes itself the conversion.
+//
+// `medium` travels with them because a sampler shares the decode, not just the
+// I/O: it is a fact every consumer would otherwise derive identically from the
+// same device list, exactly like the net reading's `edge` and the CPU reading's
+// per-core columns. Classified inside this loop rather than in a second pass,
+// so no reading ever exists with the field unset -- net needs two passes only
+// because its PPP fallback consults a whole-map fact, and disk has no such
+// clause.
 function readDiskstats(deliver) {
     const cancellable = new Gio.Cancellable();
     Gio.File.new_for_path('/proc/diskstats').load_contents_async(cancellable, (file, result) => {
@@ -344,7 +352,10 @@ function readDiskstats(deliver) {
                 // -- one bad row and the whole aggregate reads NaN, forever.
                 if (isNaN(readSectors) || isNaN(writeSectors))
                     continue;
-                stats.set(entry[2], {readSectors, writeSectors});
+                stats.set(entry[2], {
+                    readSectors, writeSectors,
+                    medium: is_storage_medium(entry[2]),
+                });
             }
         } catch (e) {
             deliver(null, `could not read /proc/diskstats: ${e.message}`);
