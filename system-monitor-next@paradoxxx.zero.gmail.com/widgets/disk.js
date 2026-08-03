@@ -4,6 +4,12 @@ import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.j
 import { sm_log } from '../utils.js';
 import { ElementBase } from '../base.js';
 
+// /proc/diskstats counts 512-byte sectors, so a MiB is 2048 of them. The panel
+// divided by 1024 and again by 8 and labelled the result MiB/s, which is a
+// quarter of it: measured against dd's own reported throughput, 98.2 shown for
+// a real 392.8 MiB/s.
+const SECTORS_PER_MIB = 2048;
+
 const Disk = class SystemMonitor_Disk extends ElementBase {
     static metadata = {
         name: 'Disk',
@@ -95,7 +101,7 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
             }
             this._missingLogged = false;
 
-            const rate = sectors => delta > 0 ? sectors / delta / 1024 / 8 : 0;
+            const rate = sectors => delta > 0 ? sectors / delta / SECTORS_PER_MIB : 0;
             const read = rate(totals.read), write = rate(totals.write);
 
             let r = read < 10 ? Math.round(10 * read) / 10 : Math.round(read);
