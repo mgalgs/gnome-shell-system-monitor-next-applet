@@ -72,19 +72,29 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
                 totals[0] += counters[0] - prev[0];
                 totals[1] += counters[1] - prev[1];
             }
+            // The counters and the instant they were read at advance together,
+            // or the next tick divides one device set's delta by another's
+            // interval. The reading's own instant, not the clock now: a reading
+            // taken for a faster sibling and consumed here is older than this
+            // tick, and dividing by the wrong interval understates the rate.
+            const time = reading.time / 1000;
+            const delta = (time - this._lastTime) / 1000;
             this._last = current;
+            this._lastTime = time;
 
-            // The reading's own instant, not the clock now: a reading taken for
-            // a faster sibling and consumed here is older than this tick, and
-            // dividing by the wrong interval understates the rate.
-            let time = reading.time / 1000;
-            let delta = (time - this._lastTime) / 1000;
+            // A named device that is not in the table is not a device reading
+            // zero. An "all" that matched nothing is: an aggregate is a fold
+            // over a set, and the empty set folds to a real zero.
+            if (this.device_id !== 'all' && current.size === 0) {
+                callback(null);
+                return;
+            }
+
             let usage = [0, 0];
             if (delta > 0) {
                 for (let i = 0; i < 2; i++)
                     usage[i] = totals[i] / delta / 1024 / 8;
             }
-            this._lastTime = time;
 
             let r = usage[0] < 10 ? Math.round(10 * usage[0]) / 10 : Math.round(usage[0]);
             let w = usage[1] < 10 ? Math.round(10 * usage[1]) / 10 : Math.round(usage[1]);
