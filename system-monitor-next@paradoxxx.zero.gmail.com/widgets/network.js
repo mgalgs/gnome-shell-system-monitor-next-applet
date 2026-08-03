@@ -80,10 +80,19 @@ const Net = class SystemMonitor_Net extends ElementBase {
             if (current.size) {
                 this._noEdgeLogged = false;
                 this._missingLogged = false;
-            } else if (this.device_id === 'all')
+            } else if (this.device_id === 'all') {
+                // An aggregate is a fold over a set, and the empty set folds to
+                // a real zero: this host's traffic genuinely never reaches its
+                // edge.
                 this._reportNoEdge(reading.data);
-            else
+            } else {
+                // A named interface that is not in /proc/net/dev has not been
+                // measured, which is not the same as having carried nothing.
                 this._reportMissing(reading.data);
+                this._lastTime = reading.time * 0.001024;
+                callback(null);
+                return;
+            }
 
             // The reading's own instant, not the clock now: a reading taken for
             // a faster sibling and consumed here is older than this tick, and
@@ -123,7 +132,7 @@ const Net = class SystemMonitor_Net extends ElementBase {
             return;
         this._missingLogged = true;
         sm_log(`${this.item_name}: /proc/net/dev lists ${[...interfaces.keys()].join(', ')} — ` +
-               `nothing for "${this.device_id}". Showing 0.`, 'warn');
+               `nothing for "${this.device_id}". Showing --.`, 'warn');
     }
 
     _present(usage) {
