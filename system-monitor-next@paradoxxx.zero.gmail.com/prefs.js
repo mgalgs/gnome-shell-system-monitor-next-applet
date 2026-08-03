@@ -11,7 +11,7 @@ import Adw from "gi://Adw";
 
 import { ExtensionPreferences, gettext as _ } from "resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js";
 
-import { parse_bytearray } from './common.js';
+import { parse_bytearray, is_storage_medium } from './common.js';
 import { parseMonitorConfigs } from './monitors.js';
 
 const N_ = function (e) {
@@ -222,22 +222,36 @@ function getNetInterfaces() {
     return [];
 }
 
+// Enumerate from /proc/diskstats, the source the panel reads, so a device the
+// picker offers is a device the panel can show -- the fault M02b fixed for net,
+// where the picker enumerated one way and the widget another. A name regex
+// (sd[a-z]|nvme\d+n\d+|mmcblk\d+|vd[a-z]) stood here, which broke at the 27th
+// SCSI disk and hid every logical volume, encrypted device and zram.
+//
+// Whole devices only. Partitions are dropped because five entries beginning
+// "nvme0n1" make the commonest task in the dialog -- find my disk -- harder for
+// a case nobody has asked for; a config that names a partition still reads it.
+// /sys/block holds exactly the whole devices, so membership is the test.
+//
+// Media first, so the devices the total sums sit directly under it and the ones
+// it excludes sit visibly below, which makes the aggregate's note checkable
+// rather than merely assertable. It also keeps a snap-heavy laptop's thirty
+// loop devices below the disk instead of above it.
 function getDiskDevices() {
     try {
         let file = Gio.File.new_for_path('/proc/diskstats');
         let [success, contents] = file.load_contents(null);
         if (success) {
             let lines = new TextDecoder().decode(contents).split('\n');
-            let disks = new Set();
+            let media = [], layers = [];
             for (let line of lines) {
                 let parts = line.trim().split(/\s+/);
-                if (parts.length > 2) {
-                    let disk = parts[2];
-                    if (disk && /^(sd[a-z]|nvme\d+n\d+|mmcblk\d+|vd[a-z])$/.test(disk))
-                        disks.add(disk);
-                }
+                let disk = parts.length > 2 ? parts[2] : null;
+                if (!disk || !GLib.file_test(`/sys/block/${disk}`, GLib.FileTest.IS_DIR))
+                    continue;
+                (is_storage_medium(disk) ? media : layers).push(disk);
             }
-            return Array.from(disks);
+            return media.concat(layers);
         }
     } catch {
         // fall through
@@ -321,8 +335,10 @@ function detectSensors(sensorType) {
 // choose, so there is no picker.
 //
 // An aggregate may carry a `note`, which replaces the picker's default
-// subtitle. Only net needs one: every other aggregate really is a plain total
-// over the members listed under it, and net's is not.
+// subtitle. Net and disk need one: traffic and block I/O are both layered, so
+// their totals cover the layer where the data reaches hardware rather than
+// every member listed under them. Every other aggregate really is a plain total
+// over its members -- cpu's "all" is every core.
 function catalogSet(aggregate, members) {
     return {kind: 'set', aggregate, members};
 }
@@ -349,7 +365,11 @@ function detectCatalog(type, extensionPath) {
             note: _('Excludes VPN, bridge and container interfaces — their traffic is already counted on the hardware carrying it'),
         }, named(getNetInterfaces()));
     case 'disk':
-        return catalogSet({id: 'all', name: _('All disks (total)')}, named(getDiskDevices()));
+        return catalogSet({
+            id: 'all',
+            name: _('All physical disks (total)'),
+            note: _('Only devices where data reaches a physical disk. Partitions, LVM, RAID and encrypted volumes are excluded — their I/O is counted on the disk underneath'),
+        }, named(getDiskDevices()));
     case 'gpu':
         return catalogSet(null, getGpuDevices(extensionPath));
     case 'thermal':
