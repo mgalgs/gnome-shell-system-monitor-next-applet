@@ -423,15 +423,23 @@ export const Chart = class SystemMonitor_Chart {
         themeContext.connectObject('notify::scale-factor', this.rescale.bind(this), this);
         this.actor.connect('repaint', this._draw.bind(this));
     }
-    update() {
-        let data_a = this.parentC.vals;
-        if (data_a.length !== this.parentC.colors.length) {
+    /**
+     * @param {number[]|null} vals - this tick's values, or null when the tick
+     *   produced no reading. A null sample is a hole in the series rather than
+     *   a zero: the fill stops at it and resumes after it, where a zero would
+     *   draw a notch that reads as a real idle moment.
+     */
+    update(vals) {
+        const series = this.parentC.colors.length;
+        if (vals && vals.length !== series) {
             return;
         }
-        let accdata = [];
-        for (let l = 0; l < data_a.length; l++) {
-            accdata[l] = (l === 0) ? data_a[0] : accdata[l - 1] + ((data_a[l] > 0) ? data_a[l] : 0);
-            this.data[l].push(accdata[l]);
+        let acc = 0;
+        for (let l = 0; l < series; l++) {
+            if (vals) {
+                acc = (l === 0) ? vals[0] : acc + ((vals[l] > 0) ? vals[l] : 0);
+            }
+            this.data[l].push(vals ? acc : null);
             if (this.data[l].length > this.width) {
                 this.data[l].shift();
             }
@@ -470,29 +478,63 @@ export const Chart = class SystemMonitor_Chart {
         sm_cairo_set_source_color(cr, this.extension._Background);
         cr.rectangle(0, 0, width, height);
         cr.fill();
+        const frame = {cr, width, height, top, range, samples: this.data[0].length - 1};
         for (let i = this.parentC.colors.length - 1; i >= 0; i--) {
-            let samples = this.data[i].length - 1;
-            if (samples > 0) {
-                cr.moveTo(width, height); // bottom right
-                let x = width - 0.25 * this.scale_factor;
-                cr.lineTo(x, (top - this.data[i][samples] / range) * height);
-                x -= 0.5 * this.scale_factor;
-                for (let j = samples; j >= 0; j--) {
-                    let y = (top - this.data[i][j] / range) * height;
-                    cr.lineTo(x, y);
-                    x -= 0.5 * this.scale_factor;
-                    cr.lineTo(x, y);
-                    x -= 0.5 * this.scale_factor;
-                }
-                x += 0.25 * this.scale_factor;
-                cr.lineTo(x, (top - this.data[i][0] / range) * height);
-                cr.lineTo(x, height);
-                cr.closePath();
-                sm_cairo_set_source_color(cr, this.parentC.colors[i]);
-                cr.fill();
+            if (frame.samples <= 0) {
+                continue;
             }
+            sm_cairo_set_source_color(cr, this.parentC.colors[i]);
+            this._fill_series(frame, this.data[i]);
         }
         cr.$dispose();
+    }
+    // Right to left, filling each run of present samples as its own closed
+    // shape, so that a tick with no reading leaves a hole rather than a notch
+    // at the floor. Invariant: `newest` is the index of the most recent sample
+    // of the run being collected, or -1 between runs.
+    _fill_series(frame, series) {
+        let newest = -1;
+        for (let j = frame.samples; j >= 0; j--) {
+            if (series[j] === null) {
+                if (newest >= 0) {
+                    this._fill_run(frame, series, newest, j + 1);
+                    newest = -1;
+                }
+                continue;
+            }
+            if (newest < 0) {
+                newest = j;
+            }
+            if (j === 0) {
+                this._fill_run(frame, series, newest, 0);
+            }
+        }
+    }
+    // A sample's position is fixed by its index -- every sample takes one cell,
+    // holes included -- so a run's geometry does not depend on what preceded it,
+    // and a series with no holes traces exactly the path this chart has always
+    // traced.
+    _fill_run(frame, series, newest, oldest) {
+        const {cr, height} = frame;
+        const step = 0.5 * this.scale_factor;
+        const y = j => (frame.top - series[j] / frame.range) * height;
+        let x = frame.width - (frame.samples - newest) * 2 * step;
+        cr.moveTo(x, height); // the run's bottom right
+        x -= 0.5 * step;
+        cr.lineTo(x, y(newest));
+        x -= step;
+        for (let j = newest; j >= oldest; j--) {
+            const yj = y(j);
+            cr.lineTo(x, yj);
+            x -= step;
+            cr.lineTo(x, yj);
+            x -= step;
+        }
+        x += 0.5 * step;
+        cr.lineTo(x, y(oldest));
+        cr.lineTo(x, height);
+        cr.closePath();
+        cr.fill();
     }
     resize(width) {
         if (this.width === width) {
@@ -1114,7 +1156,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
             } else {
                 this.refresh();
                 this._apply();
-                this._postApply();
+                this._postApply(this.vals);
                 this._updateErrorLogged = false;
             }
         } catch (e) {
@@ -1157,7 +1199,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         try {
             if (data)
                 this._autoApply(data);
-            this._postApply();
+            this._postApply(this.vals);
             this._updateErrorLogged = false;
         } catch (e) {
             this._logUpdateError(e);
@@ -1169,8 +1211,12 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this._updateErrorLogged = true;
         sm_log(`${this.elt}: update failed: ${e}`, 'error');
     }
-    _postApply() {
-        this.chart.update();
+    /**
+     * @param {number[]|null} vals - this tick's values, or null when the tick
+     *   produced no reading, which the chart draws as a hole.
+     */
+    _postApply(vals) {
+        this.chart.update(vals);
         for (let i = 0; i < this.tip_vals.length; i++) {
             if (this.tip_labels[i])
                 this.tip_labels[i].text = this.tip_vals[i].toString();
