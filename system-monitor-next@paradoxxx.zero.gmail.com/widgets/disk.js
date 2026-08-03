@@ -26,7 +26,7 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
         this._mountListener = this.update_mounts.bind(this);
         extension._MountsMonitor.add_listener(this._mountListener);
         this.cursor = extension._Samplers.disk.cursor();
-        this._last = [0, 0];
+        this._last = new Map();
         this._lastTime = 0;
 
         if (this.device_id !== 'all') {
@@ -47,14 +47,32 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
     collectAsync(callback) {
         this.cursor.sample(reading => {
             if (this._destroyed || !reading?.data) { callback(null); return; }
-            let accum = [0, 0];
 
+            // Invariant: _last maps each device summed at the previous tick to
+            // that device's counters at _lastTime. Every term below is therefore
+            // a difference of two readings OF THE SAME DEVICE, so no term is
+            // negative and neither is the total. A device appearing or
+            // disappearing changes which terms exist, never the sign of one.
+            let totals = [0, 0];
+            const current = new Map();
             for (const [device, counters] of reading.data) {
                 if (this.device_id !== 'all' && !this.device_id.includes(device))
                     continue;
-                accum[0] += counters[0];
-                accum[1] += counters[1];
+                current.set(device, counters);
+                const prev = this._last.get(device);
+                // No previous reading means the device has just appeared, and
+                // how much I/O preceded it is not knowable. A counter that went
+                // backwards is that same name reused -- a card swapped in the
+                // same reader, a mapper device torn down and recreated -- and
+                // the kernel zeroes the whole stats struct, so either counter
+                // witnesses it. Either way it contributes nothing for one tick
+                // and re-baselines.
+                if (!prev || counters[0] < prev[0] || counters[1] < prev[1])
+                    continue;
+                totals[0] += counters[0] - prev[0];
+                totals[1] += counters[1] - prev[1];
             }
+            this._last = current;
 
             // The reading's own instant, not the clock now: a reading taken for
             // a faster sibling and consumed here is older than this tick, and
@@ -63,10 +81,8 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
             let delta = (time - this._lastTime) / 1000;
             let usage = [0, 0];
             if (delta > 0) {
-                for (let i = 0; i < 2; i++) {
-                    usage[i] = (accum[i] - this._last[i]) / delta / 1024 / 8;
-                    this._last[i] = accum[i];
-                }
+                for (let i = 0; i < 2; i++)
+                    usage[i] = totals[i] / delta / 1024 / 8;
             }
             this._lastTime = time;
 
