@@ -260,7 +260,9 @@ After `super(extension, config)`, these are available:
 | `this.config`     | Per-instance config object (display, style, colors, refresh-time, etc.)      |
 | `this.device_id`  | Device identifier from `config.device` (`'all'`, `'0'`, sensor label, etc.)  |
 | `this.extension`  | The extension instance                                                       |
-| `this.item_name`  | Display name (from `metadata.name`, can be overridden)                       |
+| `this.item_name`  | Popup menu title when this widget is a monitor's only device (can be overridden) |
+| `this.device_name`| Popup menu label when it is one of several (defaults to `device_id`)         |
+| `this.monitor_name`| The type's own name, from `metadata.name` — the title over a monitor's devices |
 | `this.label`      | `St.Label` — the panel label widget (text set from metadata, can be changed) |
 | `this.text_items` | Array of `St.Label`/`St.Icon` — panel value display elements                 |
 | `this.menu_items` | Array of `St.Label` — popup menu display elements                            |
@@ -327,6 +329,7 @@ constructor(extension, config) {
         this.coreIndex = parseInt(this.device_id);
         this.label.text = 'CPU' + (this.coreIndex + 1);
         this.item_name = _('CPU') + ' ' + (this.coreIndex + 1);
+        this.device_name = String(this.coreIndex + 1);
     }
 }
 ```
@@ -338,6 +341,22 @@ Common device_id patterns:
 - Sensor label string — named device (thermal/fan sensors)
 
 Users pick devices from a checklist in the preferences "Add Monitor" dialog, and can change the selection later from the monitor's row.
+
+### How a monitor's devices reach the popup menu
+
+The menu has **one entry per monitor**, not one row per widget. A monitor with one visible device is a plain row titled `item_name`; a monitor with several writes its type once and then each device beside its own numbers, wrapped over as many lines as they need:
+
+```
+CPU     All: 3 %   1: 1 %   2: 5 %   3: 2 %
+        4: 7 %
+Net     enp1s0: 12 KiB/s ↓  3 KiB/s ↑
+```
+
+So a widget sets `item_name` for the first case and `device_name` for the second. `device_name` defaults to the device id, which is already the right answer wherever the id *is* the name — interfaces, block devices, sensor labels, GPU indices — and to `All` for the aggregate, matching the word the preferences picker uses. Override it only when the id is not the name: `cpu` and `freq` do, because their ids count from zero and their names count from one.
+
+`item_name` is not derived from the other two, and should not be: `thermal` and `fan` use the sensor label with no type in front of it, and `prometheus` uses the metric from its config, so what belongs in a title is the widget's own decision.
+
+A widget's `menu_items` are its own for its whole life — the menu borrows them, and gives them back before it rebuilds — so `_applyMenu` writes to the same labels whichever shape the entry has.
 
 ### Declaring a new type's devices
 

@@ -180,6 +180,7 @@ All extension source files are in `system-monitor-next@paradoxxx.zero.gmail.com/
   - `onSettingsChanged(newConfig)` for live config updates without recreating widgets
   - `collect()` API — widgets return `{metricKey: value}`, framework auto-updates display
   - `Chart` — stacked area graph rendering (Cairo)
+  - `build_menu_info()` — the popup menu's table, **one entry per monitor**: a monitor with one visible device is a row titled `item_name`, one with several writes its type once and wraps its devices beneath it. A widget's `menu_items` belong to the widget; the table borrows them and returns them before each rebuild
   - `TipBox`/`TipMenu`/`TipItem` — tooltip system
   - `smStyleManager` — display styling and compact mode
   - Color helpers
