@@ -338,10 +338,13 @@ function readDiskstats(deliver) {
                 // A blank line ends the table; anything after it is not a device.
                 if (typeof entry[1] === 'undefined')
                     break;
-                stats.set(entry[2], {
-                    readSectors: parseInt(entry[5]),
-                    writeSectors: parseInt(entry[9]),
-                });
+                const readSectors = parseInt(entry[5]), writeSectors = parseInt(entry[9]);
+                // A row too short to hold both counters is not a device reading
+                // zero, and admitting it as NaN would poison every sum it joins
+                // -- one bad row and the whole aggregate reads NaN, forever.
+                if (isNaN(readSectors) || isNaN(writeSectors))
+                    continue;
+                stats.set(entry[2], {readSectors, writeSectors});
             }
         } catch (e) {
             deliver(null, `could not read /proc/diskstats: ${e.message}`);
