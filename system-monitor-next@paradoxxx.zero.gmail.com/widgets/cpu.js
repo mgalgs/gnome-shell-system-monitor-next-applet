@@ -2,6 +2,7 @@
 
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
 import GTop from "gi://GTop";
+import { sm_log } from '../utils.js';
 import { ElementBase } from '../base.js';
 
 const Cpu = class SystemMonitor_Cpu extends ElementBase {
@@ -28,6 +29,7 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
         }
 
         this.cursor = extension._Samplers.cpu.cursor();
+        this._missingLogged = false;
         this.last = [0, 0, 0, 0, 0];
         this.current = [0, 0, 0, 0, 0];
         try {
@@ -53,6 +55,19 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
         }
 
     }
+
+    // A config can name a core this machine does not have -- carried over from
+    // a machine with more of them, or written by hand. Named the way the menu
+    // and the preferences picker name it, one-based, so that whoever saw "--"
+    // beside a number can look that number up. How many cores there are is what
+    // separates a bad selection from a machine with a core offline.
+    _reportMissing() {
+        if (this._missingLogged)
+            return;
+        this._missingLogged = true;
+        sm_log(`${this.item_name}: this machine has ${this.total_cores} cores. Showing --.`, 'warn');
+    }
+
     collect() {
         const reading = this.cursor.sample();
         // The aggregate divides by the machine's total jiffies, a per-core
@@ -66,8 +81,11 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
         // below fires, and the panel shows the value this.usage was initialised
         // with -- a permanent 99%. A core brought online this second reads as no
         // reading for one tick, which is honest.
-        if (!(counters.total > 0))
+        if (!(counters.total > 0)) {
+            this._reportMissing();
             return null;
+        }
+        this._missingLogged = false;
         const scale = this.cpuid === -1 ? 100 * this.total_cores : 100;
 
         this.current[0] = counters.user;

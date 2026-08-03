@@ -1,6 +1,7 @@
 /* -*- mode: js2; js2-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
+import { sm_log } from '../utils.js';
 import { ElementBase } from '../base.js';
 
 const Disk = class SystemMonitor_Disk extends ElementBase {
@@ -28,6 +29,7 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
         this.cursor = extension._Samplers.disk.cursor();
         this._last = new Map();
         this._lastTime = 0;
+        this._missingLogged = false;
 
         if (this.device_id !== 'all') {
             this.label.text = this.device_id.split('/').pop();
@@ -37,6 +39,18 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
 
     update_mounts(mounts) {
         this.mounts = mounts;
+    }
+
+    // A disk can be selected and then removed, or named in a config carried
+    // over from another machine. The panel can only show "--"; which devices do
+    // exist is the difference between a mystery and a one-line diagnosis, and
+    // it separates a bad selection from a bad machine.
+    _reportMissing(devices) {
+        if (this._missingLogged)
+            return;
+        this._missingLogged = true;
+        sm_log(`${this.item_name}: /proc/diskstats lists ${[...devices.keys()].join(', ')} — ` +
+               `nothing for "${this.device_id}". Showing --.`, 'warn');
     }
 
     destroy() {
@@ -86,9 +100,11 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
             // zero. An "all" that matched nothing is: an aggregate is a fold
             // over a set, and the empty set folds to a real zero.
             if (this.device_id !== 'all' && current.size === 0) {
+                this._reportMissing(reading.data);
                 callback(null);
                 return;
             }
+            this._missingLogged = false;
 
             let usage = [0, 0];
             if (delta > 0) {
