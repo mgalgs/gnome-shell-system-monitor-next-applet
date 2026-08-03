@@ -23,6 +23,32 @@
     font-family: monospace;
 }
 
+/* One device inside a monitor's menu entry: its name, then its values, held
+   tight together and well away from the next device. */
+.sm-menu-device {
+    spacing: 3px;
+    padding-right: 16px;
+}
+
+.sm-device-name {
+    opacity: 0.75;
+    font-size: 0.75em;
+    padding-top: 5px;
+    text-align: right;
+}
+
+/* A value takes exactly its own width here, where whole menu rows give it 40px
+   so that rows line up with each other. In a box wider than the number in it a
+   short value sits far from the name in front of it and close to the cell after
+   it, and "1  0 %" beside "2  0 %" reads as "0 %1" -- the next device's name
+   attaching itself to the previous device's value. Cells are held apart by the
+   grid instead, which is where the eye is meant to break. */
+.sm-menu-device .sm-value,
+.sm-menu-device .sm-value-compact {
+    min-width: 0px;
+    padding-right: 3px;
+}
+
 .sm-status-label {
     opacity: 0.75;
     font-size: 0.625em;
@@ -131,6 +157,12 @@
     font-size: 0.5em;
     padding: 2px 0px 0 0px;
 } /* names and Disk R and W signs in text items */
+
+.sm-device-name-compact {
+    opacity: 0.75;
+    font-size: 0.6875em;
+    text-align: right;
+} /* a device's name inside a monitor's menu entry */
 
 .sm-unit-label-compact,
 .sm-net-unit-label-compact {

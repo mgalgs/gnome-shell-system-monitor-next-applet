@@ -64,6 +64,12 @@ const ASYNC_STALL_US = 30 * 1e6;
 // them", named here so the menu can say it in the word preferences uses.
 const AGGREGATE_DEVICE = 'all';
 
+// How much width a monitor's devices may take in the popup menu, before the
+// theme's scale factor. The menu is about 390px wide with a title column of
+// roughly 100, and it is the menu's *height* that runs out -- so this buys
+// lines back without letting the menu grow sideways to pay for them.
+const MENU_ENTRY_WIDTH = 280;
+
 // What a device is called when its widget does not say otherwise. Right
 // wherever the id is already the name -- interfaces, block devices, sensor
 // labels, GPU indices -- and 'All' for the total, which is the word the
@@ -99,6 +105,126 @@ function release_menu_cells(elts) {
     }
 }
 
+// One entry per monitor, in the order the monitor's first widget appears.
+// Grouping is a Map rather than a run detector: a monitor's widgets are
+// adjacent in elts today, but that is expansion's ordering, held across a
+// module boundary with nothing here enforcing it. Gathering costs the same and
+// beats emitting two entries under the same title if it ever stops holding.
+//
+// Hidden widgets are dropped here, so an entry always has at least one device
+// and a monitor whose devices are all hidden contributes nothing.
+function group_by_monitor(elts) {
+    const entries = new Map();
+    for (const widget of elts) {
+        if (!widget.menu_visible)
+            continue;
+        const devices = entries.get(widget.config.monitorUuid);
+        if (devices)
+            devices.push(widget);
+        else
+            entries.set(widget.config.monitorUuid, [widget]);
+    }
+    return entries;
+}
+
+// A monitor's devices under one title. The wrap is not decided here: a cell is
+// as wide as the number in it, and the numbers arrive on each widget's own tick.
+// Deciding at build time would decide on whatever the values happened to be --
+// on the first build, on no values at all -- so the cells go in one column and
+// reflow_menu_entries settles them whenever the menu is opened.
+function build_monitor_entry(extension, devices) {
+    const Style = extension._Style;
+    const entry = new St.BoxLayout({style: 'spacing: 10px;'});
+    entry.add_child(new St.Label({
+        text: devices[0].monitor_name,
+        style_class: Style.get('sm-title'),
+        x_align: Clutter.ActorAlign.START,
+        y_align: Clutter.ActorAlign.CENTER
+    }));
+
+    // Homogeneous, so every device occupies the same width and the values line
+    // up in a lattice. Legitimate because a monitor is one type: every device
+    // in it has the same menuLayout and therefore the same cells.
+    const grid = new St.Widget({
+        style: 'spacing-rows: 2px; spacing-columns: 18px;',
+        layout_manager: new Clutter.GridLayout({orientation: Clutter.Orientation.VERTICAL})
+    });
+    grid.layout_manager.column_homogeneous = true;
+    entry.add_child(grid);
+
+    const cells = devices.map((widget, i) => {
+        const cell = new St.BoxLayout({style_class: 'sm-menu-device'});
+        // The colon is what keeps a numeric device name from reading as part of
+        // the number beside it: a core called 1 showing 3% is "1: 3 %", where
+        // "1 3 %" is a glance away from thirteen percent.
+        cell.add_child(new St.Label({
+            text: widget.device_name + ':',
+            style_class: Style.get('sm-device-name'),
+            y_align: Clutter.ActorAlign.CENTER
+        }));
+        for (const item of widget.menu_items)
+            cell.add_child(item);
+        // Every cell is as wide as the widest, and the slack has to fall
+        // somewhere. Falling inside a cell, it separates a device's name from
+        // its own number by more than the cells are separated from each other,
+        // and "1  0 %" beside "2  0 %" reads as "0 %1" -- the next device's
+        // name attaching itself to the previous device's value. So it falls
+        // here, after the cell, where the eye is meant to break anyway.
+        cell.add_child(new St.Widget({x_expand: true}));
+        grid.layout_manager.attach(cell, 0, i, 1, 1);
+        return cell;
+    });
+
+    return {actor: entry, grid, cells, columns: 1};
+}
+
+// Wrap the devices to the width budget. Placement is arithmetic rather than a
+// loop over an evolving line, so there is nothing to argue terminates; the one
+// obligation is 1 <= columns <= cells.length, which max(1, min(...)) discharges
+// as long as the divide is finite -- and `> 0` is false for NaN too, so a cell
+// that cannot report a width yields one column rather than an empty entry.
+function reflow_monitor_entry({grid, cells, columns}) {
+    const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+    let widest = 0;
+    for (const cell of cells)
+        widest = Math.max(widest, cell.get_preferred_width(-1)[1]);
+    const cell_width = widest > 0 ? widest : 1;
+    const wrap = Math.max(1, Math.min(cells.length,
+        Math.floor(MENU_ENTRY_WIDTH * scale / cell_width)));
+    if (wrap === columns)
+        return wrap;
+
+    grid.remove_all_children();
+    cells.forEach((cell, i) => {
+        grid.layout_manager.attach(cell, i % wrap, (i / wrap) | 0, 1, 1);
+    });
+    return wrap;
+}
+
+// Settle every multi-device entry against the widths its values have now.
+// Called when the menu opens, which is the only moment the answer matters and
+// the one moment every value is as current as it will ever be.
+export function reflow_menu_entries(extension) {
+    for (const entry of extension.__sm?.menu_entries ?? [])
+        entry.columns = reflow_monitor_entry(entry);
+}
+
+function attach_monitor_row(extension, layout, widget, row_index) {
+    layout.attach(
+        new St.Label({
+            text: widget.item_name,
+            style_class: extension._Style.get('sm-title'),
+            x_align: Clutter.ActorAlign.START,
+            y_align: Clutter.ActorAlign.CENTER
+        }), 0, row_index, 1, 1);
+
+    let col_index = 1;
+    for (const item of widget.menu_items) {
+        layout.attach(item, col_index, row_index, 1, 1);
+        col_index++;
+    }
+}
+
 export function build_menu_info(extension) {
     let elts = extension.__sm.elts;
     let tray_menu = extension.__sm.tray.menu;
@@ -117,34 +243,33 @@ export function build_menu_info(extension) {
     });
     let menu_info_box_table_layout = menu_info_box_table.layout_manager;
 
-    // Populate Table
+    const entries = group_by_monitor(elts);
+    // One title column plus the widest set of cells in this table. Derived
+    // rather than written down, so a menuLayout added later cannot silently
+    // outgrow it, and seeded with 1 so an empty table needs no special case.
+    let table_columns = 1;
+    for (const devices of entries.values()) {
+        for (const widget of devices)
+            table_columns = Math.max(table_columns, 1 + widget.menu_items.length);
+    }
+
+    // A monitor with one visible device is the row it has always been: the
+    // title folds the device into itself, which two devices cannot both do.
     let row_index = 0;
-    for (let elt in elts) {
-        if (!elts[elt].menu_visible) {
-            continue;
+    extension.__sm.menu_entries = [];
+    for (const devices of entries.values()) {
+        if (devices.length === 1) {
+            attach_monitor_row(extension, menu_info_box_table_layout, devices[0], row_index);
+        } else {
+            const entry = build_monitor_entry(extension, devices);
+            menu_info_box_table_layout.attach(entry.actor, 0, row_index, table_columns, 1);
+            extension.__sm.menu_entries.push(entry);
         }
-
-        // Add item name to table
-        menu_info_box_table_layout.attach(
-            new St.Label({
-                text: elts[elt].item_name,
-                style_class: extension._Style.get('sm-title'),
-                x_align: Clutter.ActorAlign.START,
-                y_align: Clutter.ActorAlign.CENTER
-            }), 0, row_index, 1, 1);
-
-        // Add item data to table
-        let col_index = 1;
-        for (let item in elts[elt].menu_items) {
-            menu_info_box_table_layout.attach(
-                elts[elt].menu_items[item], col_index, row_index, 1, 1);
-
-            col_index++;
-        }
-
         row_index++;
     }
-    tray_menu._getMenuItems()[0].actor.get_last_child().add_child(menu_info_box_table);
+    lastChild.add_child(menu_info_box_table);
+    // A cell can only report its width once it is in the stage, which it now is.
+    reflow_menu_entries(extension);
 }
 
 export function change_menu() {

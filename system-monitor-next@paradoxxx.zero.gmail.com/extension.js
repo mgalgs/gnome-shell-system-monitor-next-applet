@@ -32,7 +32,7 @@ import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 import { sm_log } from './utils.js';
 import { migrateSettings } from './migration.js';
 import { parseMonitorConfigs, expandMonitors } from './monitors.js';
-import { color_from_string, smStyleManager, build_menu_info } from './base.js';
+import { color_from_string, smStyleManager, build_menu_info, reflow_menu_entries } from './base.js';
 import { smSamplers, smTickClock } from './sampling.js';
 import { smMountsMonitor, Bar, Pie } from './mounts.js';
 import { Battery } from './widgets/battery.js';
@@ -258,6 +258,8 @@ export default class SystemMonitorExtension extends Extension {
             pie: new Pie(this),
             bar: new Bar(this),
             elts: [],
+            // Multi-device menu entries, which are re-wrapped on menu open.
+            menu_entries: [],
             widgetMap: new Map(),
         };
         let tray = this.__sm.tray;
@@ -323,6 +325,10 @@ export default class SystemMonitorExtension extends Extension {
             (menu, isOpen) => {
                 if (isOpen) {
                     this.__sm.pie.actor.queue_repaint();
+                    // How many devices fit on a line depends on how wide their
+                    // numbers are, and the numbers are only ever as current as
+                    // they are right now.
+                    reflow_menu_entries(this);
 
                     this.menuTimeout = GLib.timeout_add_seconds(
                         GLib.PRIORITY_DEFAULT,
