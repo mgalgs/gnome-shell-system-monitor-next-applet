@@ -357,7 +357,10 @@ export const Bar = class SystemMonitor_Bar extends Graph {
         for (let mount in this.mounts) {
             GTop.glibtop_get_fsusage(this.gtop, this.mounts[mount]);
             const {used, total} = calc_usage(this.gtop);
-            const perc_full = used / total;
+            // A mount we cannot size reports zero blocks. Dividing by that
+            // yields NaN, and NaN coordinates put the Cairo context into a
+            // permanent error state.
+            const perc_full = total > 0 ? used / total : 0;
             const alpha = MOUNT_SHADE_ALPHAS[mount % MOUNT_SHADE_ALPHAS.length];
             cr.setSourceRGBA(fg.red / 255, fg.green / 255, fg.blue / 255, alpha);
 
