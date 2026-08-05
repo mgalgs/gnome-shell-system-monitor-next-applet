@@ -333,11 +333,21 @@ export const Bar = class SystemMonitor_Bar extends Graph {
         if (!this.actor.visible) {
             return;
         }
+        let cr = this.actor.get_context();
+        try {
+            this._paint(cr);
+        } finally {
+            // Anything thrown while painting would otherwise leave the context
+            // undisposed. The compositor repaints continuously, so one leak
+            // becomes a leak per frame.
+            cr.$dispose();
+        }
+    }
+    _paint(cr) {
         let thickness = this.extension._Style.bar_thickness() * this.scale_factor * this.text_scaling;
         let fontsize = this.extension._Style.bar_fontsize() * this.scale_factor * this.text_scaling;
         this.actor.set_height(this.mounts.length * (3 * thickness));
         let [width, _height] = this.actor.get_surface_size();
-        let cr = this.actor.get_context();
 
         let x0 = width / 8;
         let y0 = thickness / 2;
@@ -366,7 +376,6 @@ export const Bar = class SystemMonitor_Bar extends Graph {
             cr.stroke();
             y0 += (7 * thickness) / 4;
         }
-        cr.$dispose();
     }
     update_mounts(mounts) {
         this.mounts = mounts;
@@ -390,8 +399,18 @@ export const Pie = class SystemMonitor_Pie extends Graph {
         if (!this.actor.visible) {
             return;
         }
-        let [width, height] = this.actor.get_surface_size();
         let cr = this.actor.get_context();
+        try {
+            this._paint(cr);
+        } finally {
+            // Anything thrown while painting would otherwise leave the context
+            // undisposed. The compositor repaints continuously, so one leak
+            // becomes a leak per frame.
+            cr.$dispose();
+        }
+    }
+    _paint(cr) {
+        let [width, height] = this.actor.get_surface_size();
         let xc = width / 2;
         let yc = height / 2;
         let pi = Math.PI;
@@ -440,7 +459,6 @@ export const Pie = class SystemMonitor_Pie extends Graph {
             cr.showText(text);
             y += ring_width;
         }
-        cr.$dispose();
     }
 
     update_mounts(mounts) {
