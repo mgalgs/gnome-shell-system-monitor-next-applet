@@ -2,6 +2,7 @@
 
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
 import Gio from "gi://Gio";
+import GLib from "gi://GLib";
 import GTop from "gi://GTop";
 import St from "gi://St";
 import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
@@ -12,6 +13,17 @@ const MOUNT_SHADE_ALPHAS = [1.0, 0.7, 0.5];
 
 // stale network shares will cause the shell to freeze, enable this with caution
 export const ENABLE_NETWORK_DISK_USAGE = false;
+
+// Filesystem types we cannot usefully statfs() for a disk usage figure.
+const NET_FILESYSTEMS = ['nfs', 'smbfs', 'cifs', 'ftp', 'sshfs', 'sftp', 'mtp', 'mtpfs'];
+
+// Attaching one device emits several mount signals. Wait this long for the
+// burst to end so we probe once instead of once per signal.
+const REFRESH_DEBOUNCE_MS = 300;
+
+// How long a mount gets to answer before we publish the list without it. A
+// healthy mount answers in microseconds; anything near this limit is wedged.
+const PROBE_TIMEOUT_MS = 5000;
 
 export function interesting_mountpoint(mount) {
     if (mount.length < 3) {
@@ -51,49 +63,125 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
                 this.base_mounts.push(sMount);
             }
         });
+        // refresh() publishes asynchronously, so seed the list here. Widgets
+        // read get_mounts() in their own constructors and must never see undefined.
+        this.mounts = [...this.base_mounts];
+        this._refreshId = null;
+        this._probeTimeoutId = null;
+        this._probeCancellable = null;
+        this._probeGen = 0;
         this.startListening();
     }
     refresh() {
-        // try check that number of volumes has changed
-        // try {
-        //     let num_mounts = this.manager.getMounts().length;
-        //     if (num_mounts == this.num_mounts)
-        //         return;
-        //     this.num_mounts = num_mounts;
-        // } catch (e) {};
-
         // Can't get mountlist:
         // GTop.glibtop_get_mountlist
         // Error: No symbol 'glibtop_get_mountlist' in namespace 'GTop'
-        // Getting it with mtab
-        // let mount_lines = Shell.get_file_contents_utf8_sync('/etc/mtab').split("\n");
-        // this.mounts = [];
-        // for(let mount_line in mount_lines) {
-        //     let mount = mount_lines[mount_line].split(" ");
-        //     if(interesting_mountpoint(mount) && this.mounts.indexOf(mount[1]) < 0) {
-        //         this.mounts.push(mount[1]);
-        //     }
-        // }
-        // log("[System monitor] old mounts: " + this.mounts);
-        this.mounts = [];
-        for (let base in this.base_mounts) {
-            // log("[System monitor] " + this.base_mounts[base]);
-            this.mounts.push(this.base_mounts[base]);
+        // so the volume monitor is the source of truth.
+        //
+        // Attaching one device emits several mount signals in a row. Coalesce
+        // them, otherwise every signal starts its own round of probes.
+        if (this._refreshId) {
+            return;
         }
-        let mount_lines = this._volumeMonitor.get_mounts();
-        mount_lines.forEach((mount) => {
-            if ((!this.is_net_mount(mount) || ENABLE_NETWORK_DISK_USAGE) &&
-                 !this.is_ro_mount(mount)) {
-                let mpath = mount.get_root().get_path() || mount.get_default_location().get_path();
-                if (mpath) {
-                    this.mounts.push(mpath);
-                }
-            }
+        this._refreshId = GLib.timeout_add(GLib.PRIORITY_DEFAULT_IDLE, REFRESH_DEBOUNCE_MS, () => {
+            this._refreshId = null;
+            this._refreshAsync();
+            return GLib.SOURCE_REMOVE;
         });
-        // log("[System monitor] base: " + this.base_mounts);
-        // log("[System monitor] mounts: " + this.mounts);
+    }
+    // Build the mount list without ever blocking the caller. Every mount we
+    // still have to ask about gets an async query, so a wedged mount costs us a
+    // missing row in the disk popup instead of a frozen desktop.
+    _refreshAsync() {
+        this._cancelProbes();
+        // Cancelling does not stop the previous round's callbacks from running,
+        // it only makes them fail. Without this generation stamp the abandoned
+        // round would still reach settle() and publish its half-empty list over
+        // the results of this one.
+        const gen = this._probeGen;
+
+        const candidates = this._volumeMonitor.get_mounts().filter(
+            (mount) => ENABLE_NETWORK_DISK_USAGE || !this.is_gvfs_mount(mount));
+        if (!candidates.length) {
+            this._publish([]);
+            return;
+        }
+
+        // Keep results positional so the popup's row order stays stable
+        // regardless of which mount answers first.
+        const found = new Array(candidates.length).fill(null);
+        // found[i] === null also means "answered but unusable", so track
+        // answers separately: the timeout log must name only the mounts that
+        // actually stalled.
+        const answered = new Array(candidates.length).fill(false);
+        const cancellable = new Gio.Cancellable();
+        this._probeCancellable = cancellable;
+        let outstanding = candidates.length;
+        let settled = false;
+
+        const settle = () => {
+            if (settled || this._probeGen !== gen) {
+                return;
+            }
+            settled = true;
+            if (this._probeTimeoutId) {
+                GLib.Source.remove(this._probeTimeoutId);
+                this._probeTimeoutId = null;
+            }
+            if (this._probeCancellable === cancellable) {
+                this._probeCancellable = null;
+            }
+            this._publish(found.filter((mpath) => mpath !== null));
+        };
+
+        this._probeTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, PROBE_TIMEOUT_MS, () => {
+            this._probeTimeoutId = null;
+            const stuck = candidates.filter((mount, i) => !answered[i])
+                .map((mount) => mount.get_name()).join(', ');
+            sm_log(`mounts did not answer in time: ${stuck}; publishing without them`, 'warn');
+            cancellable.cancel();
+            settle();
+            return GLib.SOURCE_REMOVE;
+        });
+
+        candidates.forEach((mount, i) => {
+            const file = mount.get_default_location();
+            file.query_filesystem_info_async(
+                `${Gio.FILE_ATTRIBUTE_FILESYSTEM_TYPE},${Gio.FILE_ATTRIBUTE_FILESYSTEM_READONLY}`,
+                GLib.PRIORITY_DEFAULT, cancellable, (source, result) => {
+                    answered[i] = true;
+                    try {
+                        const info = source.query_filesystem_info_finish(result);
+                        if (!settled && this.is_usable_mount(info)) {
+                            found[i] = mount.get_root().get_path() || file.get_path();
+                        }
+                    } catch {
+                        // Cancelled, or the mount cannot be read. Either way we
+                        // have no usable path, so leave this slot null rather
+                        // than pass an unknown path to glibtop_get_fsusage().
+                    }
+                    if (--outstanding === 0) {
+                        settle();
+                    }
+                });
+        });
+    }
+    _publish(extra_mounts) {
+        this.mounts = [...this.base_mounts, ...extra_mounts];
         for (let i in this.listeners) {
             this.listeners[i](this.mounts);
+        }
+    }
+    _cancelProbes() {
+        // Retires the current round: see the generation stamp in _refreshAsync().
+        this._probeGen++;
+        if (this._probeTimeoutId) {
+            GLib.Source.remove(this._probeTimeoutId);
+            this._probeTimeoutId = null;
+        }
+        if (this._probeCancellable) {
+            this._probeCancellable.cancel();
+            this._probeCancellable = null;
         }
     }
     add_listener(cb) {
@@ -120,29 +208,27 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
             throw e;
         }
     }
-    is_ro_mount(mount) {
-        // FIXME: running this function after "login after waking from suspend"
-        // can make login hang. Actual issue seems to occur when a former net
-        // mount got broken (e.g. due to a VPN connection terminated or
-        // otherwise broken connection)
-        try {
-            let file = mount.get_default_location();
-            let info = file.query_filesystem_info(Gio.FILE_ATTRIBUTE_FILESYSTEM_READONLY, null);
-            return info.get_attribute_boolean(Gio.FILE_ATTRIBUTE_FILESYSTEM_READONLY);
-        } catch {
-            return false;
-        }
+    // True for gvfs mounts: gphoto2, mtp, afc, sftp, smb and friends. Anything
+    // we would have to reach over gvfs is out of scope for a statfs() usage
+    // figure, and we must not even ask about it: the question is a round trip
+    // to gvfsd, which in turn talks to the device, and a device that does not
+    // answer — a locked phone, a dropped VPN — leaves that round trip hanging
+    // for the full D-Bus timeout. is_native() answers from local state alone,
+    // so this costs no IO and cannot stall.
+    is_gvfs_mount(mount) {
+        return !mount.get_default_location().is_native();
     }
-    is_net_mount(mount) {
-        try {
-            let file = mount.get_default_location();
-            let info = file.query_filesystem_info(Gio.FILE_ATTRIBUTE_FILESYSTEM_TYPE, null);
-            let result = info.get_attribute_string(Gio.FILE_ATTRIBUTE_FILESYSTEM_TYPE);
-            let net_fs = ['nfs', 'smbfs', 'cifs', 'ftp', 'sshfs', 'sftp', 'mtp', 'mtpfs'];
-            return !file.is_native() || net_fs.indexOf(result) > -1;
-        } catch {
+    // Decide from an already-fetched GFileInfo, so this never performs IO.
+    is_usable_mount(info) {
+        if (info.get_attribute_boolean(Gio.FILE_ATTRIBUTE_FILESYSTEM_READONLY)) {
             return false;
         }
+        if (ENABLE_NETWORK_DISK_USAGE) {
+            return true;
+        }
+        // Kernel-mounted network filesystems look native and have a real path,
+        // so only the reported type gives them away.
+        return NET_FILESYSTEMS.indexOf(info.get_attribute_string(Gio.FILE_ATTRIBUTE_FILESYSTEM_TYPE)) === -1;
     }
     startListening() {
         if (this.connected) {
@@ -164,6 +250,14 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
         this.refresh();
     }
     stopListening() {
+        // Drop the pending refresh and any in-flight probe first. Their
+        // callbacks outlive this object otherwise, and they would run against a
+        // disabled extension.
+        if (this._refreshId) {
+            GLib.Source.remove(this._refreshId);
+            this._refreshId = null;
+        }
+        this._cancelProbes();
         if (!this.connected) {
             return;
         }
