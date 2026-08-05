@@ -5,6 +5,7 @@ import Gio from "gi://Gio";
 import GTop from "gi://GTop";
 import St from "gi://St";
 import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
+import { parse_bytearray } from './common.js';
 import { sm_log } from './utils.js';
 
 // Visual distinction between adjacent mount rings/bars; cycled per index.
@@ -42,6 +43,9 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
         this.num_mounts = -1;
         this.listeners = [];
         this.connected = false;
+        this.mounts = [];
+        this._mount_table = new Map();
+        this._cancellable = null;
 
         this._volumeMonitor = Gio.VolumeMonitor.get();
         let sys_mounts = ['/home', '/tmp', '/boot', '/usr', '/usr/local'];
@@ -75,6 +79,53 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
         //     }
         // }
         // log("[System monitor] old mounts: " + this.mounts);
+        this._cancellable?.cancel();
+        this._cancellable = new Gio.Cancellable();
+        Gio.File.new_for_path('/proc/mounts').load_contents_async(this._cancellable, (file, result) => {
+            let table;
+            try {
+                let [, contents] = file.load_contents_finish(result);
+                table = this._parse_mount_table(parse_bytearray(contents));
+            } catch {
+                // Cancelled by stopListening(), or /proc/mounts unreadable.
+                return;
+            }
+            this._mount_table = table;
+            this._update_mounts();
+        });
+    }
+    // Build mountpoint -> {fstype, ro} from /proc/mounts.
+    _parse_mount_table(text) {
+        let table = new Map();
+        text.split('\n').forEach((line) => {
+            let fields = line.split(' ');
+            if (fields.length < 4) {
+                return;
+            }
+            // /proc/mounts octal-escapes space, tab, newline and backslash.
+            let mpath = fields[1].replace(/\\([0-7]{3})/g,
+                (_m, oct) => String.fromCharCode(parseInt(oct, 8)));
+            // A later entry shadows an earlier one for the same mountpoint.
+            table.set(mpath, {
+                fstype: fields[2].toLowerCase(),
+                ro: fields[3].split(',').indexOf('ro') > -1,
+            });
+        });
+        return table;
+    }
+    // A mount's default location is not necessarily the mountpoint itself, so
+    // walk up to the nearest entry, mirroring which filesystem a statfs() on
+    // that path would have reported.
+    _lookup_mount(file) {
+        for (let f = file; f !== null; f = f.get_parent()) {
+            let entry = this._mount_table.get(f.get_path());
+            if (entry) {
+                return entry;
+            }
+        }
+        return null;
+    }
+    _update_mounts() {
         this.mounts = [];
         for (let base in this.base_mounts) {
             // log("[System monitor] " + this.base_mounts[base]);
@@ -121,25 +172,31 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
         }
     }
     is_ro_mount(mount) {
-        // FIXME: running this function after "login after waking from suspend"
-        // can make login hang. Actual issue seems to occur when a former net
-        // mount got broken (e.g. due to a VPN connection terminated or
-        // otherwise broken connection)
         try {
             let file = mount.get_default_location();
-            let info = file.query_filesystem_info(Gio.FILE_ATTRIBUTE_FILESYSTEM_READONLY, null);
-            return info.get_attribute_boolean(Gio.FILE_ATTRIBUTE_FILESYSTEM_READONLY);
+            if (!file.is_native()) {
+                // gvfs-backed; is_net_mount() already excludes these.
+                return false;
+            }
+            let entry = this._lookup_mount(file);
+            return entry ? entry.ro : false;
         } catch {
             return false;
         }
     }
     is_net_mount(mount) {
+        let net_fs = ['nfs', 'nfs4', 'smbfs', 'cifs', 'smb3', 'ftp', 'sshfs',
+            'sftp', 'mtp', 'mtpfs', 'fuse.sshfs', 'afs', 'ceph'];
         try {
             let file = mount.get_default_location();
-            let info = file.query_filesystem_info(Gio.FILE_ATTRIBUTE_FILESYSTEM_TYPE, null);
-            let result = info.get_attribute_string(Gio.FILE_ATTRIBUTE_FILESYSTEM_TYPE);
-            let net_fs = ['nfs', 'smbfs', 'cifs', 'ftp', 'sshfs', 'sftp', 'mtp', 'mtpfs'];
-            return !file.is_native() || net_fs.indexOf(result) > -1;
+            // Non-native GFiles are gvfs-backed (MTP, SMB, SFTP, HTTP, ...).
+            // is_native() is a local property, so it costs no I/O and must be
+            // tested before anything that would touch the mount.
+            if (!file.is_native()) {
+                return true;
+            }
+            let entry = this._lookup_mount(file);
+            return entry ? net_fs.indexOf(entry.fstype) > -1 : false;
         } catch {
             return false;
         }
@@ -164,6 +221,8 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
         this.refresh();
     }
     stopListening() {
+        this._cancellable?.cancel();
+        this._cancellable = null;
         if (!this.connected) {
             return;
         }
