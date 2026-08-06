@@ -11,6 +11,12 @@ import { sm_log } from './utils.js';
 // Visual distinction between adjacent mount rings/bars; cycled per index.
 const MOUNT_SHADE_ALPHAS = [1.0, 0.7, 0.5];
 
+// Kernel filesystem types backed by a remote. gvfs backends never show up
+// here: their GFiles are non-native, which is_net_mount() tests first.
+const NET_FS_TYPES = ['nfs', 'nfs4', 'smbfs', 'cifs', 'smb3', 'ftp', 'sshfs',
+    'sftp', 'mtp', 'mtpfs', 'fuse.sshfs', 'afs', 'ceph', '9p', 'davfs',
+    'fuse.davfs', 'fuse.rclone', 'glusterfs', 'fuse.glusterfs', 'lustre'];
+
 // stale network shares will cause the shell to freeze, enable this with caution
 export const ENABLE_NETWORK_DISK_USAGE = false;
 
@@ -108,6 +114,11 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
             // A later entry shadows an earlier one for the same mountpoint.
             table.set(mpath, {
                 fstype: fields[2].toLowerCase(),
+                // A network mount's source names the remote: //server/share
+                // (SMB), server:/path (NFS-style) or scheme://... (davfs and
+                // friends). Catches network filesystems whose fstype is not
+                // in NET_FS_TYPES.
+                remote: /^\/\/|^[^/]+:\//.test(fields[0]),
                 ro: fields[3].split(',').indexOf('ro') > -1,
             });
         });
@@ -185,8 +196,6 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
         }
     }
     is_net_mount(mount) {
-        let net_fs = ['nfs', 'nfs4', 'smbfs', 'cifs', 'smb3', 'ftp', 'sshfs',
-            'sftp', 'mtp', 'mtpfs', 'fuse.sshfs', 'afs', 'ceph'];
         try {
             let file = mount.get_default_location();
             // Non-native GFiles are gvfs-backed (MTP, SMB, SFTP, HTTP, ...).
@@ -196,7 +205,7 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
                 return true;
             }
             let entry = this._lookup_mount(file);
-            return entry ? net_fs.indexOf(entry.fstype) > -1 : false;
+            return entry ? entry.remote || NET_FS_TYPES.indexOf(entry.fstype) > -1 : false;
         } catch {
             return false;
         }
