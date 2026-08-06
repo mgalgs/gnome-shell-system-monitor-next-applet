@@ -17,6 +17,10 @@ const NET_FS_TYPES = ['nfs', 'nfs4', 'smbfs', 'cifs', 'smb3', 'ftp', 'sshfs',
     'sftp', 'mtp', 'mtpfs', 'fuse.sshfs', 'afs', 'ceph', '9p', 'davfs',
     'fuse.davfs', 'fuse.rclone', 'glusterfs', 'fuse.glusterfs', 'lustre'];
 
+// Well-known system mountpoints, listed before removable media when a
+// filesystem is actually mounted there.
+const SYS_MOUNTS = ['/home', '/tmp', '/boot', '/usr', '/usr/local'];
+
 // stale network shares will cause the shell to freeze, enable this with caution
 export const ENABLE_NETWORK_DISK_USAGE = false;
 
@@ -54,13 +58,6 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
         this._cancellable = null;
 
         this._volumeMonitor = Gio.VolumeMonitor.get();
-        let sys_mounts = ['/home', '/tmp', '/boot', '/usr', '/usr/local'];
-        this.base_mounts = ['/'];
-        sys_mounts.forEach((sMount) => {
-            if (this.is_sys_mount(sMount + '/')) {
-                this.base_mounts.push(sMount);
-            }
-        });
         this.startListening();
     }
     refresh() {
@@ -137,10 +134,11 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
         return null;
     }
     _update_mounts() {
-        this.mounts = [];
-        for (let base in this.base_mounts) {
-            // log("[System monitor] " + this.base_mounts[base]);
-            this.mounts.push(this.base_mounts[base]);
+        this.mounts = ['/'];
+        for (const mpath of SYS_MOUNTS) {
+            if (this._mount_table.has(mpath)) {
+                this.mounts.push(mpath);
+            }
         }
         let mount_lines = this._volumeMonitor.get_mounts();
         mount_lines.forEach((mount) => {
@@ -152,7 +150,6 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
                 }
             }
         });
-        // log("[System monitor] base: " + this.base_mounts);
         // log("[System monitor] mounts: " + this.mounts);
         for (let i in this.listeners) {
             this.listeners[i](this.mounts);
@@ -168,19 +165,6 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
     }
     get_mounts() {
         return this.mounts;
-    }
-    is_sys_mount(mpath) {
-        let file = Gio.file_new_for_path(mpath);
-        try {
-            let info = file.query_info(Gio.FILE_ATTRIBUTE_UNIX_IS_MOUNTPOINT,
-                Gio.FileQueryInfoFlags.NONE, null);
-            return info.get_attribute_boolean(Gio.FILE_ATTRIBUTE_UNIX_IS_MOUNTPOINT);
-        } catch (e) {
-            if (e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND)) {
-                return false;
-            }
-            throw e;
-        }
     }
     is_ro_mount(mount) {
         try {
