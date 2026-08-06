@@ -2,7 +2,7 @@
 
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
 import Gio from "gi://Gio";
-import GTop from "gi://GTop";
+import GLib from "gi://GLib";
 import St from "gi://St";
 import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 import { parse_bytearray } from './common.js';
@@ -32,20 +32,6 @@ export function interesting_mountpoint(mount) {
     return ((mount[0].indexOf('/dev/') === 0 || mount[2].toLowerCase() === 'nfs') && mount[2].toLowerCase() !== 'udf');
 }
 
-// This is the algorithm used by the df utility. Returns an object with
-// used and total fields, computed from a given statfs structure.
-export function calc_usage(statfs) {
-    // bfree represents the total amount of disk space remaining for the
-    // superuser and internal FS operations, while bavail represents the space
-    // remaining for an unprivileged user. The difference between bfree and
-    // bavail represents reserved blocks that should not be part of the total
-    // value, since users don't get to use those blocks. That is one way to
-    // explain why total here is blocks - (bfree - bavail). Alternate
-    // explanation: as bavail approaches 0, used and total should converge.
-    const used = statfs.blocks - statfs.bfree;
-    return {used, total: used + statfs.bavail};
-}
-
 // Class to deal with volumes insertion / ejection
 export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
     constructor() {
@@ -56,6 +42,10 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
         this.mounts = [];
         this._mount_table = new Map();
         this._cancellable = null;
+        this._usage = new Map();
+        this._usage_inflight = new Set();
+        this._usage_cancellable = null;
+        this._usage_time = 0;
 
         this._volumeMonitor = Gio.VolumeMonitor.get();
         this.startListening();
@@ -151,8 +141,67 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
             }
         });
         // log("[System monitor] mounts: " + this.mounts);
+        for (const mpath of this._usage.keys()) {
+            if (this.mounts.indexOf(mpath) === -1) {
+                this._usage.delete(mpath);
+            }
+        }
         for (let i in this.listeners) {
             this.listeners[i](this.mounts);
+        }
+        this._usage_time = 0;
+        this.refresh_usage();
+    }
+    // Cached usage numbers for a mountpoint; zeros until the first
+    // asynchronous refresh for that mount completes.
+    get_usage(mpath) {
+        return this._usage.get(mpath) ?? {used: 0, total: 0};
+    }
+    // Refresh the cached usage of every mount off the main thread. Repaints
+    // request this on every frame, so issuing is rate-limited; a mount whose
+    // filesystem hangs keeps its query in flight and is skipped on later
+    // rounds, wedging one GIO worker thread instead of the shell.
+    refresh_usage() {
+        const USAGE_REFRESH_MIN_US = 2 * 1e6;
+        let now = GLib.get_monotonic_time();
+        if (now - this._usage_time < USAGE_REFRESH_MIN_US) {
+            return;
+        }
+        this._usage_time = now;
+        this._usage_cancellable ??= new Gio.Cancellable();
+        for (const mpath of this.mounts) {
+            if (this._usage_inflight.has(mpath)) {
+                continue;
+            }
+            this._usage_inflight.add(mpath);
+            Gio.File.new_for_path(mpath).query_filesystem_info_async(
+                `${Gio.FILE_ATTRIBUTE_FILESYSTEM_USED},${Gio.FILE_ATTRIBUTE_FILESYSTEM_FREE}`,
+                GLib.PRIORITY_DEFAULT, this._usage_cancellable,
+                (file, result) => {
+                    this._usage_inflight.delete(mpath);
+                    let info;
+                    try {
+                        info = file.query_filesystem_info_finish(result);
+                    } catch {
+                        // Cancelled, or the filesystem is unreadable; keep
+                        // the last value we got.
+                        return;
+                    }
+                    // df semantics: used includes the root-reserved blocks,
+                    // free is what an unprivileged user can still write
+                    // (f_bavail), so used/total converges to 1 as the user
+                    // runs out of space.
+                    let used = info.get_attribute_uint64(Gio.FILE_ATTRIBUTE_FILESYSTEM_USED);
+                    let total = used + info.get_attribute_uint64(Gio.FILE_ATTRIBUTE_FILESYSTEM_FREE);
+                    let prev = this._usage.get(mpath);
+                    if (prev && prev.used === used && prev.total === total) {
+                        return;
+                    }
+                    this._usage.set(mpath, {used, total});
+                    for (let i in this.listeners) {
+                        this.listeners[i](this.mounts);
+                    }
+                });
         }
     }
     add_listener(cb) {
@@ -216,6 +265,8 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
     stopListening() {
         this._cancellable?.cancel();
         this._cancellable = null;
+        this._usage_cancellable?.cancel();
+        this._usage_cancellable = null;
         if (!this.connected) {
             return;
         }
@@ -234,7 +285,6 @@ export const Graph = class SystemMonitor_Graph {
         this.actor = new St.DrawingArea({style_class: this.extension._Style.get('sm-chart'), reactive: false});
         this.width = width;
         this.height = height;
-        this.gtop = new GTop.glibtop_fsusage();
 
         this._themeContext = St.ThemeContext.get_for_stage(global.stage);
         this.scale_factor = this._themeContext.scale_factor;
@@ -291,6 +341,10 @@ export const Bar = class SystemMonitor_Bar extends Graph {
         if (!this.actor.visible) {
             return;
         }
+        // Usage is collected asynchronously: this draw renders the cache and
+        // the refresh notifies listeners, queueing a repaint, when a value
+        // changes.
+        this.extension._MountsMonitor.refresh_usage();
         let thickness = this.extension._Style.bar_thickness() * this.scale_factor * this.text_scaling;
         let fontsize = this.extension._Style.bar_fontsize() * this.scale_factor * this.text_scaling;
         this.actor.set_height(this.mounts.length * (3 * thickness));
@@ -303,9 +357,8 @@ export const Bar = class SystemMonitor_Bar extends Graph {
         cr.setFontSize(fontsize);
         const fg = this.actor.get_theme_node().get_foreground_color();
         for (let mount in this.mounts) {
-            GTop.glibtop_get_fsusage(this.gtop, this.mounts[mount]);
-            const {used, total} = calc_usage(this.gtop);
-            const perc_full = used / total;
+            const {used, total} = this.extension._MountsMonitor.get_usage(this.mounts[mount]);
+            const perc_full = total > 0 ? used / total : 0;
             const alpha = MOUNT_SHADE_ALPHAS[mount % MOUNT_SHADE_ALPHAS.length];
             cr.setSourceRGBA(fg.red / 255, fg.green / 255, fg.blue / 255, alpha);
 
@@ -348,6 +401,8 @@ export const Pie = class SystemMonitor_Pie extends Graph {
         if (!this.actor.visible) {
             return;
         }
+        // Usage is collected asynchronously; see Bar._draw().
+        this.extension._MountsMonitor.refresh_usage();
         let [width, height] = this.actor.get_surface_size();
         let cr = this.actor.get_context();
         let xc = width / 2;
@@ -378,10 +433,9 @@ export const Pie = class SystemMonitor_Pie extends Graph {
         const fg = this.actor.get_theme_node().get_foreground_color();
         let r = (height - ring_width) / 2;
         for (let mount in this.mounts) {
-            GTop.glibtop_get_fsusage(this.gtop, this.mounts[mount]);
             const alpha = MOUNT_SHADE_ALPHAS[mount % MOUNT_SHADE_ALPHAS.length];
             cr.setSourceRGBA(fg.red / 255, fg.green / 255, fg.blue / 255, alpha);
-            const {used, total} = calc_usage(this.gtop);
+            const {used, total} = this.extension._MountsMonitor.get_usage(this.mounts[mount]);
             arc(r, used, total, -pi / 2);
             cr.stroke();
             r -= ring_width;
