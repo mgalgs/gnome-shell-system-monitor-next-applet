@@ -50,8 +50,6 @@ export function calc_usage(statfs) {
 // Class to deal with volumes insertion / ejection
 export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
     constructor() {
-        this.files = [];
-        this.num_mounts = -1;
         this.listeners = [];
         this.connected = false;
 
