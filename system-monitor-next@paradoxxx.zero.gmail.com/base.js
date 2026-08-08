@@ -60,6 +60,33 @@ export function l_limit(t) {
     return (t > 0) ? t : 1000;
 }
 
+/**
+ * Whether a GLib source id still refers to a live source on the default main
+ * context. GJS refuses to enter JS while the GC is sweeping, and a refused
+ * SourceFunc yields no return value, which GLib reads as G_SOURCE_REMOVE — so
+ * a source can be destroyed without the extension ever being told. Anything
+ * holding a source id has to be able to ask.
+ *
+ * id - GLib source id, or a falsy value
+ */
+export function source_is_alive(id) {
+    if (!id)
+        return false;
+    return GLib.MainContext.default().find_source_by_id(id) !== null;
+}
+
+/**
+ * Removes a GLib source only if it is still alive, so that a source already
+ * destroyed behind our back does not produce a "Source ID N was not found when
+ * attempting to remove it" critical.
+ *
+ * id - GLib source id, or a falsy value
+ */
+export function source_remove_if_alive(id) {
+    if (source_is_alive(id))
+        GLib.Source.remove(id);
+}
+
 export function change_text() {
     this.label.visible = this.config['show-text'];
 }
@@ -860,9 +887,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
      * max - Maximum value to preserve during cooldown
      */
     restart_cooldown_timer(max = 0) {
-        if (this.graph_scale_cooldown_timer_id) {
-            GLib.Source.remove(this.graph_scale_cooldown_timer_id);
-        }
+        source_remove_if_alive(this.graph_scale_cooldown_timer_id);
         this.graph_scale_max_including_cooldown = max;
         this.graph_scale_cooldown_delay_minutes = this.extension._Schema.get_int('graph-cooldown-delay-m');
         if (this.graph_scale_cooldown_delay_minutes !== 0) {
@@ -1100,21 +1125,13 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         if (this.chart)
             this.chart.destroy();
         TipBox.prototype.destroy.call(this);
-        if (this._initialUpdateId) {
-            GLib.Source.remove(this._initialUpdateId);
-            this._initialUpdateId = null;
-        }
-        if (this.timeout) {
-            GLib.Source.remove(this.timeout);
-            this.timeout = null;
-        }
-        if (this.graph_scale_cooldown_timer_id) {
-            GLib.Source.remove(this.graph_scale_cooldown_timer_id);
-            this.graph_scale_cooldown_timer_id = null;
-        }
-        if (this._asyncTimeoutId) {
-            GLib.Source.remove(this._asyncTimeoutId);
-            this._asyncTimeoutId = null;
-        }
+        source_remove_if_alive(this._initialUpdateId);
+        this._initialUpdateId = null;
+        source_remove_if_alive(this.timeout);
+        this.timeout = null;
+        source_remove_if_alive(this.graph_scale_cooldown_timer_id);
+        this.graph_scale_cooldown_timer_id = null;
+        source_remove_if_alive(this._asyncTimeoutId);
+        this._asyncTimeoutId = null;
     }
 }
