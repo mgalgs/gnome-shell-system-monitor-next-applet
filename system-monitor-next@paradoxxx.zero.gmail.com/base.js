@@ -908,15 +908,24 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
             sm_log("Invalid call to restart_update_timer", 'error');
             return;
         }
-        if (this.timeout) {
-            GLib.Source.remove(this.timeout);
-        }
+        source_remove_if_alive(this.timeout);
         this.timeout = GLib.timeout_add(
             GLib.PRIORITY_DEFAULT_IDLE,
             interval,
             this.update.bind(this),
         );
         this._lastInterval = interval;
+    }
+    /**
+     * Re-arms the update timer if the GC destroyed its source. Called by the
+     * extension's watchdog; returns true if a repair was needed.
+     */
+    revive_update_timer() {
+        if (this._destroyed || source_is_alive(this.timeout))
+            return false;
+        this.timeout = null;
+        this.restart_update_timer();
+        return true;
     }
     tip_format(unit) {
         if (typeof (unit) === 'undefined') {
