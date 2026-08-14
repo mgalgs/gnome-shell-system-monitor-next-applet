@@ -224,18 +224,36 @@ function getDiskDevices() {
     return [];
 }
 
-function getGpuDevices() {
+// nvidia-smi can take seconds to answer when it has to wake a sleeping GPU,
+// so it must never be waited for synchronously.
+function getGpuDevices(callback) {
     try {
-        let [success, stdout] = GLib.spawn_command_line_sync(
-            'nvidia-smi --query-gpu=count --format=csv,noheader');
-        if (success) {
-            let count = parseInt(new TextDecoder().decode(stdout).trim(), 10);
-            if (!isNaN(count) && count > 0)
-                return Array.from({length: count}, (_v, i) => i.toString());
-        }
+        let proc = new Gio.Subprocess({
+            argv: ['nvidia-smi', '--query-gpu=count', '--format=csv,noheader'],
+            flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE,
+        });
+        proc.init(null);
+        proc.communicate_utf8_async(null, null, (p, result) => {
+            try {
+                let [, stdout] = p.communicate_utf8_finish(result);
+                let count = parseInt(stdout.trim(), 10);
+                if (!isNaN(count) && count > 0) {
+                    callback(Array.from({length: count}, (_v, i) => i.toString()));
+                    return;
+                }
+            } catch {
+                // nvidia-smi failed
+            }
+            callback(getDrmGpuDevices());
+        });
+        return;
     } catch {
         // nvidia-smi not available
     }
+    callback(getDrmGpuDevices());
+}
+
+function getDrmGpuDevices() {
     try {
         let drmDir = Gio.File.new_for_path('/sys/class/drm/');
         let enumerator = drmDir.enumerate_children('standard::name', Gio.FileQueryInfoFlags.NONE, null);
@@ -291,29 +309,39 @@ function detectSensors(sensorType) {
     return Object.keys(sensors);
 }
 
-function detectDevices(type) {
+// Calls back with the device list; synchronously for every type except gpu,
+// where nvidia-smi is consulted asynchronously.
+function detectDevices(type, callback) {
     switch (type) {
     case 'cpu':
     case 'freq':
-        return ['all', ...getCpuCores()];
+        callback(['all', ...getCpuCores()]);
+        break;
     case 'memory':
     case 'swap':
     case 'battery':
-        return ['default'];
+        callback(['default']);
+        break;
     case 'net':
-        return ['all', ...getNetInterfaces()];
+        callback(['all', ...getNetInterfaces()]);
+        break;
     case 'disk':
-        return ['all', ...getDiskDevices()];
+        callback(['all', ...getDiskDevices()]);
+        break;
     case 'gpu':
-        return getGpuDevices();
+        getGpuDevices(callback);
+        break;
     case 'thermal':
-        return detectSensors('temp');
+        callback(detectSensors('temp'));
+        break;
     case 'fan':
-        return detectSensors('fan');
+        callback(detectSensors('fan'));
+        break;
     case 'prometheus':
-        return ['default'];
+        callback(['default']);
+        break;
     default:
-        return ['all'];
+        callback(['all']);
     }
 }
 
@@ -772,26 +800,44 @@ const SMMonitorsPage = GObject.registerClass({
 
         let currentDevices = [];
         let addBtn; // created below with the button box
+        let dialogClosed = false;
+        dialog.connect('close-request', () => {
+            dialogClosed = true;
+            return false;
+        });
         const updateTypeUI = () => {
             let type = MONITOR_TYPES[typeRow.selected];
             let isPrometheus = type === 'prometheus';
             deviceRow.visible = !isPrometheus;
             serverRow.visible = isPrometheus;
             metricRow.visible = isPrometheus;
-            let haveDevices = true;
-            if (!isPrometheus) {
-                currentDevices = detectDevices(type);
+            if (isPrometheus) {
+                addBtn.sensitive = true;
+                return;
+            }
+            // Detection calls back asynchronously for some types; keep Add
+            // disabled until the devices for the selected type are known.
+            currentDevices = [];
+            deviceRow.model = new Gtk.StringList();
+            deviceRow.subtitle = _('Detecting devices…');
+            addBtn.sensitive = false;
+            detectDevices(type, devices => {
+                // Dropped if the dialog is gone or the user switched type.
+                if (dialogClosed || MONITOR_TYPES[typeRow.selected] !== type) {
+                    return;
+                }
+                currentDevices = devices;
                 let model = new Gtk.StringList();
-                currentDevices.forEach(d => model.append(d));
+                devices.forEach(d => model.append(d));
                 deviceRow.model = model;
                 deviceRow.selected = 0;
                 // E.g. thermal/fan on a machine with no readable sensors;
                 // a monitor saved without a real device could never
                 // resolve, so block the add instead.
-                haveDevices = currentDevices.length > 0;
+                let haveDevices = devices.length > 0;
                 deviceRow.subtitle = haveDevices ? '' : _('No devices detected');
-            }
-            addBtn.sensitive = haveDevices;
+                addBtn.sensitive = haveDevices;
+            });
         };
 
         let btnBox = new Gtk.Box({
