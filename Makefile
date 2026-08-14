@@ -199,10 +199,13 @@ check.whitespace:
 
 check.lint:
 	$(call msg,$@,Running ESLint...)
-	$(Q)if command -v eslint >/dev/null 2>&1; then \
+	$(Q)if [ -x node_modules/.bin/eslint ]; then \
+		node_modules/.bin/eslint $(UUID); \
+	elif command -v eslint >/dev/null 2>&1; then \
 		eslint $(UUID); \
 	else \
-		echo "  [lint        ] WARNING: eslint not found, skipping"; \
+		echo "  [lint        ] ERROR: eslint not found; run: npm install" >&2; \
+		exit 1; \
 	fi
 	$(call msg,$@,OK)
 
