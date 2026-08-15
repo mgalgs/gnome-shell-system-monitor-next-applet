@@ -9,8 +9,8 @@ Do these once:
 
 - Install the Node dependencies: `npm install`. The release lints with the
   ESLint in `node_modules`.
-- Set up a GPG signing key. Tags are signed (`tag.gpgSign` is enabled). The
-  release cannot tag without a working key and agent.
+- Set up a GPG signing key. The release signs the tag (`git tag -s`), so it
+  cannot tag without a working key and agent.
 - Get push access to `origin`.
 
 The build tools `glib-compile-schemas` (from glib2) and `msgfmt` (from

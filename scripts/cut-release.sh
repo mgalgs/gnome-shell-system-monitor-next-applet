@@ -46,8 +46,12 @@ cd "$(dirname "$0")/.." || die "cannot cd to repo root"
 branch="$(git rev-parse --abbrev-ref HEAD)"
 [ "$branch" = "$RELEASE_BRANCH" ] || die "not on $RELEASE_BRANCH (on $branch)"
 
-if ! git diff --quiet || ! git diff --cached --quiet; then
-    die "working tree is dirty; commit or stash first"
+# --porcelain reports tracked modifications, staged changes AND untracked
+# files. A plain `git diff` misses untracked files, which `make build` would
+# still copy into the zip via its directory globs -- shipping content that is
+# not in the tagged commit.
+if [ -n "$(git status --porcelain)" ]; then
+    die "working tree is dirty (tracked or untracked changes); commit, stash, or clean first"
 fi
 
 say "Fetching origin/$RELEASE_BRANCH ..."
@@ -60,15 +64,29 @@ git fetch --quiet origin "$RELEASE_BRANCH"
 if [ -z "$version" ]; then
     latest="$(git tag --list 'v3.*' --sort=-v:refname | head -n1)"
     [ -n "$latest" ] || die "no v3.* tags found; pass VERSION explicitly"
-    version="$(( ${latest#v3.} + 1 ))"
+    latest_n="${latest#v3.}"
+    # Reject anything that is not a plain integer (e.g. v3.36-rc1) before the
+    # arithmetic, and force base 10 so a zero-padded tag is not read as octal.
+    case "$latest_n" in
+        ''|*[!0-9]*) die "latest tag $latest is not a plain v3.N tag; pass VERSION explicitly" ;;
+    esac
+    version="$(( 10#$latest_n + 1 ))"
 fi
 case "$version" in
     ''|*[!0-9]*) die "version must be a positive integer, got: $version" ;;
 esac
 tag="v3.${version}"
 
-git rev-parse -q --verify "refs/tags/${tag}" >/dev/null 2>&1 \
-    && die "tag ${tag} already exists"
+# A tag left behind by an earlier run whose push failed is safe to resume
+# from, as long as it still points at HEAD. A tag on any other commit is a
+# real conflict.
+tag_exists=false
+if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null 2>&1; then
+    [ "$(git rev-parse "refs/tags/${tag}^{commit}")" = "$(git rev-parse HEAD)" ] \
+        || die "tag ${tag} already exists and points at another commit"
+    tag_exists=true
+    say "tag ${tag} already exists on HEAD; resuming (will re-push)"
+fi
 
 say "Releasing ${tag} from ${branch} @ $(git rev-parse --short HEAD)"
 
@@ -76,10 +94,13 @@ say "Releasing ${tag} from ${branch} @ $(git rev-parse --short HEAD)"
 
 make release "VERSION=${version}"
 
+# `|| true`: without it, a grep that matches nothing exits non-zero, and
+# under pipefail+set -e the assignment would abort the script before the
+# check below could report the mismatch.
 zipver="$(unzip -p "$ZIPFILE" metadata.json \
-    | grep -o '"version":[[:space:]]*[0-9]\+' | grep -o '[0-9]\+')"
+    | grep -o '"version":[[:space:]]*[0-9]\+' | grep -o '[0-9]\+' || true)"
 [ "$zipver" = "$version" ] \
-    || die "zip metadata version ($zipver) does not match ${tag}"
+    || die "zip metadata version (${zipver:-none}) does not match ${tag}"
 say "Zip metadata version matches ${tag}"
 
 if $dry_run; then
@@ -89,12 +110,15 @@ fi
 
 # --- tag + push ------------------------------------------------------------
 
-# tag.gpgSign is enabled repo-wide, so this tag is signed. Signing needs a
-# working GPG key and agent.
-git tag -s "${tag}" -m "Release ${tag}"
-say "Created signed tag ${tag}"
+# git tag -s signs the tag unconditionally, so this needs a working GPG key
+# and agent (independent of the tag.gpgSign config).
+if ! $tag_exists; then
+    git tag -s "${tag}" -m "Release ${tag}"
+    say "Created signed tag ${tag}"
+fi
 
-git push origin "${tag}"
+git push origin "${tag}" \
+    || die "tag ${tag} exists locally but the push failed; re-run to retry, or: git push origin ${tag}"
 say "Pushed ${tag} to origin"
 
 # --- done ------------------------------------------------------------------
