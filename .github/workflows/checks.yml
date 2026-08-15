@@ -27,7 +27,7 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y libglib2.0-bin gettext
+          sudo apt-get install -y libglib2.0-bin gettext zip
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
