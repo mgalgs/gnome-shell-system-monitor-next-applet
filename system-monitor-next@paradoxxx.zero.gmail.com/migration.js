@@ -5,7 +5,7 @@ import { sm_log } from './utils.js';
 
 function migrateSettings(extension) {
     const SCHEMA_VERSION_KEY = 'settings-schema-version';
-    const CURRENT_SCHEMA_VERSION = 2;
+    const CURRENT_SCHEMA_VERSION = 3;
 
     const settings = extension.getSettings();
     let currentVersion = settings.get_int(SCHEMA_VERSION_KEY);
@@ -24,6 +24,11 @@ function migrateSettings(extension) {
     if (currentVersion < 2) {
         migrateFrom1(extension, settings);
         currentVersion = 2;
+    }
+
+    if (currentVersion < 3) {
+        migrateFrom2(settings);
+        currentVersion = 3;
     }
 
     settings.set_int(SCHEMA_VERSION_KEY, CURRENT_SCHEMA_VERSION);
@@ -132,6 +137,29 @@ function migrateFrom1(extension, settings) {
 
     settings.set_strv('monitors', monitors);
     sm_log(`Successfully migrated ${monitors.length} monitors to new config format.`);
+}
+
+function migrateFrom2(settings) {
+    sm_log('Migrating settings: v2 -> v3 (adding averageDigit and restoreAverage)');
+
+    let monitors = settings.get_strv('monitors');
+
+    monitors = monitors.map(s => {
+        try {
+            let monitor = JSON.parse(s);
+
+            if (monitor.type === 'cpu') {
+                monitor.averageDigit = false;
+                monitor.restoreAverage = false;
+            }
+
+            return JSON.stringify(monitor);
+        } catch {
+            return s;
+        }
+    });
+
+    settings.set_strv('monitors', monitors);
 }
 
 export { migrateSettings };
