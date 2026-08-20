@@ -67,9 +67,10 @@ help:
 	@echo  ''
 	@echo  'Other targets:'
 	@echo  ''
-	@echo  '  release   - lint, build zip, verify contents (use this for EGO uploads)'
+	@echo  '  cut-release - full release: derive version, check, build, sign+push tag'
+	@echo  '  release   - check, build zip, verify contents (build step of cut-release)'
 	@echo  '  zip-file  - build zip only (no checks)'
-	@echo  '  check     - run code quality checks (whitespace, lint)'
+	@echo  '  check     - run code quality checks (whitespace, ESLint, shexli)'
 	@echo  '  clean     - remove most generated files'
 	@echo  ''
 	@echo  'VM Testing (requires libvirt + virt-install + passt):'
@@ -144,6 +145,14 @@ release: check zip-file
 	@echo '  Upload at:   https://extensions.gnome.org/upload/'
 	@echo ''
 
+# One-shot release: see RELEASING.md. Pass VERSION=N to override the version
+# (default: latest v3.* tag + 1). cut-release.dry-run stops before tag/push.
+cut-release:
+	$(Q)./scripts/cut-release.sh $(patsubst 0,,$(VERSION))
+
+cut-release.dry-run:
+	$(Q)./scripts/cut-release.sh --dry-run $(patsubst 0,,$(VERSION))
+
 gschemas: $(GSCHEMA_COMPILED)
 	$(call msg,$@,OK)
 
@@ -201,10 +210,13 @@ check.whitespace:
 
 check.lint:
 	$(call msg,$@,Running ESLint...)
-	$(Q)if command -v eslint >/dev/null 2>&1; then \
+	$(Q)if [ -x node_modules/.bin/eslint ]; then \
+		node_modules/.bin/eslint $(UUID); \
+	elif command -v eslint >/dev/null 2>&1; then \
 		eslint $(UUID); \
 	else \
-		echo "  [lint        ] WARNING: eslint not found, skipping"; \
+		echo "  [lint        ] ERROR: eslint not found; run: npm install" >&2; \
+		exit 1; \
 	fi
 	$(call msg,$@,OK)
 
@@ -271,6 +283,8 @@ vm-destroy:
 .PHONY: help \
 	install \
 	release \
+	cut-release \
+	cut-release.dry-run \
 	zip-file \
 	zip-file.clean \
 	gschemas \

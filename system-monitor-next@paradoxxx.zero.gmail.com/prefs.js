@@ -263,32 +263,82 @@ function gpuName(index) {
     return _('GPU %d').replace('%d', index.toString());
 }
 
+// Detection can fail here while gpu_usage.sh still works on the shell side, so
+// keep the entry rather than locking those users out -- but say that it was not
+// found instead of presenting it as a GPU we saw.
+function undetectedGpu() {
+    return [{id: '0', name: `${gpuName(0)} ${_('(not detected)')}`}];
+}
+
+function parseGpuDevices(stdout) {
+    return stdout.split('\n')
+        .map(line => line.trim().split(/\s+/))
+        .filter(field => field.length >= 4 && !isNaN(parseInt(field[1])))
+        .map(field => ({id: field[0], name: gpuName(parseInt(field[0]))}));
+}
+
 // Enumerate by running the script the panel reads, so a GPU the picker offers
 // is a GPU the panel can show. Counting DRM cards here instead used to disagree
 // with the script on any hybrid-graphics machine -- an Intel card0 with no vram
 // counters and an AMD card1 with them yielded two entries that both resolved to
 // the AMD.
-function getGpuDevices(extensionPath) {
-    try {
-        if (extensionPath) {
-            let [success, stdout] = GLib.spawn_command_line_sync(
-                `/usr/bin/env bash ${extensionPath}/gpu_usage.sh`);
-            if (success) {
-                const ids = new TextDecoder().decode(stdout).split('\n')
-                    .map(line => line.trim().split(/\s+/))
-                    .filter(field => field.length >= 4 && !isNaN(parseInt(field[1])))
-                    .map(field => field[0]);
-                if (ids.length)
-                    return ids.map(id => ({id, name: gpuName(parseInt(id))}));
-            }
-        }
-    } catch {
-        // fall through -- the script may be missing or unreadable
+//
+// The script runs nvidia-smi, which can take seconds to answer when it has to
+// wake a sleeping GPU, so it is never waited for synchronously. Which GPUs the
+// machine has is a fact about the machine rather than about a dialog, so one
+// answer serves every caller: a second asking while the first read is in flight
+// joins it, and the rows built together when the window opens cost one spawn
+// between them rather than one apiece.
+let gpuDevices = null;   // the resolved list, or null while it is not yet known
+let gpuWaiting = null;   // callers queued behind the read already in flight
+
+function deliverGpuDevices(devices) {
+    const waiting = gpuWaiting;
+    gpuWaiting = null;
+    // Detached before it is walked, so a caller that asks again from its own
+    // callback cannot extend the list it is inside.
+    for (const cb of waiting)
+        cb(devices);
+}
+
+function getGpuDevices(extensionPath, callback) {
+    if (gpuDevices) {
+        callback(gpuDevices);
+        return;
     }
-    // Detection can fail here while gpu_usage.sh still works on the shell side,
-    // so keep the entry rather than locking those users out -- but say that it
-    // was not found instead of presenting it as a GPU we saw.
-    return [{id: '0', name: `${gpuName(0)} ${_('(not detected)')}`}];
+    if (gpuWaiting) {
+        gpuWaiting.push(callback);
+        return;
+    }
+    gpuWaiting = [callback];
+    if (extensionPath) {
+        try {
+            let proc = new Gio.Subprocess({
+                argv: ['/usr/bin/env', 'bash', `${extensionPath}/gpu_usage.sh`],
+                flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE,
+            });
+            proc.init(null);
+            proc.communicate_utf8_async(null, null, (p, result) => {
+                let devices = [];
+                try {
+                    let [, stdout] = p.communicate_utf8_finish(result);
+                    devices = parseGpuDevices(stdout);
+                } catch {
+                    // the script may be missing or unreadable
+                }
+                // Only a real answer is kept. Nothing here can tell a permanent
+                // failure from a transient one, so a failure is retried rather
+                // than cached as the machine's GPU list.
+                if (devices.length)
+                    gpuDevices = devices;
+                deliverGpuDevices(devices.length ? devices : undetectedGpu());
+            });
+            return;
+        } catch {
+            // fall through -- the script could not be spawned at all
+        }
+    }
+    deliverGpuDevices(undetectedGpu());
 }
 
 function detectSensors(sensorType) {
@@ -351,33 +401,41 @@ function named(ids) {
     return ids.map(id => ({id, name: id}));
 }
 
-function detectCatalog(type, extensionPath) {
+// Calls back with the catalog; synchronously for every type except gpu, whose
+// enumerating script must never be waited for.
+function detectCatalog(type, extensionPath, callback) {
     switch (type) {
     case 'cpu':
     case 'freq':
-        return catalogSet(
+        callback(catalogSet(
             {id: 'all', name: _('All cores (total)')},
-            getCpuCores().map((id, i) => ({id, name: _('Core %d').replace('%d', (i + 1).toString())})));
+            getCpuCores().map((id, i) => ({id, name: _('Core %d').replace('%d', (i + 1).toString())}))));
+        break;
     case 'net':
-        return catalogSet({
+        callback(catalogSet({
             id: 'all',
             name: _('All physical interfaces (total)'),
             note: _('Excludes VPN, bridge and container interfaces — their traffic is already counted on the hardware carrying it'),
-        }, named(getNetInterfaces()));
+        }, named(getNetInterfaces())));
+        break;
     case 'disk':
-        return catalogSet({
+        callback(catalogSet({
             id: 'all',
             name: _('All physical disks (total)'),
             note: _('Only devices where data reaches a physical disk. Partitions, LVM, RAID and encrypted volumes are excluded — their I/O is counted on the disk underneath'),
-        }, named(getDiskDevices()));
+        }, named(getDiskDevices())));
+        break;
     case 'gpu':
-        return catalogSet(null, getGpuDevices(extensionPath));
+        getGpuDevices(extensionPath, devices => callback(catalogSet(null, devices)));
+        break;
     case 'thermal':
-        return catalogSet(null, named(detectSensors('temp')));
+        callback(catalogSet(null, named(detectSensors('temp'))));
+        break;
     case 'fan':
-        return catalogSet(null, named(detectSensors('fan')));
+        callback(catalogSet(null, named(detectSensors('fan'))));
+        break;
     default:
-        return catalogSingleton();
+        callback(catalogSingleton());
     }
 }
 
@@ -667,18 +725,14 @@ const SMMonitorRow = GObject.registerClass({
         this._dragX = 0;
         this._dragY = 0;
         this._extensionPath = extensionPath;
-        this._catalog = detectCatalog(config.type, extensionPath);
         // An entry inherits any key it does not carry from the shared body, so a
         // config still holding show-text there (hand-authored, or written before
         // the device-set migration) must show its real value in the picker.
         const inherited = config['show-text'] === true;
-        this._selection = new SMDeviceSelection(
-            this._catalog,
-            (config.devices || []).map(e => ({...e, 'show-text': e['show-text'] ?? inherited})),
-            () => this._onSelectionChanged());
+        this._entries = (config.devices || [])
+            .map(e => ({...e, 'show-text': e['show-text'] ?? inherited}));
 
         this.title = type_name(config.type);
-        this.subtitle = this._deviceSummary();
 
         let dragHandle = new Gtk.Image({
             icon_name: 'list-drag-handle-symbolic',
@@ -718,7 +772,18 @@ const SMMonitorRow = GObject.registerClass({
         dropTarget.connect('drop', this._onDrop.bind(this));
         this.add_controller(dropTarget);
 
-        this._buildSettings();
+        // Detection calls back synchronously for every type but gpu, whose
+        // enumerating script runs nvidia-smi -- seconds, if it has to wake a
+        // sleeping GPU, and one row is built per configured monitor when the
+        // window opens. Nothing above depends on which devices exist, so the
+        // wait costs the rows below rather than the window.
+        detectCatalog(config.type, extensionPath, catalog => {
+            this._catalog = catalog;
+            this._selection = new SMDeviceSelection(
+                catalog, this._entries, () => this._onSelectionChanged());
+            this.subtitle = this._deviceSummary();
+            this._buildSettings();
+        });
     }
 
     // The names, not a bare count: "5 devices" makes the user expand the row to
@@ -1194,36 +1259,55 @@ const SMMonitorsPage = GObject.registerClass({
         let selection = null;
         let deviceRows = [];
         let addBtn; // created below with the button box
+        let dialogClosed = false;
+        let detectSeq = 0;
+        dialog.connect('close-request', () => {
+            dialogClosed = true;
+            return false;
+        });
         const updateTypeUI = () => {
             let type = MONITOR_TYPES[typeRow.selected];
             let isPrometheus = type === 'prometheus';
             serverRow.visible = isPrometheus;
             metricRow.visible = isPrometheus;
 
+            // Detection calls back asynchronously for gpu, so keep Add disabled
+            // until the devices for the selected type are known. A superseded
+            // answer -- the dialog closed, or the type switched away and back --
+            // is dropped rather than appending a second set of rows.
+            const seq = ++detectSeq;
             for (const row of deviceRows)
                 deviceGroup.remove(row);
             deviceRows = [];
+            scroller.visible = false;
+            deviceGroup.description = _('Detecting devices…');
+            addBtn.sensitive = false;
 
-            const catalog = detectCatalog(type, this._extensionPath);
-            // A singleton type has nothing to choose; the first device is
-            // pre-ticked so the zero-thought path lands on today's behavior.
-            const initial = catalog.kind === 'singleton'
-                ? [catalog.device]
-                : catalog.aggregate ? [catalog.aggregate] : catalog.members.slice(0, 1);
-            selection = new SMDeviceSelection(
-                catalog, initial.map(d => ({id: d.id, 'show-text': true})),
-                () => { addBtn.sensitive = selection.entries.length > 0; });
+            detectCatalog(type, this._extensionPath, catalog => {
+                if (dialogClosed || seq !== detectSeq)
+                    return;
 
-            deviceRows = selection.rows;
-            for (const row of deviceRows)
-                deviceGroup.add(row);
-            scroller.visible = deviceRows.length > 0;
+                // A singleton type has nothing to choose; the first device is
+                // pre-ticked so the zero-thought path lands on today's behavior.
+                const initial = catalog.kind === 'singleton'
+                    ? [catalog.device]
+                    : catalog.aggregate ? [catalog.aggregate] : catalog.members.slice(0, 1);
+                selection = new SMDeviceSelection(
+                    catalog, initial.map(d => ({id: d.id, 'show-text': true})),
+                    () => { addBtn.sensitive = selection.entries.length > 0; });
 
-            // E.g. thermal/fan on a machine with no readable sensors; a monitor
-            // saved without a real device could never resolve, so block the add.
-            const haveDevices = catalog.kind === 'singleton' || deviceRows.length > 0;
-            deviceGroup.description = haveDevices ? devicePickerHint() : _('No devices detected');
-            addBtn.sensitive = haveDevices && selection.entries.length > 0;
+                deviceRows = selection.rows;
+                for (const row of deviceRows)
+                    deviceGroup.add(row);
+                scroller.visible = deviceRows.length > 0;
+
+                // E.g. thermal/fan on a machine with no readable sensors; a
+                // monitor saved without a real device could never resolve, so
+                // block the add instead.
+                const haveDevices = catalog.kind === 'singleton' || deviceRows.length > 0;
+                deviceGroup.description = haveDevices ? devicePickerHint() : _('No devices detected');
+                addBtn.sensitive = haveDevices && selection.entries.length > 0;
+            });
         };
 
         let btnBox = new Gtk.Box({

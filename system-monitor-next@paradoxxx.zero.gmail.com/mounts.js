@@ -2,13 +2,24 @@
 
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
 import Gio from "gi://Gio";
-import GTop from "gi://GTop";
+import GLib from "gi://GLib";
 import St from "gi://St";
 import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
+import { parse_bytearray } from './common.js';
 import { sm_log } from './utils.js';
 
 // Visual distinction between adjacent mount rings/bars; cycled per index.
 const MOUNT_SHADE_ALPHAS = [1.0, 0.7, 0.5];
+
+// Kernel filesystem types backed by a remote. gvfs backends never show up
+// here: their GFiles are non-native, which is_net_mount() tests first.
+const NET_FS_TYPES = ['nfs', 'nfs4', 'smbfs', 'cifs', 'smb3', 'ftp', 'sshfs',
+    'sftp', 'mtp', 'mtpfs', 'fuse.sshfs', 'afs', 'ceph', '9p', 'davfs',
+    'fuse.davfs', 'fuse.rclone', 'glusterfs', 'fuse.glusterfs', 'lustre'];
+
+// Well-known system mountpoints, listed before removable media when a
+// filesystem is actually mounted there.
+const SYS_MOUNTS = ['/home', '/tmp', '/boot', '/usr', '/usr/local'];
 
 // stale network shares will cause the shell to freeze, enable this with caution
 export const ENABLE_NETWORK_DISK_USAGE = false;
@@ -21,20 +32,6 @@ export function interesting_mountpoint(mount) {
     return ((mount[0].indexOf('/dev/') === 0 || mount[2].toLowerCase() === 'nfs') && mount[2].toLowerCase() !== 'udf');
 }
 
-// This is the algorithm used by the df utility. Returns an object with
-// used and total fields, computed from a given statfs structure.
-export function calc_usage(statfs) {
-    // bfree represents the total amount of disk space remaining for the
-    // superuser and internal FS operations, while bavail represents the space
-    // remaining for an unprivileged user. The difference between bfree and
-    // bavail represents reserved blocks that should not be part of the total
-    // value, since users don't get to use those blocks. That is one way to
-    // explain why total here is blocks - (bfree - bavail). Alternate
-    // explanation: as bavail approaches 0, used and total should converge.
-    const used = statfs.blocks - statfs.bfree;
-    return {used, total: used + statfs.bavail};
-}
-
 // Class to deal with volumes insertion / ejection
 export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
     constructor() {
@@ -42,15 +39,15 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
         this.num_mounts = -1;
         this.listeners = [];
         this.connected = false;
+        this.mounts = [];
+        this._mount_table = new Map();
+        this._cancellable = null;
+        this._usage = new Map();
+        this._usage_inflight = new Set();
+        this._usage_cancellable = null;
+        this._usage_time = 0;
 
         this._volumeMonitor = Gio.VolumeMonitor.get();
-        let sys_mounts = ['/home', '/tmp', '/boot', '/usr', '/usr/local'];
-        this.base_mounts = ['/'];
-        sys_mounts.forEach((sMount) => {
-            if (this.is_sys_mount(sMount + '/')) {
-                this.base_mounts.push(sMount);
-            }
-        });
         this.startListening();
     }
     refresh() {
@@ -75,10 +72,63 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
         //     }
         // }
         // log("[System monitor] old mounts: " + this.mounts);
-        this.mounts = [];
-        for (let base in this.base_mounts) {
-            // log("[System monitor] " + this.base_mounts[base]);
-            this.mounts.push(this.base_mounts[base]);
+        this._cancellable?.cancel();
+        this._cancellable = new Gio.Cancellable();
+        Gio.File.new_for_path('/proc/mounts').load_contents_async(this._cancellable, (file, result) => {
+            let table;
+            try {
+                let [, contents] = file.load_contents_finish(result);
+                table = this._parse_mount_table(parse_bytearray(contents));
+            } catch {
+                // Cancelled by stopListening(), or /proc/mounts unreadable.
+                return;
+            }
+            this._mount_table = table;
+            this._update_mounts();
+        });
+    }
+    // Build mountpoint -> {fstype, ro} from /proc/mounts.
+    _parse_mount_table(text) {
+        let table = new Map();
+        text.split('\n').forEach((line) => {
+            let fields = line.split(' ');
+            if (fields.length < 4) {
+                return;
+            }
+            // /proc/mounts octal-escapes space, tab, newline and backslash.
+            let mpath = fields[1].replace(/\\([0-7]{3})/g,
+                (_m, oct) => String.fromCharCode(parseInt(oct, 8)));
+            // A later entry shadows an earlier one for the same mountpoint.
+            table.set(mpath, {
+                fstype: fields[2].toLowerCase(),
+                // A network mount's source names the remote: //server/share
+                // (SMB), server:/path (NFS-style) or scheme://... (davfs and
+                // friends). Catches network filesystems whose fstype is not
+                // in NET_FS_TYPES.
+                remote: /^\/\/|^[^/]+:\//.test(fields[0]),
+                ro: fields[3].split(',').indexOf('ro') > -1,
+            });
+        });
+        return table;
+    }
+    // A mount's default location is not necessarily the mountpoint itself, so
+    // walk up to the nearest entry, mirroring which filesystem a statfs() on
+    // that path would have reported.
+    _lookup_mount(file) {
+        for (let f = file; f !== null; f = f.get_parent()) {
+            let entry = this._mount_table.get(f.get_path());
+            if (entry) {
+                return entry;
+            }
+        }
+        return null;
+    }
+    _update_mounts() {
+        this.mounts = ['/'];
+        for (const mpath of SYS_MOUNTS) {
+            if (this._mount_table.has(mpath)) {
+                this.mounts.push(mpath);
+            }
         }
         let mount_lines = this._volumeMonitor.get_mounts();
         mount_lines.forEach((mount) => {
@@ -90,10 +140,68 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
                 }
             }
         });
-        // log("[System monitor] base: " + this.base_mounts);
         // log("[System monitor] mounts: " + this.mounts);
+        for (const mpath of this._usage.keys()) {
+            if (this.mounts.indexOf(mpath) === -1) {
+                this._usage.delete(mpath);
+            }
+        }
         for (let i in this.listeners) {
             this.listeners[i](this.mounts);
+        }
+        this._usage_time = 0;
+        this.refresh_usage();
+    }
+    // Cached usage numbers for a mountpoint; zeros until the first
+    // asynchronous refresh for that mount completes.
+    get_usage(mpath) {
+        return this._usage.get(mpath) ?? {used: 0, total: 0};
+    }
+    // Refresh the cached usage of every mount off the main thread. Repaints
+    // request this on every frame, so issuing is rate-limited; a mount whose
+    // filesystem hangs keeps its query in flight and is skipped on later
+    // rounds, wedging one GIO worker thread instead of the shell.
+    refresh_usage() {
+        const USAGE_REFRESH_MIN_US = 2 * 1e6;
+        let now = GLib.get_monotonic_time();
+        if (now - this._usage_time < USAGE_REFRESH_MIN_US) {
+            return;
+        }
+        this._usage_time = now;
+        this._usage_cancellable ??= new Gio.Cancellable();
+        for (const mpath of this.mounts) {
+            if (this._usage_inflight.has(mpath)) {
+                continue;
+            }
+            this._usage_inflight.add(mpath);
+            Gio.File.new_for_path(mpath).query_filesystem_info_async(
+                `${Gio.FILE_ATTRIBUTE_FILESYSTEM_USED},${Gio.FILE_ATTRIBUTE_FILESYSTEM_FREE}`,
+                GLib.PRIORITY_DEFAULT, this._usage_cancellable,
+                (file, result) => {
+                    this._usage_inflight.delete(mpath);
+                    let info;
+                    try {
+                        info = file.query_filesystem_info_finish(result);
+                    } catch {
+                        // Cancelled, or the filesystem is unreadable; keep
+                        // the last value we got.
+                        return;
+                    }
+                    // df semantics: used includes the root-reserved blocks,
+                    // free is what an unprivileged user can still write
+                    // (f_bavail), so used/total converges to 1 as the user
+                    // runs out of space.
+                    let used = info.get_attribute_uint64(Gio.FILE_ATTRIBUTE_FILESYSTEM_USED);
+                    let total = used + info.get_attribute_uint64(Gio.FILE_ATTRIBUTE_FILESYSTEM_FREE);
+                    let prev = this._usage.get(mpath);
+                    if (prev && prev.used === used && prev.total === total) {
+                        return;
+                    }
+                    this._usage.set(mpath, {used, total});
+                    for (let i in this.listeners) {
+                        this.listeners[i](this.mounts);
+                    }
+                });
         }
     }
     add_listener(cb) {
@@ -107,28 +215,15 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
     get_mounts() {
         return this.mounts;
     }
-    is_sys_mount(mpath) {
-        let file = Gio.file_new_for_path(mpath);
-        try {
-            let info = file.query_info(Gio.FILE_ATTRIBUTE_UNIX_IS_MOUNTPOINT,
-                Gio.FileQueryInfoFlags.NONE, null);
-            return info.get_attribute_boolean(Gio.FILE_ATTRIBUTE_UNIX_IS_MOUNTPOINT);
-        } catch (e) {
-            if (e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND)) {
-                return false;
-            }
-            throw e;
-        }
-    }
     is_ro_mount(mount) {
-        // FIXME: running this function after "login after waking from suspend"
-        // can make login hang. Actual issue seems to occur when a former net
-        // mount got broken (e.g. due to a VPN connection terminated or
-        // otherwise broken connection)
         try {
             let file = mount.get_default_location();
-            let info = file.query_filesystem_info(Gio.FILE_ATTRIBUTE_FILESYSTEM_READONLY, null);
-            return info.get_attribute_boolean(Gio.FILE_ATTRIBUTE_FILESYSTEM_READONLY);
+            if (!file.is_native()) {
+                // gvfs-backed; is_net_mount() already excludes these.
+                return false;
+            }
+            let entry = this._lookup_mount(file);
+            return entry ? entry.ro : false;
         } catch {
             return false;
         }
@@ -136,10 +231,14 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
     is_net_mount(mount) {
         try {
             let file = mount.get_default_location();
-            let info = file.query_filesystem_info(Gio.FILE_ATTRIBUTE_FILESYSTEM_TYPE, null);
-            let result = info.get_attribute_string(Gio.FILE_ATTRIBUTE_FILESYSTEM_TYPE);
-            let net_fs = ['nfs', 'smbfs', 'cifs', 'ftp', 'sshfs', 'sftp', 'mtp', 'mtpfs'];
-            return !file.is_native() || net_fs.indexOf(result) > -1;
+            // Non-native GFiles are gvfs-backed (MTP, SMB, SFTP, HTTP, ...).
+            // is_native() is a local property, so it costs no I/O and must be
+            // tested before anything that would touch the mount.
+            if (!file.is_native()) {
+                return true;
+            }
+            let entry = this._lookup_mount(file);
+            return entry ? entry.remote || NET_FS_TYPES.indexOf(entry.fstype) > -1 : false;
         } catch {
             return false;
         }
@@ -164,6 +263,10 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
         this.refresh();
     }
     stopListening() {
+        this._cancellable?.cancel();
+        this._cancellable = null;
+        this._usage_cancellable?.cancel();
+        this._usage_cancellable = null;
         if (!this.connected) {
             return;
         }
@@ -182,7 +285,6 @@ export const Graph = class SystemMonitor_Graph {
         this.actor = new St.DrawingArea({style_class: this.extension._Style.get('sm-chart'), reactive: false});
         this.width = width;
         this.height = height;
-        this.gtop = new GTop.glibtop_fsusage();
 
         this._themeContext = St.ThemeContext.get_for_stage(global.stage);
         this.scale_factor = this._themeContext.scale_factor;
@@ -239,6 +341,10 @@ export const Bar = class SystemMonitor_Bar extends Graph {
         if (!this.actor.visible) {
             return;
         }
+        // Usage is collected asynchronously: this draw renders the cache and
+        // the refresh notifies listeners, queueing a repaint, when a value
+        // changes.
+        this.extension._MountsMonitor.refresh_usage();
         let thickness = this.extension._Style.bar_thickness() * this.scale_factor * this.text_scaling;
         let fontsize = this.extension._Style.bar_fontsize() * this.scale_factor * this.text_scaling;
         this.actor.set_height(this.mounts.length * (3 * thickness));
@@ -251,9 +357,8 @@ export const Bar = class SystemMonitor_Bar extends Graph {
         cr.setFontSize(fontsize);
         const fg = this.actor.get_theme_node().get_foreground_color();
         for (let mount in this.mounts) {
-            GTop.glibtop_get_fsusage(this.gtop, this.mounts[mount]);
-            const {used, total} = calc_usage(this.gtop);
-            const perc_full = used / total;
+            const {used, total} = this.extension._MountsMonitor.get_usage(this.mounts[mount]);
+            const perc_full = total > 0 ? used / total : 0;
             const alpha = MOUNT_SHADE_ALPHAS[mount % MOUNT_SHADE_ALPHAS.length];
             cr.setSourceRGBA(fg.red / 255, fg.green / 255, fg.blue / 255, alpha);
 
@@ -296,6 +401,8 @@ export const Pie = class SystemMonitor_Pie extends Graph {
         if (!this.actor.visible) {
             return;
         }
+        // Usage is collected asynchronously; see Bar._draw().
+        this.extension._MountsMonitor.refresh_usage();
         let [width, height] = this.actor.get_surface_size();
         let cr = this.actor.get_context();
         let xc = width / 2;
@@ -326,10 +433,9 @@ export const Pie = class SystemMonitor_Pie extends Graph {
         const fg = this.actor.get_theme_node().get_foreground_color();
         let r = (height - ring_width) / 2;
         for (let mount in this.mounts) {
-            GTop.glibtop_get_fsusage(this.gtop, this.mounts[mount]);
             const alpha = MOUNT_SHADE_ALPHAS[mount % MOUNT_SHADE_ALPHAS.length];
             cr.setSourceRGBA(fg.red / 255, fg.green / 255, fg.blue / 255, alpha);
-            const {used, total} = calc_usage(this.gtop);
+            const {used, total} = this.extension._MountsMonitor.get_usage(this.mounts[mount]);
             arc(r, used, total, -pi / 2);
             cr.stroke();
             r -= ring_width;

@@ -1,0 +1,36 @@
+name: Checks
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  make-check:
+    name: whitespace, ESLint, shexli
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libglib2.0-bin gettext zip
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Run make check
+        run: make check

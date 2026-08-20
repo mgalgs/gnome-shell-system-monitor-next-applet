@@ -39,10 +39,18 @@ make clean
 # Create distribution zip for extensions.gnome.org
 make zip-file
 
-# Cut a release (lint, build zip, verify contents — use for EGO uploads)
-make release VERSION=<N>   # e.g. VERSION=34 for v3.34
-# Tag first: git tag v3.<N>
+# Cut a release: derive version, check, build, sign+push tag. See RELEASING.md.
+make cut-release                  # version = latest v3.* tag + 1
+make cut-release VERSION=<N>      # or pin the version explicitly
+make cut-release.dry-run          # rehearse without tagging or pushing
+
+# Build the release zip only (the build+verify step cut-release runs)
+make release VERSION=<N>
 ```
+
+After `make cut-release` pushes the tag, upload the printed zip at
+<https://extensions.gnome.org/upload/> (the one manual step). See
+[RELEASING.md](RELEASING.md) for the full process.
 
 ### Development Workflow
 
