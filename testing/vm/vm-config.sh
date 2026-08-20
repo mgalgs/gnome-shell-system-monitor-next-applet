@@ -10,6 +10,7 @@
 #   --vm NAME          VM to use (default: first in vms.conf)
 #   --preset NAME      Use a preset from testing/vm/configs/
 #   --screenshot       Take a screenshot after applying config
+#   --open-menu        Open the extension's tray menu before screenshotting
 #   --label LABEL      Label for screenshot file (default: preset/file name)
 #   --list-presets     List available preset names
 #
@@ -26,11 +27,13 @@ CONFIGS_DIR="$SCRIPT_DIR/configs"
 
 source "$SCRIPT_DIR/lib/vm-common.sh"
 source "$SCRIPT_DIR/lib/vm-screenshot.sh"
+source "$SCRIPT_DIR/lib/vm-menu.sh"
 
 TARGET_VM=""
 PRESET=""
 CONFIG_FILE=""
 SCREENSHOT=false
+OPEN_MENU=false
 LABEL=""
 
 while [[ $# -gt 0 ]]; do
@@ -38,6 +41,7 @@ while [[ $# -gt 0 ]]; do
         --vm) TARGET_VM="$2"; shift 2 ;;
         --preset) PRESET="$2"; shift 2 ;;
         --screenshot) SCREENSHOT=true; shift ;;
+        --open-menu) OPEN_MENU=true; shift ;;
         --label) LABEL="$2"; shift 2 ;;
         --list-presets)
             echo "Available presets:"
@@ -63,6 +67,7 @@ print(desc)
             echo "  --vm NAME          VM to use (default: first in vms.conf)"
             echo "  --preset NAME      Use a preset from testing/vm/configs/"
             echo "  --screenshot       Take a screenshot after applying"
+            echo "  --open-menu        Open the tray menu before screenshotting"
             echo "  --label LABEL      Label for screenshot (default: config name)"
             echo "  --list-presets     List available presets"
             echo ""
@@ -70,6 +75,7 @@ print(desc)
             echo "  $0 --preset all-visible"
             echo "  $0 --preset prometheus --screenshot"
             echo "  $0 my-config.json --screenshot"
+            echo "  $0 --preset all-cores --open-menu --screenshot"
             exit 0
             ;;
         -*) log_error "Unknown option: $1"; exit 2 ;;
@@ -119,8 +125,17 @@ vm_rsync "$TARGET_VM" "$APPLY_SCRIPT" "/tmp/_sm_apply.py"
 vm_ssh "$TARGET_VM" "python3 /tmp/_sm_apply.py /tmp/_sm_config.json"
 log_ok "Config applied"
 
-if $SCREENSHOT; then
+if $OPEN_MENU; then
+    # Widgets fill their menu cells on their own refresh tick, so a menu opened
+    # the instant the config lands shows a table that is still filling in.
     sleep 3
+    open_tray_menu "$TARGET_VM"
+fi
+
+if $SCREENSHOT; then
+    if ! $OPEN_MENU; then
+        sleep 3
+    fi
     SCREENSHOT_PATH=$(take_screenshot "$TARGET_VM" "$LABEL")
     log_ok "Screenshot: $SCREENSHOT_PATH"
 fi

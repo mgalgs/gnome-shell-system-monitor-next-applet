@@ -18,6 +18,7 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
         super(extension, config);
         this.max = 100;
         this.sensor_label = this.device_id;
+        this.cursor = extension._Samplers.sensors.cursor();
         this.sensors = null;
         check_sensors_async('temp', sensors => {
             this.sensors = sensors;
@@ -39,8 +40,26 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
         this.reset_style();
     }
 
+    // Not a bad selection but a machine with nothing to select: no hwmon
+    // temperature inputs and no lm_sensors, which is ordinary on a virtual
+    // machine. The panel can only show "--", and without this there is nothing
+    // anywhere saying why.
+    _reportNoSensors() {
+        if (!this._display_error)
+            return;
+        this._display_error = false;
+        sm_log(`${this.item_name}: this machine reports no temperature sensors. Showing --. ` +
+               'Installing lm_sensors may expose more of them.', 'warn');
+    }
+
     collectAsync(callback) {
-        if (!this.sensors || Object.keys(this.sensors).length === 0) {
+        if (!this.sensors) {
+            // Enumeration has not come back yet, which is not a fault.
+            callback(null);
+            return;
+        }
+        if (Object.keys(this.sensors).length === 0) {
+            this._reportNoSensors();
             callback(null);
             return;
         }
@@ -54,7 +73,7 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
             callback(null);
             return;
         }
-        read_sensor_async(sensorInfo, value => {
+        read_sensor_async(this.cursor, sensorInfo, value => {
             if (this._destroyed) { callback(null); return; }
             if (value === null) {
                 if (this._display_error) {
@@ -95,8 +114,6 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
     }
 
     _formatTemp() {
-        if (this._temperature === null)
-            return '-- ';
         let t = this._temperature;
         if (this.fahrenheit_unit)
             t = Math.round(t * 1.8 + 32);

@@ -56,6 +56,40 @@ function tr(text) {
     return text ? _(text) : '';
 }
 
+// A collect that never calls back is a bug in a widget, not a condition to
+// design around, so the recovery only has to be eventual rather than prompt.
+const ASYNC_STALL_US = 30 * 1e6;
+
+// What the panel shows in place of a number it does not have. Not a zero: zero
+// is a measurement, and a device that is not on this machine has not been
+// measured.
+const NO_READING = '--';
+
+// The device id every widget already branches on to mean "the total over all of
+// them", named here so the menu can say it in the word preferences uses.
+const AGGREGATE_DEVICE = 'all';
+
+// How much width a monitor's devices may take in the popup menu, before the
+// theme's scale factor. The menu is about 390px wide with a title column of
+// roughly 100, and it is the menu's *height* that runs out -- so this buys
+// lines back without letting the menu grow sideways to pay for them.
+const MENU_ENTRY_WIDTH = 280;
+
+// ...but only until height is genuinely the thing running out. Past this many
+// lines an entry takes the width it needs instead, because a menu too tall to
+// show its own "Preferences..." is the fault this is all here to fix, and a
+// wide menu is not. Reached only near M01's 64-device cap, where the panel is
+// long past unusable anyway.
+const MENU_ENTRY_LINES = 6;
+
+// What a device is called when its widget does not say otherwise. Right
+// wherever the id is already the name -- interfaces, block devices, sensor
+// labels, GPU indices -- and 'All' for the total, which is the word the
+// preferences picker uses, so the name resolves when a user goes looking.
+function default_device_name(deviceId) {
+    return deviceId === AGGREGATE_DEVICE ? _('All') : deviceId;
+}
+
 export function l_limit(t) {
     return (t > 0) ? t : 1000;
 }
@@ -70,20 +104,151 @@ export function change_style() {
     this.chart.actor.visible = style === 'graph' || style === 'both';
 }
 
+// A widget's menu cells belong to the widget for the widget's whole life; the
+// table only ever borrows them, and gives them back before it is torn down.
+// Re-creating them here instead threw away the values every widget had just
+// computed -- _syncMonitors updates each widget before it rebuilds the table --
+// so every synchronously collecting widget showed a blank value until its next
+// tick, which is a whole refresh interval away.
+function release_menu_cells(elts) {
+    for (const widget of elts) {
+        for (const item of widget.menu_items)
+            item.get_parent()?.remove_child(item);
+    }
+}
+
+// One entry per monitor, in the order the monitor's first widget appears.
+// Grouping is a Map rather than a run detector: a monitor's widgets are
+// adjacent in elts today, but that is expansion's ordering, held across a
+// module boundary with nothing here enforcing it. Gathering costs the same and
+// beats emitting two entries under the same title if it ever stops holding.
+//
+// Hidden widgets are dropped here, so an entry always has at least one device
+// and a monitor whose devices are all hidden contributes nothing.
+function group_by_monitor(elts) {
+    const entries = new Map();
+    for (const widget of elts) {
+        if (!widget.menu_visible)
+            continue;
+        const devices = entries.get(widget.config.monitorUuid);
+        if (devices)
+            devices.push(widget);
+        else
+            entries.set(widget.config.monitorUuid, [widget]);
+    }
+    return entries;
+}
+
+// A monitor's devices under one title. The wrap is not decided here: a cell is
+// as wide as the number in it, and the numbers arrive on each widget's own tick.
+// Deciding at build time would decide on whatever the values happened to be --
+// on the first build, on no values at all -- so the cells go in one column and
+// reflow_menu_entries settles them whenever the menu is opened.
+function build_monitor_entry(extension, devices) {
+    const Style = extension._Style;
+    const entry = new St.BoxLayout({style: 'spacing: 10px;'});
+    entry.add_child(new St.Label({
+        text: devices[0].monitor_name,
+        style_class: Style.get('sm-title'),
+        x_align: Clutter.ActorAlign.START,
+        y_align: Clutter.ActorAlign.CENTER
+    }));
+
+    // Homogeneous, so every device occupies the same width and the values line
+    // up in a lattice. Legitimate because a monitor is one type: every device
+    // in it has the same menuLayout and therefore the same cells.
+    const grid = new St.Widget({
+        style: 'spacing-rows: 2px; spacing-columns: 18px;',
+        layout_manager: new Clutter.GridLayout({orientation: Clutter.Orientation.VERTICAL})
+    });
+    grid.layout_manager.column_homogeneous = true;
+    entry.add_child(grid);
+
+    const cells = devices.map((widget, i) => {
+        const cell = new St.BoxLayout({style_class: 'sm-menu-device'});
+        // The colon is what keeps a numeric device name from reading as part of
+        // the number beside it: a core called 1 showing 3% is "1: 3 %", where
+        // "1 3 %" is a glance away from thirteen percent.
+        cell.add_child(new St.Label({
+            text: widget.device_name + ':',
+            style_class: Style.get('sm-device-name'),
+            y_align: Clutter.ActorAlign.CENTER
+        }));
+        for (const item of widget.menu_items)
+            cell.add_child(item);
+        // Every cell is as wide as the widest, and the slack has to fall
+        // somewhere. Falling inside a cell, it separates a device's name from
+        // its own number by more than the cells are separated from each other,
+        // and "1  0 %" beside "2  0 %" reads as "0 %1" -- the next device's
+        // name attaching itself to the previous device's value. So it falls
+        // here, after the cell, where the eye is meant to break anyway.
+        cell.add_child(new St.Widget({x_expand: true}));
+        grid.layout_manager.attach(cell, 0, i, 1, 1);
+        return cell;
+    });
+
+    return {actor: entry, grid, cells, columns: 1};
+}
+
+// Wrap the devices to the width budget. Placement is arithmetic rather than a
+// loop over an evolving line, so there is nothing to argue terminates; the one
+// obligation is 1 <= columns <= cells.length, which max(1, min(...)) discharges
+// as long as the divide is finite -- and `> 0` is false for NaN too, so a cell
+// that cannot report a width yields one column rather than an empty entry.
+function reflow_monitor_entry({grid, cells, columns}) {
+    const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+    let widest = 0;
+    for (const cell of cells)
+        widest = Math.max(widest, cell.get_preferred_width(-1)[1]);
+    const cell_width = widest > 0 ? widest : 1;
+    const fits = Math.floor(MENU_ENTRY_WIDTH * scale / cell_width);
+    const needed = Math.ceil(cells.length / MENU_ENTRY_LINES);
+    const wrap = Math.max(1, Math.min(cells.length, Math.max(fits, needed)));
+    if (wrap === columns)
+        return wrap;
+
+    grid.remove_all_children();
+    cells.forEach((cell, i) => {
+        grid.layout_manager.attach(cell, i % wrap, (i / wrap) | 0, 1, 1);
+    });
+    return wrap;
+}
+
+// Settle every multi-device entry against the widths its values have now.
+// Called when the menu opens, which is the only moment the answer matters and
+// the one moment every value is as current as it will ever be.
+export function reflow_menu_entries(extension) {
+    for (const entry of extension.__sm?.menu_entries ?? [])
+        entry.columns = reflow_monitor_entry(entry);
+}
+
+function attach_monitor_row(extension, layout, widget, row_index) {
+    layout.attach(
+        new St.Label({
+            text: widget.item_name,
+            style_class: extension._Style.get('sm-title'),
+            x_align: Clutter.ActorAlign.START,
+            y_align: Clutter.ActorAlign.CENTER
+        }), 0, row_index, 1, 1);
+
+    let col_index = 1;
+    for (const item of widget.menu_items) {
+        layout.attach(item, col_index, row_index, 1, 1);
+        col_index++;
+    }
+}
+
 export function build_menu_info(extension) {
     let elts = extension.__sm.elts;
     let tray_menu = extension.__sm.tray.menu;
 
     let firstItem = tray_menu._getMenuItems()[0];
     let lastChild = firstItem?.actor.get_last_child();
-    if (lastChild) {
-        lastChild.destroy_all_children();
-        for (let elt in elts) {
-            elts[elt].menu_items = elts[elt].create_menu_items();
-        }
-    } else {
+    if (!lastChild) {
         return;
     }
+    release_menu_cells(elts);
+    lastChild.destroy_all_children();
 
     let menu_info_box_table = new St.Widget({
         style: 'padding: 10px 0px 10px 0px; spacing-rows: 10px; spacing-columns: 15px;',
@@ -91,34 +256,33 @@ export function build_menu_info(extension) {
     });
     let menu_info_box_table_layout = menu_info_box_table.layout_manager;
 
-    // Populate Table
+    const entries = group_by_monitor(elts);
+    // One title column plus the widest set of cells in this table. Derived
+    // rather than written down, so a menuLayout added later cannot silently
+    // outgrow it, and seeded with 1 so an empty table needs no special case.
+    let table_columns = 1;
+    for (const devices of entries.values()) {
+        for (const widget of devices)
+            table_columns = Math.max(table_columns, 1 + widget.menu_items.length);
+    }
+
+    // A monitor with one visible device is the row it has always been: the
+    // title folds the device into itself, which two devices cannot both do.
     let row_index = 0;
-    for (let elt in elts) {
-        if (!elts[elt].menu_visible) {
-            continue;
+    extension.__sm.menu_entries = [];
+    for (const devices of entries.values()) {
+        if (devices.length === 1) {
+            attach_monitor_row(extension, menu_info_box_table_layout, devices[0], row_index);
+        } else {
+            const entry = build_monitor_entry(extension, devices);
+            menu_info_box_table_layout.attach(entry.actor, 0, row_index, table_columns, 1);
+            extension.__sm.menu_entries.push(entry);
         }
-
-        // Add item name to table
-        menu_info_box_table_layout.attach(
-            new St.Label({
-                text: elts[elt].item_name,
-                style_class: extension._Style.get('sm-title'),
-                x_align: Clutter.ActorAlign.START,
-                y_align: Clutter.ActorAlign.CENTER
-            }), 0, row_index, 1, 1);
-
-        // Add item data to table
-        let col_index = 1;
-        for (let item in elts[elt].menu_items) {
-            menu_info_box_table_layout.attach(
-                elts[elt].menu_items[item], col_index, row_index, 1, 1);
-
-            col_index++;
-        }
-
         row_index++;
     }
-    tray_menu._getMenuItems()[0].actor.get_last_child().add_child(menu_info_box_table);
+    lastChild.add_child(menu_info_box_table);
+    // A cell can only report its width once it is in the stage, which it now is.
+    reflow_menu_entries(extension);
 }
 
 export function change_menu() {
@@ -264,15 +428,23 @@ export const Chart = class SystemMonitor_Chart {
         themeContext.connectObject('notify::scale-factor', this.rescale.bind(this), this);
         this.actor.connect('repaint', this._draw.bind(this));
     }
-    update() {
-        let data_a = this.parentC.vals;
-        if (data_a.length !== this.parentC.colors.length) {
+    /**
+     * @param {number[]|null} vals - this tick's values, or null when the tick
+     *   produced no reading. A null sample is a hole in the series rather than
+     *   a zero: the fill stops at it and resumes after it, where a zero would
+     *   draw a notch that reads as a real idle moment.
+     */
+    update(vals) {
+        const series = this.parentC.colors.length;
+        if (vals && vals.length !== series) {
             return;
         }
-        let accdata = [];
-        for (let l = 0; l < data_a.length; l++) {
-            accdata[l] = (l === 0) ? data_a[0] : accdata[l - 1] + ((data_a[l] > 0) ? data_a[l] : 0);
-            this.data[l].push(accdata[l]);
+        let acc = 0;
+        for (let l = 0; l < series; l++) {
+            if (vals) {
+                acc = (l === 0) ? vals[0] : acc + ((vals[l] > 0) ? vals[l] : 0);
+            }
+            this.data[l].push(vals ? acc : null);
             if (this.data[l].length > this.width) {
                 this.data[l].shift();
             }
@@ -311,29 +483,63 @@ export const Chart = class SystemMonitor_Chart {
         sm_cairo_set_source_color(cr, this.extension._Background);
         cr.rectangle(0, 0, width, height);
         cr.fill();
+        const frame = {cr, width, height, top, range, samples: this.data[0].length - 1};
         for (let i = this.parentC.colors.length - 1; i >= 0; i--) {
-            let samples = this.data[i].length - 1;
-            if (samples > 0) {
-                cr.moveTo(width, height); // bottom right
-                let x = width - 0.25 * this.scale_factor;
-                cr.lineTo(x, (top - this.data[i][samples] / range) * height);
-                x -= 0.5 * this.scale_factor;
-                for (let j = samples; j >= 0; j--) {
-                    let y = (top - this.data[i][j] / range) * height;
-                    cr.lineTo(x, y);
-                    x -= 0.5 * this.scale_factor;
-                    cr.lineTo(x, y);
-                    x -= 0.5 * this.scale_factor;
-                }
-                x += 0.25 * this.scale_factor;
-                cr.lineTo(x, (top - this.data[i][0] / range) * height);
-                cr.lineTo(x, height);
-                cr.closePath();
-                sm_cairo_set_source_color(cr, this.parentC.colors[i]);
-                cr.fill();
+            if (frame.samples <= 0) {
+                continue;
             }
+            sm_cairo_set_source_color(cr, this.parentC.colors[i]);
+            this._fill_series(frame, this.data[i]);
         }
         cr.$dispose();
+    }
+    // Right to left, filling each run of present samples as its own closed
+    // shape, so that a tick with no reading leaves a hole rather than a notch
+    // at the floor. Invariant: `newest` is the index of the most recent sample
+    // of the run being collected, or -1 between runs.
+    _fill_series(frame, series) {
+        let newest = -1;
+        for (let j = frame.samples; j >= 0; j--) {
+            if (series[j] === null) {
+                if (newest >= 0) {
+                    this._fill_run(frame, series, newest, j + 1);
+                    newest = -1;
+                }
+                continue;
+            }
+            if (newest < 0) {
+                newest = j;
+            }
+            if (j === 0) {
+                this._fill_run(frame, series, newest, 0);
+            }
+        }
+    }
+    // A sample's position is fixed by its index -- every sample takes one cell,
+    // holes included -- so a run's geometry does not depend on what preceded it,
+    // and a series with no holes traces exactly the path this chart has always
+    // traced.
+    _fill_run(frame, series, newest, oldest) {
+        const {cr, height} = frame;
+        const step = 0.5 * this.scale_factor;
+        const y = j => (frame.top - series[j] / frame.range) * height;
+        let x = frame.width - (frame.samples - newest) * 2 * step;
+        cr.moveTo(x, height); // the run's bottom right
+        x -= 0.5 * step;
+        cr.lineTo(x, y(newest));
+        x -= step;
+        for (let j = newest; j >= oldest; j--) {
+            const yj = y(j);
+            cr.lineTo(x, yj);
+            x -= step;
+            cr.lineTo(x, yj);
+            x -= step;
+        }
+        x += 0.5 * step;
+        cr.lineTo(x, y(oldest));
+        cr.lineTo(x, height);
+        cr.closePath();
+        cr.fill();
     }
     resize(width) {
         if (this.width === width) {
@@ -612,6 +818,17 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
      * Constructor receives a config object with per-instance settings:
      *   { uuid, type, device, display, style, graph-width, refresh-time,
      *     show-text, show-menu, colors, ... }
+     *
+     * Three names. A widget may set the first two in its constructor; the third
+     * is the type's own name and is not a widget's to change:
+     *   item_name    - the popup menu row when this widget is a monitor's only
+     *                  device. Folds type and device together however the widget
+     *                  sees fit: 'CPU 4', but 'Package id 0' with no type at all.
+     *   device_name  - the cell when the monitor covers several devices, where
+     *                  the type is already written once beside them. Defaults to
+     *                  the device id, which is right wherever the id is already
+     *                  the name (interfaces, block devices, sensor labels).
+     *   monitor_name - the title over those cells.
      */
     constructor(extension, config) {
         super(extension);
@@ -620,13 +837,17 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         const meta = this.constructor.metadata;
 
         this.elt = meta?.id || meta?.name?.toLowerCase() || config.type;
-        this.item_name = meta ? tr(meta.name) : '';
+        this.monitor_name = meta ? tr(meta.name) : '';
+        this.item_name = this.monitor_name;
         this.color_name = meta ? meta.metrics.filter(m => m.color).map(m => m.key) : [];
         this.device_id = config.device;
+        // The device's own name, for when this widget is one of several in a
+        // monitor and item_name -- which folds the type and the device together
+        // however that widget sees fit -- is the wrong half to show.
+        this.device_name = default_device_name(config.device);
         this.text_items = [];
         this.menu_items = [];
         this.menu_visible = true;
-        this.timeout = null;
         this._updateErrorLogged = false;
         this._asyncGen = 0;
 
@@ -877,21 +1098,11 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
                 });
         }
     }
-    restart_update_timer(interval = null) {
-        interval = interval || this._lastInterval;
-        if (!interval) {
-            sm_log("Invalid call to restart_update_timer", 'error');
-            return;
-        }
-        if (this.timeout) {
-            GLib.Source.remove(this.timeout);
-        }
-        this.timeout = GLib.timeout_add(
-            GLib.PRIORITY_DEFAULT_IDLE,
-            interval,
-            this.update.bind(this),
-        );
-        this._lastInterval = interval;
+    // A widget does not own its refresh timer: it joins the one shared by every
+    // widget on the same interval, so siblings step together instead of drifting
+    // apart from whatever phase their construction order gave them.
+    restart_update_timer(interval) {
+        this.extension._Ticks.register(this, interval);
     }
     tip_format(unit) {
         if (typeof (unit) === 'undefined') {
@@ -928,66 +1139,94 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
     //           this.tip_unit_labels[i].text = unit[i];
     //           }
     //           }
+    // Called by the shared tick for this widget's refresh interval, and once
+    // at construction so a newly added widget is not blank until that tick.
     update() {
         if (this._destroyed)
-            return GLib.SOURCE_REMOVE;
+            return;
+        // A hidden widget collects nothing, so it also forces no shared read.
         if (!this.menu_visible && !this.actor.visible) {
-            return GLib.SOURCE_CONTINUE;
+            return;
         }
-        // A throw escaping a GLib source callback removes the source, which
-        // would silently stop this widget's updates until shell restart —
-        // never let collection errors propagate out of here.
+        // A throw escaping here would take down every widget sharing this
+        // tick, not just this one -- never let collection errors propagate.
         try {
             if (this.collect) {
                 this._applyCollected(this.collect());
             } else if (this.collectAsync) {
-                if (!this._asyncPending) {
-                    this._asyncPending = true;
-                    const gen = ++this._asyncGen;
-                    if (this._asyncTimeoutId)
-                        GLib.Source.remove(this._asyncTimeoutId);
-                    this._asyncTimeoutId = GLib.timeout_add_seconds(
-                        GLib.PRIORITY_DEFAULT, 30, () => {
-                            this._asyncTimeoutId = null;
-                            if (this._asyncPending && this._asyncGen === gen) {
-                                sm_log(`${this.elt}: async collect timed out`, 'warn');
-                                this._asyncPending = false;
-                            }
-                            return GLib.SOURCE_REMOVE;
-                        });
-                    this.collectAsync(data => {
-                        if (this._asyncGen !== gen)
-                            return;
-                        this._asyncPending = false;
-                        if (this._asyncTimeoutId) {
-                            GLib.Source.remove(this._asyncTimeoutId);
-                            this._asyncTimeoutId = null;
-                        }
-                        if (this._destroyed)
-                            return;
-                        this._applyCollected(data);
-                    });
-                }
+                if (this._asyncPending)
+                    this._checkAsyncStall();
+                else
+                    this._startAsyncCollect();
             } else {
                 this.refresh();
                 this._apply();
-                this._postApply();
+                this._postApply(this.vals);
                 this._updateErrorLogged = false;
             }
         } catch (e) {
             this._logUpdateError(e);
         }
-        return GLib.SOURCE_CONTINUE;
+    }
+    _startAsyncCollect() {
+        this._asyncPending = true;
+        this._asyncStartedAt = GLib.get_monotonic_time();
+        const gen = ++this._asyncGen;
+        try {
+            this.collectAsync(data => {
+                // A callback from a collect we already gave up on.
+                if (this._asyncGen !== gen)
+                    return;
+                this._asyncPending = false;
+                if (this._destroyed)
+                    return;
+                this._applyCollected(data);
+            });
+        } catch (e) {
+            // Nothing would ever clear the pending flag, and this widget would
+            // stop collecting for good.
+            this._asyncPending = false;
+            throw e;
+        }
+    }
+    // A collect that never calls back would leave this widget pending forever,
+    // so the stall is noticed at the next tick -- which costs nothing, where a
+    // GLib timeout armed and disarmed around every collect cost two source
+    // operations per widget per tick, paid forever to catch something that
+    // essentially never happens.
+    _checkAsyncStall() {
+        if (GLib.get_monotonic_time() - this._asyncStartedAt < ASYNC_STALL_US)
+            return;
+        sm_log(`${this.elt}: async collect did not finish; giving up on it`, 'warn');
+        this._asyncPending = false;
     }
     _applyCollected(data) {
         try {
             if (data)
                 this._autoApply(data);
-            this._postApply();
+            else
+                this._showNoReading();
+            // This tick's values, or nothing at all: a tick with no reading is
+            // a hole in the series, never a zero.
+            this._postApply(data ? this.vals : null);
             this._updateErrorLogged = false;
         } catch (e) {
             this._logUpdateError(e);
         }
+    }
+    // A tick that produced no numbers: this widget's device is not in the
+    // source, the source could not be read, or the first reading has not landed
+    // yet. One form for all three, because which of them it was is a journal
+    // question and the panel's answer is the same either way -- there is no
+    // number. Units are left alone, since "-- KiB/s" still says what the number
+    // would have been.
+    _showNoReading() {
+        const meta = this.constructor.metadata;
+        const data = {display: NO_READING, display2: NO_READING, detail: NO_READING};
+        for (let i = 0; i < this.tip_vals.length; i++)
+            this.tip_vals[i] = NO_READING;
+        this._applyPanel(data, NO_READING, meta?.panelLayout ?? 'simple');
+        this._applyMenu(data, NO_READING, meta?.menuLayout ?? 'simple');
     }
     _logUpdateError(e) {
         if (this._updateErrorLogged)
@@ -995,8 +1234,12 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this._updateErrorLogged = true;
         sm_log(`${this.elt}: update failed: ${e}`, 'error');
     }
-    _postApply() {
-        this.chart.update();
+    /**
+     * @param {number[]|null} vals - this tick's values, or null when the tick
+     *   produced no reading, which the chart draws as a hole.
+     */
+    _postApply(vals) {
+        this.chart.update(vals);
         for (let i = 0; i < this.tip_vals.length; i++) {
             if (this.tip_labels[i])
                 this.tip_labels[i].text = this.tip_vals[i].toString();
@@ -1096,7 +1339,13 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
     }
     destroy() {
         this._destroyed = true;
+        this.extension._Ticks.unregister(this);
         this.extension._Schema.disconnectObject(this);
+        // The other half of the borrow: a cell whose owner is gone must not sit
+        // in the table showing a value nobody is computing any more.
+        for (const item of this.menu_items)
+            item.destroy();
+        this.menu_items = [];
         if (this.chart)
             this.chart.destroy();
         TipBox.prototype.destroy.call(this);
@@ -1104,17 +1353,9 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
             GLib.Source.remove(this._initialUpdateId);
             this._initialUpdateId = null;
         }
-        if (this.timeout) {
-            GLib.Source.remove(this.timeout);
-            this.timeout = null;
-        }
         if (this.graph_scale_cooldown_timer_id) {
             GLib.Source.remove(this.graph_scale_cooldown_timer_id);
             this.graph_scale_cooldown_timer_id = null;
-        }
-        if (this._asyncTimeoutId) {
-            GLib.Source.remove(this._asyncTimeoutId);
-            this._asyncTimeoutId = null;
         }
     }
 }

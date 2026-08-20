@@ -1,0 +1,41 @@
+{
+    "description": "A net total beside the hardware interface it sums and the virtual interfaces it must not, for the double-count test. Build the layered case on the VM first: 'ip link add br0 type bridge; ip link add veth0 type veth peer name veth1; ip link set veth1 master br0; ip tunnel add tun0 mode ipip remote <peer> local <self>' and bring them up. Then push a known volume through the tunnel and read the three rows together: the total must match the hardware row, not their sum, because the tunnel's bytes leave over the hardware as well. The virtual rows still report their own traffic, which is what a user who wants the inner view of a tunnel selects.",
+    "monitors": [
+        {
+            "uuid": "cfg-net-total",
+            "type": "net",
+            "devices": ["all"],
+            "display": true,
+            "style": "both",
+            "graph-width": 100,
+            "refresh-time": 1000,
+            "show-menu": true,
+            "colors": {"down": "#fce94f", "downerrors": "#ff6e00", "up": "#fb74fb", "uperrors": "#e0006e", "collisions": "#ff0000"},
+            "speed-in-bits": false
+        },
+        {
+            "uuid": "cfg-net-edge",
+            "type": "net",
+            "devices": [{"id": "enp1s0", "show-text": true}],
+            "display": true,
+            "style": "digit",
+            "graph-width": 100,
+            "refresh-time": 1000,
+            "show-menu": true,
+            "colors": {"down": "#fce94f", "downerrors": "#ff6e00", "up": "#fb74fb", "uperrors": "#e0006e", "collisions": "#ff0000"},
+            "speed-in-bits": false
+        },
+        {
+            "uuid": "cfg-net-virtual",
+            "type": "net",
+            "devices": [{"id": "br0", "show-text": true}, {"id": "tun0", "show-text": true}],
+            "display": true,
+            "style": "digit",
+            "graph-width": 100,
+            "refresh-time": 1000,
+            "show-menu": true,
+            "colors": {"down": "#fce94f", "downerrors": "#ff6e00", "up": "#fb74fb", "uperrors": "#e0006e", "collisions": "#ff0000"},
+            "speed-in-bits": false
+        }
+    ]
+}

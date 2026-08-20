@@ -14,7 +14,6 @@ A GNOME Shell extension that displays system resource usage (CPU, memory, disk, 
 
 The extension requires system libraries to function:
 - `libgtop` (system metrics)
-- `NetworkManager` libraries (network monitoring)
 - `clutter` (rendering)
 - `gnome-system-monitor`
 - For NVIDIA GPU monitoring: `nvidia-smi`
@@ -181,11 +180,15 @@ All extension source files are in `system-monitor-next@paradoxxx.zero.gmail.com/
 - **`extension.js`** (~300 lines): Extension lifecycle (enable/disable), config-driven widget instantiation
   - `WIDGET_CLASSES` lookup table maps type strings to constructors
   - `_syncMonitors()` handles live add/remove/reorder when `monitors` setting changes
+- **`monitors.js`** (~160 lines): The config boundary — the only place monitor configs are built
+  - `parseMonitorConfigs()` normalizes the `monitors` setting; skips what it cannot repair
+  - `expandMonitor()` turns one config into one derived config per selected device
 - **`base.js`** (~900 lines): Widget framework
   - `ElementBase` — base class for all monitoring widgets; accepts `(extension, config)` constructor
   - `onSettingsChanged(newConfig)` for live config updates without recreating widgets
   - `collect()` API — widgets return `{metricKey: value}`, framework auto-updates display
   - `Chart` — stacked area graph rendering (Cairo)
+  - `build_menu_info()` — the popup menu's table, **one entry per monitor**: a monitor with one visible device is a row titled `item_name`, one with several writes its type once and wraps its devices beneath it. A widget's `menu_items` belong to the widget; the table borrows them and returns them before each rebuild
   - `TipBox`/`TipMenu`/`TipItem` — tooltip system
   - `smStyleManager` — display styling and compact mode
   - Color helpers
@@ -202,10 +205,18 @@ All extension source files are in `system-monitor-next@paradoxxx.zero.gmail.com/
 - **`prefs.js`**: Preferences UI (GTK4/Adw)
   - General settings page (uses `ui/prefsGeneralSettings.ui` template)
   - Monitors page: dynamic monitor list with add/delete/reorder, reads/writes `monitors` GSettings key
+- **`sampling.js`** (~570 lines): One moment and one read, shared across widgets
+  - `smTickClock` — one `GLib` timer per distinct refresh interval, so widgets sharing an interval update in the same callback instead of drifting apart. `base.js`'s `restart_update_timer` registers here
+  - `Sampler` / `AsyncSampler` — one read of a shared source (`/proc/stat`, `/proc/diskstats`, `/proc/net/dev`, `gpu_usage.sh`, `sensors -jA`, a Prometheus scrape), taken by whichever widget ticks first
+  - A sampler shares the *decode*, not just the I/O: the CPU reading carries per-core columns, a scrape carries its split lines, the net reading carries each interface's `edge` flag — whether it is where traffic enters or leaves the machine, which is what `net`'s `all` sums — and the disk reading carries each device's `medium` flag, whether I/O to it reaches storage attached to this machine, which is what `disk`'s `all` sums
+  - Both flags come from `is_storage_medium()`/`markEdges()` testing for a `device` symlink in sysfs, the link the kernel creates from a driver to its hardware parent. They are named apart on purpose: an `nbd` device *is* where disk I/O leaves the machine and is exactly what `medium` excludes
+  - `Cursor` — one widget's position in a sampler's readings; it never consumes the same reading twice, which is what keeps delta-based metrics honest
+  - `smSamplers` — the per-extension registry, `extension._Samplers`
 - **`common.js`**: Shared utilities (`parse_bytearray()`, `check_sensors()`)
 - **`utils.js`**: Logging (`sm_log()`)
-- **`migration.js`**: Settings schema migration (v0 → v1 → v2)
+- **`migration.js`**: Settings schema migration (v0 → v1 → v2 → v3)
   - v1→v2: converts per-widget GSettings keys into JSON `monitors` array
+  - v2→v3: converts each monitor's single `device` into a `devices` set, coalescing adjacent monitors that differ only by device
 
 ### Settings and Schemas
 
@@ -214,37 +225,39 @@ All extension source files are in `system-monitor-next@paradoxxx.zero.gmail.com/
   - **`monitors` key** (type `as`): JSON array of widget configurations — the primary config mechanism
   - Legacy per-widget keys (`{metric}-{property}`) remain for backward compat
 
-- **Monitor config object shape** (each widget instance gets one):
+- **Monitor config object shape** (one per preferences entry; expands to one widget per device):
   ```json
   {
     "uuid": "unique-id",
     "type": "cpu",
-    "device": "all",
+    "devices": [{"id": "all", "show-text": true}, {"id": "0", "show-text": false}],
     "display": true,
     "style": "graph",
     "graph-width": 100,
     "refresh-time": 1500,
-    "show-text": true,
     "show-menu": true,
     "colors": {"user": "#0072b3", "system": "#0092e6"}
   }
   ```
+  `devices` also accepts a bare id list (`["all", "0", "1"]`) and the legacy scalar
+  `"device": "all"`; both normalize on load. An entry's keys beyond `id` are a sparse
+  override of the shared body for that device only.
 
 - **Display styles:** Each metric supports `digit`, `graph`, or `both` modes
 - **Disk usage styles:** `pie`, `bar`, or `none`
 
 ### External Resources
 
-- **`gpu_usage.sh`**: Shell script for GPU monitoring (NVIDIA via `nvidia-smi`, AMD via sysfs); accepts GPU index as `$1`
+- **`gpu_usage.sh`**: Shell script for GPU monitoring (NVIDIA via `nvidia-smi`, AMD via sysfs). Takes no arguments and prints one line per GPU: `<index> <total MiB> <used MiB> <busy %>`. Both the panel and the preferences GPU picker enumerate from it, so it is the single source of truth for which GPUs exist
 - **`stylesheet.css`**: Extension styling
 
 ### Monitoring Architecture
 
 The extension follows a config-driven modular pattern:
 1. On startup, `migration.js` converts legacy per-widget GSettings into a JSON `monitors` array (if needed)
-2. `extension.js` reads `monitors`, looks up each config's `type` in `WIDGET_CLASSES`, and instantiates widgets with their config object
+2. `extension.js` reads `monitors`, normalizes and expands it via `monitors.js` into one config per device, looks up each config's `type` in `WIDGET_CLASSES`, and instantiates widgets with their config object
 3. Each widget class in `widgets/` extends `ElementBase` from `base.js`, declares `static metadata` (identity, metrics, units), and uses `this.config` for per-instance settings
-4. `ElementBase` handles shared concerns: config-driven initialization, update timers, chart rendering, tooltips, panel/menu item creation
+4. `ElementBase` handles shared concerns: config-driven initialization, chart rendering, tooltips, panel/menu item creation. It does not own a refresh timer — it registers with `smTickClock`, so every widget on the same interval updates in one callback
 5. Simple widgets implement `collect()` returning `{metricKey: value}`; complex widgets use `refresh()` + `_apply()`
 6. `this.device_id` (from `config.device`) enables per-device monitoring — e.g. individual CPU cores, specific network interfaces, or GPU indices
 7. When the `monitors` GSettings key changes, `_syncMonitors()` dynamically adds/removes/updates widgets without restarting
@@ -284,6 +297,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full details. Key rules for AI agents
 
 - **Network disk usage monitoring is disabled by default** (`ENABLE_NETWORK_DISK_USAGE = false` in `extension.js:53`) because stale network shares can freeze the shell
 - The extension uses ES6 modules (import/export) introduced in GNOME Shell 45
-- Settings migration happens automatically on extension load via `migrateSettings()` (current schema version: 2)
+- Settings migration happens automatically on extension load via `migrateSettings()` (current schema version: 3)
 - The extension UUID is hardcoded throughout and must match the directory name
 - Graph width, refresh times, and colors are all user-configurable per metric type

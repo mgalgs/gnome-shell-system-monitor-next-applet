@@ -540,7 +540,7 @@
     <key name="monitors" type="as">
       <default>[]</default>
       <summary>Monitor widget configurations</summary>
-      <description>JSON array of monitor configurations. Each entry defines a widget instance with type, device, display settings, colors, and refresh rate. Supports multiple instances of the same widget type for multi-device monitoring.</description>
+      <description>JSON array of monitor configurations. Each entry defines a set of devices to monitor, with a shared type, display settings, colors and refresh rate, and expands to one panel widget per device. Individual devices may override any shared setting.</description>
     </key>
   </schema>
 </schemalist>

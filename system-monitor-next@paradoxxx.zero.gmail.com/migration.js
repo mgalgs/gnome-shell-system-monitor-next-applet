@@ -5,7 +5,7 @@ import { sm_log } from './utils.js';
 
 function migrateSettings(extension) {
     const SCHEMA_VERSION_KEY = 'settings-schema-version';
-    const CURRENT_SCHEMA_VERSION = 2;
+    const CURRENT_SCHEMA_VERSION = 3;
 
     const settings = extension.getSettings();
     let currentVersion = settings.get_int(SCHEMA_VERSION_KEY);
@@ -24,6 +24,11 @@ function migrateSettings(extension) {
     if (currentVersion < 2) {
         migrateFrom1(extension, settings);
         currentVersion = 2;
+    }
+
+    if (currentVersion < 3) {
+        migrateFrom2(extension, settings);
+        currentVersion = 3;
     }
 
     settings.set_int(SCHEMA_VERSION_KEY, CURRENT_SCHEMA_VERSION);
@@ -132,6 +137,97 @@ function migrateFrom1(extension, settings) {
 
     settings.set_strv('monitors', monitors);
     sm_log(`Successfully migrated ${monitors.length} monitors to new config format.`);
+}
+
+// Sorts object keys at every level so two configs holding the same settings
+// compare equal regardless of the order their fields were written in. Plain
+// JSON.stringify would compare serialization, and hand-authored configs are a
+// supported input.
+function canonical(value) {
+    if (Array.isArray(value))
+        return value.map(canonical);
+    if (value && typeof value === 'object') {
+        const sorted = {};
+        for (const key of Object.keys(value).sort())
+            sorted[key] = canonical(value[key]);
+        return sorted;
+    }
+    return value;
+}
+
+// Everything that must match for two monitors to be the same monitor watching
+// a different device. `type` is included, so an equal fingerprint already
+// implies an equal type.
+function settingsFingerprint(config) {
+    const settings = {...config};
+    delete settings.uuid;
+    delete settings.device;
+    return JSON.stringify(canonical(settings));
+}
+
+function toDeviceEntry(config) {
+    const entry = {id: config.device};
+    // show-text is per-device from v3 on: a widget's label belongs to the
+    // widget, and one monitor now produces several.
+    if ('show-text' in config)
+        entry['show-text'] = config['show-text'];
+    return entry;
+}
+
+function migrateFrom2(_extension, settings) {
+    sm_log('Migrating settings: v2 -> v3 (monitor device becomes a device set)');
+
+    const raw = settings.get_strv('monitors');
+    const parsed = [];
+    for (const s of raw) {
+        try {
+            const config = JSON.parse(s);
+            if (config && config.uuid && config.type)
+                parsed.push(config);
+            else
+                sm_log('Passing over a monitor with no uuid and type during v2 -> v3 migration', 'warn');
+        } catch (e) {
+            sm_log(`Passing over a malformed monitor during v2 -> v3 migration: ${e.message}`, 'warn');
+        }
+    }
+
+    // A user who had individual CPU cores enabled before the v1 -> v2 migration
+    // owns one monitor per core. Merge a run of adjacent monitors that differ
+    // only in uuid and device back into one entry -- that split is the very
+    // thing a device set exists to undo. Adjacency matters: same-type monitors
+    // placed apart in the list were placed apart deliberately.
+    const runs = [];
+    for (const config of parsed) {
+        // Nothing to convert and nothing to guess: pass it through untouched so
+        // the user still has it to fix, and let it break the run.
+        if (typeof config.device !== 'string' || Array.isArray(config.devices)) {
+            runs.push({config, fingerprint: null, merged: 0});
+            continue;
+        }
+
+        const fingerprint = settingsFingerprint(config);
+        const previous = runs[runs.length - 1];
+        if (previous && previous.fingerprint === fingerprint) {
+            previous.config.devices.push(toDeviceEntry(config));
+            previous.merged++;
+            continue;
+        }
+
+        const converted = {...config, devices: [toDeviceEntry(config)]};
+        delete converted.device;
+        delete converted['show-text'];
+        runs.push({config: converted, fingerprint, merged: 0});
+    }
+
+    for (const run of runs) {
+        if (run.merged > 0) {
+            sm_log(`Merged ${run.merged + 1} adjacent ${run.config.type} monitors into 1 with ` +
+                   `${run.config.devices.length} devices`);
+        }
+    }
+
+    settings.set_strv('monitors', runs.map(run => JSON.stringify(run.config)));
+    sm_log(`Migrated ${parsed.length} monitors to ${runs.length} device sets`);
 }
 
 export { migrateSettings };

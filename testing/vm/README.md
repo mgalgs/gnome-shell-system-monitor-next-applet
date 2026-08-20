@@ -121,7 +121,7 @@ What it does:
 3. Deploys via rsync + compiles schemas (both in extension dir and system-wide)
 4. If first deploy: restarts GDM so GNOME Shell discovers the new extension
 5. Enables extension via `gnome-extensions enable`
-6. Runs health checks (gnome-shell alive, extension ACTIVE, no JS errors)
+6. Runs health checks (gnome-shell alive, extension ACTIVE, no JS errors, preferences opens)
 7. Captures screenshot via `virsh screenshot` (PPM -> PNG)
 8. Captures GNOME Shell journal logs
 9. Prints structured results
@@ -165,11 +165,18 @@ Generates an HTML comparison report at `testing/vm/results/<label>/report.html` 
 ```bash
 ./testing/vm/vm-config.sh --vm gssmn-fedora42 --preset all-visible --screenshot
 ./testing/vm/vm-config.sh --vm gssmn-fedora42 --preset prometheus --screenshot
+./testing/vm/vm-config.sh --vm gssmn-fedora42 --preset menu-grouping --open-menu --screenshot
 ./testing/vm/vm-config.sh --vm gssmn-fedora42 my-custom-config.json
 ./testing/vm/vm-config.sh --list-presets
 ```
 
 Pushes monitor configurations from JSON files to a VM's GSettings, replacing the current monitor setup. Avoids manual GVariant escaping. Use `--screenshot` to snap the result.
+
+**`--open-menu`** opens the extension's popup menu before the screenshot, since none of it
+shows in a panel shot. There is no pointer channel into the guest, so the menu is reached by
+keyboard: focus the top bar, walk to the far right, step back onto the extension's button,
+press Enter. `vm-test.sh --screenshot-only --open-menu` does the same without pushing a
+config. Set `TRAY_MENU_WALK` if a panel ever holds more than eight items.
 
 **Presets** live in `testing/vm/configs/*.json`. Each is a JSON file with a `monitors` array (and optional `settings` for globals like `compact-display`). To add a new preset, just drop a JSON file in that directory.
 
@@ -265,7 +272,8 @@ testing/vm/
     vm-deploy.sh            # Build + rsync + schema install + enable
     vm-screenshot.sh        # virsh screenshot -> PNG
     vm-logs.sh              # GNOME Shell journal capture
-    vm-health.sh            # Health checks (alive, active, no JS errors)
+    vm-health.sh            # Health checks (alive, active, no JS errors, prefs opens)
+    prefs-smoke.sh          # Opens preferences on the VM; runs in its own process
   results/                  # Screenshots and logs (gitignored)
 ```
 

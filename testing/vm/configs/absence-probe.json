@@ -1,0 +1,63 @@
+{
+    "description": "Devices that are not there: a missing disk, a core the machine lacks, a bogus sensor, an absent interface",
+    "monitors": [
+        {
+            "uuid": "probe-disk-all",
+            "type": "disk",
+            "devices": [{"id": "all", "show-text": true}],
+            "display": true,
+            "style": "both",
+            "graph-width": 100,
+            "refresh-time": 1500,
+            "show-menu": true,
+            "colors": {"read": "#c65000", "write": "#ff6700"}
+        },
+        {
+            "uuid": "probe-cpu",
+            "type": "cpu",
+            "devices": [{"id": "3", "show-text": true}, {"id": "63", "show-text": true}],
+            "display": true,
+            "style": "both",
+            "graph-width": 60,
+            "refresh-time": 1500,
+            "show-menu": true,
+            "colors": {"user": "#0072b3", "system": "#0092e6", "nice": "#00a3ff", "iowait": "#002f3d", "other": "#001d26"}
+        },
+        {
+            "uuid": "probe-net",
+            "type": "net",
+            "devices": [{"id": "all", "show-text": true}, {"id": "enp99s0", "show-text": true}],
+            "display": true,
+            "style": "both",
+            "graph-width": 60,
+            "refresh-time": 1500,
+            "show-menu": true,
+            "colors": {"down": "#fce94f", "downerrors": "#ff6e00", "up": "#fb74fb", "uperrors": "#e0006e", "collisions": "#ff0000"},
+            "speed-in-bits": false
+        },
+        {
+            "uuid": "probe-thermal",
+            "type": "thermal",
+            "devices": [{"id": "nosuchchip - temp1", "show-text": true}],
+            "display": true,
+            "style": "both",
+            "graph-width": 60,
+            "refresh-time": 1500,
+            "show-menu": true,
+            "colors": {"tz0": "#f2002e"},
+            "fahrenheit-unit": false,
+            "threshold": 0
+        },
+        {
+            "uuid": "probe-gpu",
+            "type": "gpu",
+            "devices": [{"id": "0", "show-text": true}],
+            "display": true,
+            "style": "both",
+            "graph-width": 60,
+            "refresh-time": 1500,
+            "show-menu": true,
+            "colors": {"used": "#00b35b", "memory": "#00ff82"}
+        }
+    ]
+}

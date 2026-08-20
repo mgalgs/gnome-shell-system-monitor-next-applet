@@ -1,0 +1,49 @@
+{
+    "description": "A multi-device CPU monitor and a multi-device Net monitor beside single-device ones, all shown in the menu. Open the tray menu to read it: --open-menu --screenshot. CPU's cells are narrow so they wrap into several columns; Net's carry two rates and a unit each, so they fall to one column. Memory is the unchanged single-device row to compare against.",
+    "monitors": [
+        {
+            "uuid": "cfg-menu-cpu",
+            "type": "cpu",
+            "devices": [
+                {"id": "all", "show-text": true},
+                {"id": "0", "show-text": false},
+                {"id": "1", "show-text": false},
+                {"id": "2", "show-text": false},
+                {"id": "3", "show-text": false}
+            ],
+            "display": true,
+            "style": "graph",
+            "graph-width": 64,
+            "refresh-time": 1500,
+            "show-menu": true,
+            "colors": {"user": "#0072b3", "system": "#0092e6", "nice": "#00a3ff", "iowait": "#002f3d", "other": "#001d26"}
+        },
+        {
+            "uuid": "cfg-menu-net",
+            "type": "net",
+            "devices": [
+                {"id": "all", "show-text": true},
+                {"id": "enp1s0", "show-text": false},
+                {"id": "lo", "show-text": false}
+            ],
+            "display": true,
+            "style": "digit",
+            "graph-width": 60,
+            "refresh-time": 1500,
+            "show-menu": true,
+            "colors": {"down": "#fce94f", "downerrors": "#ff6e00", "up": "#fb74fb", "uperrors": "#e0006e", "collisions": "#ff0000"},
+            "speed-in-bits": false
+        },
+        {
+            "uuid": "cfg-menu-mem",
+            "type": "memory",
+            "devices": [{"id": "default", "show-text": true}],
+            "display": true,
+            "style": "both",
+            "graph-width": 100,
+            "refresh-time": 1500,
+            "show-menu": true,
+            "colors": {"program": "#00b35b", "buffer": "#00ff82", "cache": "#aaf5d0"}
+        }
+    ]
+}

@@ -1,7 +1,7 @@
 /* -*- mode: js2; js2-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
-import Gio from "gi://Gio";
+import { sm_log } from '../utils.js';
 import { ElementBase } from '../base.js';
 
 const Gpu = class SystemMonitor_Gpu extends ElementBase {
@@ -19,6 +19,8 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
         super(extension, config);
         this.max = 100;
         this.gpu_index = this.device_id;
+        this.cursor = extension._Samplers.gpu.cursor();
+        this._missingLogged = false;
         this._mem = 0;
         this._total = 0;
         this._percentage = 0;
@@ -29,70 +31,68 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
     }
 
     collectAsync(callback) {
-        try {
-            let path = this.extension.path;
-            let script = ['/usr/bin/env', 'bash', path + '/gpu_usage.sh', this.gpu_index];
-            let proc = new Gio.Subprocess({argv: script, flags: Gio.SubprocessFlags.STDOUT_PIPE});
-            proc.init(null);
-            proc.communicate_utf8_async(null, null, (p, result) => {
-                if (this._destroyed) {
-                    callback(null);
-                    return;
-                }
-                let [ok, output] = p.communicate_utf8_finish(result);
-                if (!ok) {
-                    callback(null);
-                    return;
-                }
-                this._parseOutput(output);
-                if (this._total === 0) {
-                    callback({metrics: {used: 0, memory: 0}, display: '0',
-                        detail: '', detailUnit: this._unitStr()});
-                } else {
-                    const Locale = this.extension._Locale;
-                    let memPct = this._mem / this._total * 100 - this._percentage;
-                    let compact = this.extension._Style.get('') === '-compact';
-                    let sep = compact ? '/' : '  /  ';
-                    let unitStr = this._unitStr();
-                    callback({
-                        metrics: {
-                            used: this._percentage,
-                            memory: memPct,
-                        },
-                        display: Math.round(this._percentage).toLocaleString(Locale),
-                        detail: this._pad(this._mem).toLocaleString(Locale) +
-                            sep + this._pad(this._total).toLocaleString(Locale),
-                        detailUnit: unitStr,
-                        tipVals: [this._percentage, this._mem],
-                        tipUnits: ['%', '/ ' + this._total + ' ' + unitStr],
-                    });
-                }
+        this.cursor.sample(reading => {
+            if (this._destroyed) {
+                callback(null);
+                return;
+            }
+            const gpu = reading?.data?.get(this.gpu_index);
+            if (!gpu) {
+                this._reportMissing(reading?.data);
+                callback(null);
+                return;
+            }
+            this._missingLogged = false;
+            this._scaleUnits(gpu);
+
+            const Locale = this.extension._Locale;
+            let memPct = this._mem / this._total * 100 - this._percentage;
+            let compact = this.extension._Style.get('') === '-compact';
+            let sep = compact ? '/' : '  /  ';
+            let unitStr = this._unitStr();
+            callback({
+                metrics: {
+                    used: this._percentage,
+                    memory: memPct,
+                },
+                display: Math.round(this._percentage).toLocaleString(Locale),
+                detail: this._pad(this._mem).toLocaleString(Locale) +
+                    sep + this._pad(this._total).toLocaleString(Locale),
+                detailUnit: unitStr,
+                tipVals: [this._percentage, this._mem],
+                tipUnits: ['%', '/ ' + this._total + ' ' + unitStr],
             });
-        } catch (err) {
-            console.error(err.message);
-            callback(null);
-        }
+        });
     }
 
-    _parseOutput(procOutput) {
-        let usage = procOutput.split('\n');
-        let memTotal = this._parseInt(usage[0]);
-        let memUsed = this._parseInt(usage[1]);
-        this._percentage = this._parseInt(usage[2]);
-        if (typeof this.useGiB === 'undefined')
-            this._initUnit(memTotal);
-        if (this.useGiB) {
-            this._mem = Math.round(memUsed / this._unitConversion) / this._decimals;
-            this._total = Math.round(memTotal / this._unitConversion) / this._decimals;
+    // The panel can only say "no reading"; which GPUs the script did report is
+    // the difference between a mystery and a one-line diagnosis.
+    _reportMissing(gpus) {
+        if (this._missingLogged)
+            return;
+        this._missingLogged = true;
+        const script = `${this.extension.path}/gpu_usage.sh`;
+        const listed = gpus ? [...gpus.keys()] : [];
+        if (listed.length) {
+            sm_log(`${this.item_name}: gpu_usage.sh listed GPUs ${listed.join(', ')} — ` +
+                   `nothing for ${this.gpu_index}. Showing "--".`, 'warn');
         } else {
-            this._mem = Math.round(memUsed / this._unitConversion);
-            this._total = Math.round(memTotal / this._unitConversion);
+            sm_log(`${this.item_name}: gpu_usage.sh listed no GPUs. ` +
+                   `Run it by hand to see why: bash ${script}`, 'warn');
         }
     }
 
-    _parseInt(val) {
-        val = parseInt(val);
-        return isNaN(val) ? 0 : val;
+    _scaleUnits(gpu) {
+        if (typeof this.useGiB === 'undefined')
+            this._initUnit(gpu.total);
+        this._percentage = gpu.busy;
+        if (this.useGiB) {
+            this._mem = Math.round(gpu.used / this._unitConversion) / this._decimals;
+            this._total = Math.round(gpu.total / this._unitConversion) / this._decimals;
+        } else {
+            this._mem = Math.round(gpu.used / this._unitConversion);
+            this._total = Math.round(gpu.total / this._unitConversion);
+        }
     }
 
     _initUnit(total) {

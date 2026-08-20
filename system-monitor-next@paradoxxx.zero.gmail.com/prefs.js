@@ -11,7 +11,8 @@ import Adw from "gi://Adw";
 
 import { ExtensionPreferences, gettext as _ } from "resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js";
 
-import { parse_bytearray } from './common.js';
+import { parse_bytearray, is_storage_medium } from './common.js';
+import { parseMonitorConfigs } from './monitors.js';
 
 const N_ = function (e) {
     return e;
@@ -133,6 +134,26 @@ const SMGeneralPrefsPage = GObject.registerClass({
 
 const MONITOR_TYPES = ['cpu', 'memory', 'swap', 'net', 'disk', 'gpu', 'thermal', 'fan', 'battery', 'freq', 'prometheus'];
 
+// The widget classes carry proper names in their metadata, but importing them
+// here would pull St and the rest of the shell into the preferences process.
+const TYPE_NAMES = {
+    cpu: 'CPU',
+    memory: 'Memory',
+    swap: 'Swap',
+    net: 'Net',
+    disk: 'Disk',
+    gpu: 'GPU',
+    thermal: 'Thermal',
+    fan: 'Fan',
+    battery: 'Battery',
+    freq: 'Frequency',
+    prometheus: 'Prometheus',
+};
+
+function type_name(type) {
+    return TYPE_NAMES[type] || capitalize(type);
+}
+
 const COLOR_MAP = {
     cpu: ['user', 'system', 'nice', 'iowait', 'other'],
     memory: ['program', 'buffer', 'cache'],
@@ -201,22 +222,36 @@ function getNetInterfaces() {
     return [];
 }
 
+// Enumerate from /proc/diskstats, the source the panel reads, so a device the
+// picker offers is a device the panel can show -- the fault M02b fixed for net,
+// where the picker enumerated one way and the widget another. A name regex
+// (sd[a-z]|nvme\d+n\d+|mmcblk\d+|vd[a-z]) stood here, which broke at the 27th
+// SCSI disk and hid every logical volume, encrypted device and zram.
+//
+// Whole devices only. Partitions are dropped because five entries beginning
+// "nvme0n1" make the commonest task in the dialog -- find my disk -- harder for
+// a case nobody has asked for; a config that names a partition still reads it.
+// /sys/block holds exactly the whole devices, so membership is the test.
+//
+// Media first, so the devices the total sums sit directly under it and the ones
+// it excludes sit visibly below, which makes the aggregate's note checkable
+// rather than merely assertable. It also keeps a snap-heavy laptop's thirty
+// loop devices below the disk instead of above it.
 function getDiskDevices() {
     try {
         let file = Gio.File.new_for_path('/proc/diskstats');
         let [success, contents] = file.load_contents(null);
         if (success) {
             let lines = new TextDecoder().decode(contents).split('\n');
-            let disks = new Set();
+            let media = [], layers = [];
             for (let line of lines) {
                 let parts = line.trim().split(/\s+/);
-                if (parts.length > 2) {
-                    let disk = parts[2];
-                    if (disk && /^(sd[a-z]|nvme\d+n\d+|mmcblk\d+|vd[a-z])$/.test(disk))
-                        disks.add(disk);
-                }
+                let disk = parts.length > 2 ? parts[2] : null;
+                if (!disk || !GLib.file_test(`/sys/block/${disk}`, GLib.FileTest.IS_DIR))
+                    continue;
+                (is_storage_medium(disk) ? media : layers).push(disk);
             }
-            return Array.from(disks);
+            return media.concat(layers);
         }
     } catch {
         // fall through
@@ -224,52 +259,86 @@ function getDiskDevices() {
     return [];
 }
 
-// nvidia-smi can take seconds to answer when it has to wake a sleeping GPU,
-// so it must never be waited for synchronously.
-function getGpuDevices(callback) {
-    try {
-        let proc = new Gio.Subprocess({
-            argv: ['nvidia-smi', '--query-gpu=count', '--format=csv,noheader'],
-            flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE,
-        });
-        proc.init(null);
-        proc.communicate_utf8_async(null, null, (p, result) => {
-            try {
-                let [, stdout] = p.communicate_utf8_finish(result);
-                let count = parseInt(stdout.trim(), 10);
-                if (!isNaN(count) && count > 0) {
-                    callback(Array.from({length: count}, (_v, i) => i.toString()));
-                    return;
-                }
-            } catch {
-                // nvidia-smi failed
-            }
-            callback(getDrmGpuDevices());
-        });
-        return;
-    } catch {
-        // nvidia-smi not available
-    }
-    callback(getDrmGpuDevices());
+function gpuName(index) {
+    return _('GPU %d').replace('%d', index.toString());
 }
 
-function getDrmGpuDevices() {
-    try {
-        let drmDir = Gio.File.new_for_path('/sys/class/drm/');
-        let enumerator = drmDir.enumerate_children('standard::name', Gio.FileQueryInfoFlags.NONE, null);
-        let count = 0;
-        let fileInfo;
-        while ((fileInfo = enumerator.next_file(null)) !== null) {
-            if (/^card\d+$/.test(fileInfo.get_name()))
-                count++;
-        }
-        enumerator.close(null);
-        if (count > 0)
-            return Array.from({length: count}, (_v, i) => i.toString());
-    } catch {
-        // fall through
+// Detection can fail here while gpu_usage.sh still works on the shell side, so
+// keep the entry rather than locking those users out -- but say that it was not
+// found instead of presenting it as a GPU we saw.
+function undetectedGpu() {
+    return [{id: '0', name: `${gpuName(0)} ${_('(not detected)')}`}];
+}
+
+function parseGpuDevices(stdout) {
+    return stdout.split('\n')
+        .map(line => line.trim().split(/\s+/))
+        .filter(field => field.length >= 4 && !isNaN(parseInt(field[1])))
+        .map(field => ({id: field[0], name: gpuName(parseInt(field[0]))}));
+}
+
+// Enumerate by running the script the panel reads, so a GPU the picker offers
+// is a GPU the panel can show. Counting DRM cards here instead used to disagree
+// with the script on any hybrid-graphics machine -- an Intel card0 with no vram
+// counters and an AMD card1 with them yielded two entries that both resolved to
+// the AMD.
+//
+// The script runs nvidia-smi, which can take seconds to answer when it has to
+// wake a sleeping GPU, so it is never waited for synchronously. Which GPUs the
+// machine has is a fact about the machine rather than about a dialog, so one
+// answer serves every caller: a second asking while the first read is in flight
+// joins it, and the rows built together when the window opens cost one spawn
+// between them rather than one apiece.
+let gpuDevices = null;   // the resolved list, or null while it is not yet known
+let gpuWaiting = null;   // callers queued behind the read already in flight
+
+function deliverGpuDevices(devices) {
+    const waiting = gpuWaiting;
+    gpuWaiting = null;
+    // Detached before it is walked, so a caller that asks again from its own
+    // callback cannot extend the list it is inside.
+    for (const cb of waiting)
+        cb(devices);
+}
+
+function getGpuDevices(extensionPath, callback) {
+    if (gpuDevices) {
+        callback(gpuDevices);
+        return;
     }
-    return ['0'];
+    if (gpuWaiting) {
+        gpuWaiting.push(callback);
+        return;
+    }
+    gpuWaiting = [callback];
+    if (extensionPath) {
+        try {
+            let proc = new Gio.Subprocess({
+                argv: ['/usr/bin/env', 'bash', `${extensionPath}/gpu_usage.sh`],
+                flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE,
+            });
+            proc.init(null);
+            proc.communicate_utf8_async(null, null, (p, result) => {
+                let devices = [];
+                try {
+                    let [, stdout] = p.communicate_utf8_finish(result);
+                    devices = parseGpuDevices(stdout);
+                } catch {
+                    // the script may be missing or unreadable
+                }
+                // Only a real answer is kept. Nothing here can tell a permanent
+                // failure from a transient one, so a failure is retried rather
+                // than cached as the machine's GPU list.
+                if (devices.length)
+                    gpuDevices = devices;
+                deliverGpuDevices(devices.length ? devices : undetectedGpu());
+            });
+            return;
+        } catch {
+            // fall through -- the script could not be spawned at all
+        }
+    }
+    deliverGpuDevices(undetectedGpu());
 }
 
 function detectSensors(sensorType) {
@@ -309,52 +378,86 @@ function detectSensors(sensorType) {
     return Object.keys(sensors);
 }
 
-// Calls back with the device list; synchronously for every type except gpu,
-// where nvidia-smi is consulted asynchronously.
-function detectDevices(type, callback) {
+// A type's device axis is one of two shapes, and which one is a fact about what
+// the widget measures. An aggregate is a fold over the members ("all cores");
+// a member is one element; a singleton is neither, which is why it is its own
+// variant rather than an aggregate over an empty set -- there is nothing to
+// choose, so there is no picker.
+//
+// An aggregate may carry a `note`, which replaces the picker's default
+// subtitle. Net and disk need one: traffic and block I/O are both layered, so
+// their totals cover the layer where the data reaches hardware rather than
+// every member listed under them. Every other aggregate really is a plain total
+// over its members -- cpu's "all" is every core.
+function catalogSet(aggregate, members) {
+    return {kind: 'set', aggregate, members};
+}
+
+function catalogSingleton() {
+    return {kind: 'singleton', device: {id: 'default', name: _('Default')}};
+}
+
+function named(ids) {
+    return ids.map(id => ({id, name: id}));
+}
+
+// Calls back with the catalog; synchronously for every type except gpu, whose
+// enumerating script must never be waited for.
+function detectCatalog(type, extensionPath, callback) {
     switch (type) {
     case 'cpu':
     case 'freq':
-        callback(['all', ...getCpuCores()]);
-        break;
-    case 'memory':
-    case 'swap':
-    case 'battery':
-        callback(['default']);
+        callback(catalogSet(
+            {id: 'all', name: _('All cores (total)')},
+            getCpuCores().map((id, i) => ({id, name: _('Core %d').replace('%d', (i + 1).toString())}))));
         break;
     case 'net':
-        callback(['all', ...getNetInterfaces()]);
+        callback(catalogSet({
+            id: 'all',
+            name: _('All physical interfaces (total)'),
+            note: _('Excludes VPN, bridge and container interfaces — their traffic is already counted on the hardware carrying it'),
+        }, named(getNetInterfaces())));
         break;
     case 'disk':
-        callback(['all', ...getDiskDevices()]);
+        callback(catalogSet({
+            id: 'all',
+            name: _('All physical disks (total)'),
+            note: _('Only devices where data reaches a physical disk. Partitions, LVM, RAID and encrypted volumes are excluded — their I/O is counted on the disk underneath'),
+        }, named(getDiskDevices())));
         break;
     case 'gpu':
-        getGpuDevices(callback);
+        getGpuDevices(extensionPath, devices => callback(catalogSet(null, devices)));
         break;
     case 'thermal':
-        callback(detectSensors('temp'));
+        callback(catalogSet(null, named(detectSensors('temp'))));
         break;
     case 'fan':
-        callback(detectSensors('fan'));
-        break;
-    case 'prometheus':
-        callback(['default']);
+        callback(catalogSet(null, named(detectSensors('fan'))));
         break;
     default:
-        callback(['all']);
+        callback(catalogSingleton());
     }
 }
 
-function buildDefaultConfig(type, device) {
+// Sixteen graphs at the standing 100px default is 1600px of panel, so the
+// zero-thought path would run off the screen and leave the user to work out
+// which knob fixes it. One device still gives exactly 100.
+function defaultGraphWidth(deviceCount) {
+    return Math.min(100, Math.max(20, Math.round(320 / deviceCount)));
+}
+
+function buildDefaultConfig(type, deviceIds) {
     let config = {
         uuid: GLib.uuid_string_random(),
         type: type,
-        device: device,
+        // A device's label is on when it is the only one and off otherwise:
+        // "CPU1 CPU2 CPU3..." across the panel is nobody's goal at sixteen
+        // cores, and position already says which is which.
+        devices: deviceIds.map(id => ({id, 'show-text': deviceIds.length === 1})),
         display: true,
         style: 'graph',
-        'graph-width': 100,
+        'graph-width': defaultGraphWidth(deviceIds.length),
         'refresh-time': type === 'cpu' || type === 'freq' ? 1500 : 5000,
-        'show-text': true,
         'show-menu': true,
         colors: {...(DEFAULT_COLORS[type] || {})},
     };
@@ -377,6 +480,234 @@ function buildDefaultConfig(type, device) {
     return config;
 }
 
+// ** Device Selection **
+
+// Both hosts of the picker -- the Add dialog and the row's Devices dialog -- say
+// the same thing, because they are the same picker. It has to be a function: an
+// extension's gettext resolves which extension is asking from the call stack, so
+// calling it while the module is still being imported throws "gettext can only be
+// called from extensions".
+function devicePickerHint() {
+    return _('Tick a device to monitor it. The check on the right shows that device\'s text label in the panel.');
+}
+
+function setTriState(check, values) {
+    const on = values.filter(Boolean).length;
+    check.inconsistent = on > 0 && on < values.length;
+    check.active = values.length > 0 && on === values.length;
+}
+
+// Owns which devices a monitor watches and whether each shows its panel label.
+// Builds rows rather than being a widget itself, so the Add dialog can put them
+// in a preferences group and the monitor row can put them in its expander.
+class SMDeviceSelection {
+    constructor(catalog, entries, onChanged) {
+        this._catalog = catalog;
+        this._onChanged = onChanged;
+        this._updating = false;
+        this._rows = [];
+        this._widgets = new Map();
+        this._state = new Map();
+
+        const configured = new Map(entries.map(e => [e.id, e['show-text'] === true]));
+
+        this._devices = [];
+        if (catalog.kind === 'singleton') {
+            this._devices.push(catalog.device);
+        } else {
+            if (catalog.aggregate)
+                this._devices.push({...catalog.aggregate, aggregate: true});
+            this._devices.push(...catalog.members);
+        }
+
+        // A configured device this machine cannot currently see -- a sensor that
+        // vanished, a core on a machine that now has fewer -- has to survive the
+        // round trip, or opening preferences would delete it on the next save.
+        const known = new Set(this._devices.map(d => d.id));
+        for (const id of configured.keys()) {
+            if (!known.has(id))
+                this._devices.push({id, name: `${id} ${_('(not detected)')}`});
+        }
+
+        for (const device of this._devices) {
+            this._state.set(device.id, {
+                selected: catalog.kind === 'singleton' || configured.has(device.id),
+                showText: configured.get(device.id) === true,
+            });
+        }
+
+        this._build();
+    }
+
+    get rows() {
+        return this._rows;
+    }
+
+    get soleDeviceId() {
+        return this._devices.length > 0 ? this._devices[0].id : null;
+    }
+
+    get entries() {
+        return this._devices
+            .filter(d => this._state.get(d.id).selected)
+            .map(d => ({id: d.id, 'show-text': this._state.get(d.id).showText}));
+    }
+
+    get selectedNames() {
+        return this._devices
+            .filter(d => this._state.get(d.id).selected)
+            .map(d => d.name);
+    }
+
+    get deviceCount() {
+        return this._devices.length;
+    }
+
+    getShowText(id) {
+        return this._state.get(id)?.showText === true;
+    }
+
+    setShowText(id, value) {
+        const state = this._state.get(id);
+        if (!state || state.showText === value)
+            return;
+        state.showText = value;
+        this._onChanged();
+    }
+
+    _selectedIds() {
+        return this._devices.map(d => d.id).filter(id => this._state.get(id).selected);
+    }
+
+    _build() {
+        if (this._catalog.kind === 'singleton' || this._devices.length === 0)
+            return;
+
+        // Structurally identical to the rows it governs -- same prefix control,
+        // same suffix column -- so what it does needs no explaining. Both halves
+        // are actions rather than stored defaults: nothing in the config records
+        // a "bulk setting", so there is no default-versus-override question.
+        const bulk = new Adw.ActionRow({
+            title: this._catalog.aggregate ? _('All individual devices') : _('All devices'),
+        });
+        this._bulkSelect = new Gtk.CheckButton({valign: Gtk.Align.CENTER});
+        this._bulkSelect.connect('toggled', () => this._onBulkSelect());
+        bulk.add_prefix(this._bulkSelect);
+        this._bulkShowText = new Gtk.CheckButton({label: _('Show text'), valign: Gtk.Align.CENTER});
+        this._bulkShowText.connect('toggled', () => this._onBulkShowText());
+        bulk.add_suffix(this._bulkShowText);
+        this._rows.push(bulk);
+
+        for (const device of this._devices) {
+            const row = new Adw.ActionRow({title: device.name});
+            if (device.aggregate)
+                row.subtitle = device.note || _('Combined figure for every device');
+
+            const select = new Gtk.CheckButton({valign: Gtk.Align.CENTER});
+            select.connect('toggled', () => this._onSelect(device.id, select.active));
+            row.add_prefix(select);
+            row.activatable_widget = select;
+
+            const showText = new Gtk.CheckButton({
+                valign: Gtk.Align.CENTER,
+                tooltip_text: _('Show this device\'s text label in the panel'),
+            });
+            showText.connect('toggled', () => this._onShowText(device.id, showText.active));
+            row.add_suffix(showText);
+
+            this._widgets.set(device.id, {select, showText});
+            this._rows.push(row);
+        }
+
+        this._refresh();
+    }
+
+    _onSelect(id, active) {
+        if (this._updating)
+            return;
+        // The last selected device cannot be unticked: a monitor over zero
+        // devices does nothing, and the extension would drop it on load.
+        if (!active && this._selectedIds().length === 1) {
+            this._refresh();
+            return;
+        }
+        const state = this._state.get(id);
+        state.selected = active;
+        if (active)
+            state.showText = this._selectedIds().length === 1;
+        this._refresh();
+        this._onChanged();
+    }
+
+    _onShowText(id, active) {
+        if (this._updating)
+            return;
+        this._state.get(id).showText = active;
+        this._refresh();
+        this._onChanged();
+    }
+
+    // Select governs the individual devices only. An aggregate is the sum over
+    // all of them, so sweeping it in alongside every core would add a redundant
+    // widget that looks like the others and is not.
+    _onBulkSelect() {
+        if (this._updating)
+            return;
+        const target = this._bulkSelect.active;
+        const members = this._devices.filter(d => !d.aggregate);
+        const added = [];
+        for (const device of members) {
+            const state = this._state.get(device.id);
+            if (state.selected === target)
+                continue;
+            state.selected = target;
+            if (target)
+                added.push(device.id);
+        }
+        if (this._selectedIds().length === 0 && members.length > 0) {
+            this._state.get(members[0].id).selected = true;
+            added.push(members[0].id);
+        }
+        const only = this._selectedIds().length === 1;
+        for (const id of added)
+            this._state.get(id).showText = only;
+        this._refresh();
+        this._onChanged();
+    }
+
+    // Show text has no such trap, so it governs every selected device.
+    _onBulkShowText() {
+        if (this._updating)
+            return;
+        const target = this._bulkShowText.active;
+        for (const id of this._selectedIds())
+            this._state.get(id).showText = target;
+        this._refresh();
+        this._onChanged();
+    }
+
+    _refresh() {
+        this._updating = true;
+        const selected = this._selectedIds();
+        for (const device of this._devices) {
+            const state = this._state.get(device.id);
+            const widgets = this._widgets.get(device.id);
+            if (!widgets)
+                continue;
+            widgets.select.active = state.selected;
+            widgets.select.sensitive = !(state.selected && selected.length === 1);
+            widgets.showText.active = state.showText;
+            widgets.showText.sensitive = state.selected;
+        }
+        if (this._bulkSelect) {
+            const members = this._devices.filter(d => !d.aggregate);
+            setTriState(this._bulkSelect, members.map(d => this._state.get(d.id).selected));
+            setTriState(this._bulkShowText, selected.map(id => this._state.get(id).showText));
+        }
+        this._updating = false;
+    }
+}
+
 // ** Monitor Row **
 
 const SMMonitorRow = GObject.registerClass({
@@ -386,15 +717,22 @@ const SMMonitorRow = GObject.registerClass({
         'delete-requested': {},
     },
 }, class SMMonitorRow extends Adw.ExpanderRow {
-    constructor(config, params = {}) {
+    constructor(config, extensionPath, params = {}) {
         super(params);
 
         this._config = config;
         this._colorDialog = new Gtk.ColorDialog({modal: true, with_alpha: true});
         this._dragX = 0;
         this._dragY = 0;
+        this._extensionPath = extensionPath;
+        // An entry inherits any key it does not carry from the shared body, so a
+        // config still holding show-text there (hand-authored, or written before
+        // the device-set migration) must show its real value in the picker.
+        const inherited = config['show-text'] === true;
+        this._entries = (config.devices || [])
+            .map(e => ({...e, 'show-text': e['show-text'] ?? inherited}));
 
-        this.title = this._formatTitle();
+        this.title = type_name(config.type);
 
         let dragHandle = new Gtk.Image({
             icon_name: 'list-drag-handle-symbolic',
@@ -403,8 +741,12 @@ const SMMonitorRow = GObject.registerClass({
         });
         this.add_prefix(dragHandle);
 
+        // GTK throws on an undefined property value where the extension just
+        // reads it as falsy, so a hand-authored config missing a field would
+        // take down the whole preferences window rather than one row. Coerce
+        // to what the extension itself makes of the same value.
         let displaySwitch = new Gtk.Switch({
-            active: config.display,
+            active: config.display === true,
             valign: Gtk.Align.CENTER,
         });
         displaySwitch.connect('notify::active', w => {
@@ -430,15 +772,106 @@ const SMMonitorRow = GObject.registerClass({
         dropTarget.connect('drop', this._onDrop.bind(this));
         this.add_controller(dropTarget);
 
-        this._buildSettings();
+        // Detection calls back synchronously for every type but gpu, whose
+        // enumerating script runs nvidia-smi -- seconds, if it has to wake a
+        // sleeping GPU, and one row is built per configured monitor when the
+        // window opens. Nothing above depends on which devices exist, so the
+        // wait costs the rows below rather than the window.
+        detectCatalog(config.type, extensionPath, catalog => {
+            this._catalog = catalog;
+            this._selection = new SMDeviceSelection(
+                catalog, this._entries, () => this._onSelectionChanged());
+            this.subtitle = this._deviceSummary();
+            this._buildSettings();
+        });
     }
 
-    _formatTitle() {
-        let type = capitalize(this._config.type);
-        let device = this._config.device;
-        if (device === 'default' || device === '')
-            return type;
-        return `${type} — ${device}`;
+    // The names, not a bare count: "5 devices" makes the user expand the row to
+    // find out which five.
+    _deviceSummary() {
+        if (this._catalog.kind === 'singleton')
+            return '';
+        const names = this._selection.selectedNames;
+        const shown = names.slice(0, 3);
+        const rest = names.length - shown.length;
+        if (rest > 0)
+            return `${shown.join(', ')} + ${_('%d more').replace('%d', rest.toString())}`;
+        return shown.join(', ');
+    }
+
+    _onSelectionChanged() {
+        this._config.devices = this._selection.entries;
+        // Every entry now states its own label, so a shared show-text would only
+        // be a second, ignored answer to the same question.
+        delete this._config['show-text'];
+        this.subtitle = this._deviceSummary();
+        if (this._devicesRow)
+            this._devicesRow.subtitle = this._deviceCount();
+        this._emitChanged();
+    }
+
+    _deviceCount() {
+        const total = this._selection.deviceCount;
+        const chosen = this._selection.entries.length;
+        // The total beside the count: "did I get them all?" is the question this
+        // row exists to answer without opening anything.
+        return _('%d of %d selected').replace('%d', chosen.toString()).replace('%d', total.toString());
+    }
+
+    // Choosing devices is a pick-then-done task, and the rarest reason to open
+    // this row -- creating a monitor picks them in the Add dialog, and everything
+    // else here is a setting you nudge. So it gets an entry point rather than the
+    // top third of the row, and the list gets a window of its own instead of
+    // scrolling inside a row inside a page.
+    _openDevicePicker() {
+        const dialog = new Adw.Window({
+            modal: true,
+            title: _('Devices'),
+            default_width: 460,
+            default_height: 620,
+            transient_for: this.get_root(),
+        });
+
+        const toolbar = new Adw.ToolbarView();
+        toolbar.add_top_bar(new Adw.HeaderBar());
+        dialog.set_content(toolbar);
+
+        const box = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 12,
+            margin_top: 12, margin_bottom: 12,
+            margin_start: 12, margin_end: 12,
+        });
+        toolbar.set_content(box);
+
+        const group = new Adw.PreferencesGroup({description: devicePickerHint()});
+        const rows = this._selection.rows;
+        for (const row of rows)
+            group.add(row);
+        box.append(new Gtk.ScrolledWindow({
+            hscrollbar_policy: Gtk.PolicyType.NEVER,
+            vexpand: true,
+            child: group,
+        }));
+
+        // Changes apply immediately here as everywhere else on this page -- a
+        // ticked device appears in the panel at once -- so there is nothing to
+        // cancel, only a way out.
+        const buttons = new Gtk.Box({halign: Gtk.Align.END});
+        const close = new Gtk.Button({label: _('Close'), css_classes: ['suggested-action']});
+        close.connect('clicked', () => dialog.close());
+        buttons.append(close);
+        box.append(buttons);
+
+        // The selection outlives the dialog, so hand its rows back before the
+        // group is destroyed or they could not be shown a second time.
+        dialog.connect('close-request', () => {
+            for (const row of rows)
+                group.remove(row);
+            return false;
+        });
+
+        dialog.present();
     }
 
     _onDragPrepare(_source, x, y) {
@@ -484,20 +917,43 @@ const SMMonitorRow = GObject.registerClass({
     _buildSettings() {
         let c = this._config;
 
-        let showMenu = new Adw.SwitchRow({title: _('Show In Menu'), active: c['show-menu']});
+        if (this._catalog.kind !== 'singleton') {
+            this._devicesRow = new Adw.ActionRow({
+                title: _('Devices'),
+                subtitle: this._deviceCount(),
+                activatable: true,
+            });
+            this._devicesRow.add_suffix(new Gtk.Image({
+                icon_name: 'go-next-symbolic',
+                valign: Gtk.Align.CENTER,
+            }));
+            this._devicesRow.connect('activated', () => this._openDevicePicker());
+            this.add_row(this._devicesRow);
+        }
+
+        let showMenu = new Adw.SwitchRow({title: _('Show In Menu'), active: c['show-menu'] === true});
         showMenu.connect('notify::active', w => { c['show-menu'] = w.active; this._emitChanged(); });
         this.add_row(showMenu);
 
-        let showText = new Adw.SwitchRow({title: _('Show Text'), active: c['show-text']});
-        showText.connect('notify::active', w => { c['show-text'] = w.active; this._emitChanged(); });
-        this.add_row(showText);
+        // Every device gets a Show Text control; only its placement varies. With
+        // a picker it rides on the device's row, and a singleton type has no
+        // picker -- so it keeps the standalone switch it has always had.
+        if (this._catalog.kind === 'singleton') {
+            const id = this._selection.soleDeviceId;
+            let showText = new Adw.SwitchRow({
+                title: _('Show Text'),
+                active: this._selection.getShowText(id),
+            });
+            showText.connect('notify::active', w => this._selection.setShowText(id, w.active));
+            this.add_row(showText);
+        }
 
         let styleModel = new Gtk.StringList();
         STYLE_OPTIONS.forEach(s => styleModel.append(_(s)));
         let styleRow = new Adw.ComboRow({
             title: _('Display Style'),
             model: styleModel,
-            selected: STYLE_OPTIONS.indexOf(c.style),
+            selected: Math.max(0, STYLE_OPTIONS.indexOf(c.style)),
         });
         styleRow.connect('notify::selected', w => {
             c.style = STYLE_OPTIONS[w.selected];
@@ -509,11 +965,11 @@ const SMMonitorRow = GObject.registerClass({
             title: _('Graph Width'),
             numeric: true,
             adjustment: new Gtk.Adjustment({
-                value: c['graph-width'], lower: 1, upper: 1000,
+                value: Number(c['graph-width']) || 100, lower: 1, upper: 1000,
                 step_increment: 1, page_increment: 10,
             }),
         });
-        graphWidth.value = c['graph-width'];
+        graphWidth.value = Number(c['graph-width']) || 100;
         this.add_row(graphWidth);
         graphWidth.connect('notify::value', w => {
             c['graph-width'] = w.value;
@@ -525,11 +981,13 @@ const SMMonitorRow = GObject.registerClass({
             subtitle: 'ms',
             numeric: true,
             adjustment: new Gtk.Adjustment({
-                value: c['refresh-time'], lower: 100, upper: 100000,
+                // 1000 matches l_limit() in base.js, which is what the extension
+                // falls back to for a missing or nonsensical interval.
+                value: Number(c['refresh-time']) || 1000, lower: 100, upper: 100000,
                 step_increment: 500, page_increment: 5000,
             }),
         });
-        refreshTime.value = c['refresh-time'];
+        refreshTime.value = Number(c['refresh-time']) || 1000;
         this.add_row(refreshTime);
         refreshTime.connect('notify::value', w => {
             c['refresh-time'] = w.value;
@@ -668,7 +1126,7 @@ const SMMonitorRow = GObject.registerClass({
 const SMMonitorsPage = GObject.registerClass({
     GTypeName: 'SMMonitorsPage',
 }, class SMMonitorsPage extends Adw.PreferencesPage {
-    constructor(settings, params = {}) {
+    constructor(settings, extensionPath, params = {}) {
         super({
             title: _('Monitors'),
             icon_name: 'utilities-system-monitor-symbolic',
@@ -676,6 +1134,7 @@ const SMMonitorsPage = GObject.registerClass({
         });
 
         this._settings = settings;
+        this._extensionPath = extensionPath;
         this._monitors = [];
         this._saveTimerId = null;
         this.connect('destroy', () => {
@@ -714,17 +1173,9 @@ const SMMonitorsPage = GObject.registerClass({
     }
 
     _loadMonitors() {
-        let strv = this._settings.get_strv('monitors');
-        this._monitors = [];
-        for (const s of strv) {
-            try {
-                let c = JSON.parse(s);
-                if (c && c.uuid && c.type)
-                    this._monitors.push(c);
-            } catch {
-                console.warn('system-monitor-next: skipping malformed monitor config');
-            }
-        }
+        // Same parser the extension uses, so preferences and the panel agree on
+        // what a valid config is and on how a legacy one normalizes.
+        this._monitors = parseMonitorConfigs(this._settings.get_strv('monitors'));
     }
 
     _saveMonitors() {
@@ -750,7 +1201,7 @@ const SMMonitorsPage = GObject.registerClass({
     }
 
     _addRow(config) {
-        let row = new SMMonitorRow(config);
+        let row = new SMMonitorRow(config, this._extensionPath);
         row.connect('config-changed', () => this._saveMonitors());
         row.connect('delete-requested', () => {
             this._listBox.remove(row);
@@ -764,8 +1215,8 @@ const SMMonitorsPage = GObject.registerClass({
         let dialog = new Adw.Window({
             modal: true,
             title: _('Add Monitor'),
-            default_width: 400,
-            default_height: 280,
+            default_width: 460,
+            default_height: 560,
             transient_for: this.get_root(),
         });
 
@@ -785,22 +1236,31 @@ const SMMonitorsPage = GObject.registerClass({
         box.append(group);
 
         let typeModel = new Gtk.StringList();
-        MONITOR_TYPES.forEach(t => typeModel.append(_(capitalize(t))));
+        MONITOR_TYPES.forEach(t => typeModel.append(_(type_name(t))));
         let typeRow = new Adw.ComboRow({title: _('Type'), model: typeModel});
         group.add(typeRow);
-
-        let deviceModel = new Gtk.StringList();
-        let deviceRow = new Adw.ComboRow({title: _('Device'), model: deviceModel});
-        group.add(deviceRow);
 
         let serverRow = new Adw.EntryRow({title: _('Exporter URL'), text: 'http://localhost:9100'});
         group.add(serverRow);
         let metricRow = new Adw.EntryRow({title: _('Metric (e.g. node_load1 or metric{label="val"})'), text: 'node_load1'});
         group.add(metricRow);
 
-        let currentDevices = [];
+        let deviceGroup = new Adw.PreferencesGroup({
+            title: _('Devices'),
+            description: devicePickerHint(),
+        });
+        let scroller = new Gtk.ScrolledWindow({
+            hscrollbar_policy: Gtk.PolicyType.NEVER,
+            vexpand: true,
+            child: deviceGroup,
+        });
+        box.append(scroller);
+
+        let selection = null;
+        let deviceRows = [];
         let addBtn; // created below with the button box
         let dialogClosed = false;
+        let detectSeq = 0;
         dialog.connect('close-request', () => {
             dialogClosed = true;
             return false;
@@ -808,35 +1268,45 @@ const SMMonitorsPage = GObject.registerClass({
         const updateTypeUI = () => {
             let type = MONITOR_TYPES[typeRow.selected];
             let isPrometheus = type === 'prometheus';
-            deviceRow.visible = !isPrometheus;
             serverRow.visible = isPrometheus;
             metricRow.visible = isPrometheus;
-            if (isPrometheus) {
-                addBtn.sensitive = true;
-                return;
-            }
-            // Detection calls back asynchronously for some types; keep Add
-            // disabled until the devices for the selected type are known.
-            currentDevices = [];
-            deviceRow.model = new Gtk.StringList();
-            deviceRow.subtitle = _('Detecting devices…');
+
+            // Detection calls back asynchronously for gpu, so keep Add disabled
+            // until the devices for the selected type are known. A superseded
+            // answer -- the dialog closed, or the type switched away and back --
+            // is dropped rather than appending a second set of rows.
+            const seq = ++detectSeq;
+            for (const row of deviceRows)
+                deviceGroup.remove(row);
+            deviceRows = [];
+            scroller.visible = false;
+            deviceGroup.description = _('Detecting devices…');
             addBtn.sensitive = false;
-            detectDevices(type, devices => {
-                // Dropped if the dialog is gone or the user switched type.
-                if (dialogClosed || MONITOR_TYPES[typeRow.selected] !== type) {
+
+            detectCatalog(type, this._extensionPath, catalog => {
+                if (dialogClosed || seq !== detectSeq)
                     return;
-                }
-                currentDevices = devices;
-                let model = new Gtk.StringList();
-                devices.forEach(d => model.append(d));
-                deviceRow.model = model;
-                deviceRow.selected = 0;
-                // E.g. thermal/fan on a machine with no readable sensors;
-                // a monitor saved without a real device could never
-                // resolve, so block the add instead.
-                let haveDevices = devices.length > 0;
-                deviceRow.subtitle = haveDevices ? '' : _('No devices detected');
-                addBtn.sensitive = haveDevices;
+
+                // A singleton type has nothing to choose; the first device is
+                // pre-ticked so the zero-thought path lands on today's behavior.
+                const initial = catalog.kind === 'singleton'
+                    ? [catalog.device]
+                    : catalog.aggregate ? [catalog.aggregate] : catalog.members.slice(0, 1);
+                selection = new SMDeviceSelection(
+                    catalog, initial.map(d => ({id: d.id, 'show-text': true})),
+                    () => { addBtn.sensitive = selection.entries.length > 0; });
+
+                deviceRows = selection.rows;
+                for (const row of deviceRows)
+                    deviceGroup.add(row);
+                scroller.visible = deviceRows.length > 0;
+
+                // E.g. thermal/fan on a machine with no readable sensors; a
+                // monitor saved without a real device could never resolve, so
+                // block the add instead.
+                const haveDevices = catalog.kind === 'singleton' || deviceRows.length > 0;
+                deviceGroup.description = haveDevices ? devicePickerHint() : _('No devices detected');
+                addBtn.sensitive = haveDevices && selection.entries.length > 0;
             });
         };
 
@@ -858,8 +1328,11 @@ const SMMonitorsPage = GObject.registerClass({
         });
         addBtn.connect('clicked', () => {
             let type = MONITOR_TYPES[typeRow.selected];
-            let device = currentDevices[deviceRow.selected] || 'all';
-            let config = buildDefaultConfig(type, device);
+            let entries = selection.entries;
+            let config = buildDefaultConfig(type, entries.map(e => e.id));
+            // buildDefaultConfig applies the label default for the count; the
+            // picker may already have been told otherwise.
+            config.devices = entries;
             if (type === 'prometheus') {
                 config.server = serverRow.text || 'http://localhost:9100';
                 config.metric = metricRow.text || 'node_load1';
@@ -989,7 +1462,7 @@ export default class SystemMonitorExtensionPreferences extends ExtensionPreferen
         let generalSettingsPage = new SMGeneralPrefsPage(settings);
         window.add(generalSettingsPage);
 
-        let monitorsPage = new SMMonitorsPage(settings);
+        let monitorsPage = new SMMonitorsPage(settings, this.path);
         window.add(monitorsPage);
 
         let whatsNewPage = new SMWhatsNewPage();

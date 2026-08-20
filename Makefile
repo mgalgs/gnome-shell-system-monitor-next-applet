@@ -10,6 +10,8 @@ BASE_MODULES = \
   $(UUID)/mounts.js \
   $(UUID)/utils.js \
   $(UUID)/migration.js \
+  $(UUID)/monitors.js \
+  $(UUID)/sampling.js \
   $(UUID)/common.js \
   $(UUID)/README* \
   $(UUID)/metadata.json \

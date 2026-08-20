@@ -202,9 +202,61 @@ collectAsync(callback) {
 }
 ```
 
-Call `callback(data)` when the data is ready, or `callback(null)` if the read failed. The framework handles chart/tooltip updates after the callback fires.
+Call `callback(data)` when the data is ready. The framework handles chart/tooltip updates after the callback fires.
 
 **Do not implement both `collect()` and `refresh()`** — the framework checks for `collect` first and ignores `refresh`/`_apply` if it exists.
+
+### There is no reading
+
+A tick yields one of two things, and there is no third:
+
+| Return | Meaning |
+|--------|---------|
+| a data object | numbers, applied as above |
+| `null` | **there is no reading** |
+
+Return `null` whenever you have no numbers — the device you were configured to watch is not in the source, the source could not be read, the first reading has not landed yet. The framework writes `--` into the panel digits, the menu cells and the tooltip, and the chart takes a **hole** for that tick rather than a zero.
+
+Do not build your own `'--'`, and do not return a data object with the metrics left out. Three widgets each did that independently and each got it subtly wrong — a chart that kept drawing the last value under dashes, a menu unit with nothing in front of it.
+
+Two rules that come with it:
+
+- **An aggregate is never "no reading".** A device named `all` is a fold over a set, and the empty set folds to zero, which is a measurement. Only a *named* device can be absent.
+- **Say which one in the journal, once per outage.** `--` tells the user there is no number; only the journal can tell them why. Name the device the user asked for, name what the source did list, and say what is being shown instead — that last clause is what separates a bad selection from a bad machine:
+
+```javascript
+sm_log(`${this.item_name}: /proc/diskstats lists ${[...devices.keys()].join(', ')} — ` +
+       `nothing for "${this.device_id}". Showing --.`, 'warn');
+```
+
+## Sharing a source between widgets
+
+If your source contains data for more than one device — `/proc/stat` holds every core, one `nvidia-smi` call covers every GPU, one scrape covers every metric on a server — do not read it per widget. Take a cursor on a shared sampler in `sampling.js`, and whichever widget's tick fires first pays for the read while the rest ride it.
+
+| Your widget uses | Take a cursor on | Where |
+|------------------|------------------|-------|
+| `collect()`      | `Sampler`        | `extension._Samplers.<name>.cursor()` |
+| `collectAsync()` | `AsyncSampler`   | same, then `cursor.sample(reading => …)` |
+
+```javascript
+constructor(extension, config) {
+    super(extension, config);
+    this.cursor = extension._Samplers.cpu.cursor();   // once, here
+}
+
+collect() {
+    const reading = this.cursor.sample();             // {gen, time, data}
+    return { load1: reading.data.core(this.cpuid).user };
+}
+```
+
+Three rules:
+
+- **Use `reading.time` for rate arithmetic, never the clock at delivery.** A reading taken for a faster sibling is older than your tick, and dividing a real counter delta by the wrong interval reports the wrong rate. This is the one every widget in the tree got wrong before sampling existed, so it is the one you will copy wrong from the file next door.
+- **Add a new shared source as a getter on `smSamplers`**, not as a module-level cache of its own. One place to look, one lifetime, one teardown.
+- **Do not add your own `GLib.timeout_add` for refreshing.** `refresh-time` is served by a timer shared with every other widget on that interval, so a private one puts your widget out of step with the rest of the panel.
+
+A sampler owns the read; it does not own a timer. Widgets keep their own tick and a cursor never repeats a reading, so a widget never sees data older than its own configured refresh interval.
 
 ## Constructor
 
@@ -231,7 +283,9 @@ After `super(extension, config)`, these are available:
 | `this.config`     | Per-instance config object (display, style, colors, refresh-time, etc.)      |
 | `this.device_id`  | Device identifier from `config.device` (`'all'`, `'0'`, sensor label, etc.)  |
 | `this.extension`  | The extension instance                                                       |
-| `this.item_name`  | Display name (from `metadata.name`, can be overridden)                       |
+| `this.item_name`  | Popup menu title when this widget is a monitor's only device (can be overridden) |
+| `this.device_name`| Popup menu label when it is one of several (defaults to `device_id`)         |
+| `this.monitor_name`| The type's own name, from `metadata.name` — the title over a monitor's devices |
 | `this.label`      | `St.Label` — the panel label widget (text set from metadata, can be changed) |
 | `this.text_items` | Array of `St.Label`/`St.Icon` — panel value display elements                 |
 | `this.menu_items` | Array of `St.Label` — popup menu display elements                            |
@@ -243,7 +297,49 @@ After `super(extension, config)`, these are available:
 
 ## Multi-Device Support
 
-Widgets support monitoring specific devices via `this.device_id`. The config's `device` field determines which device to monitor:
+A monitor config covers a **set** of devices, and the framework expands it into one widget per device before any widget is constructed. Widgets are unaffected by this: each one still monitors exactly one device and reads it from `this.device_id`.
+
+```json
+{
+  "uuid": "a1b2c3", "type": "cpu",
+  "devices": ["all", "0", "1", "2", "3"],
+  "style": "graph", "graph-width": 20
+}
+```
+
+That is one entry in preferences and five widgets in the panel. `"all"` is a device id like the others, meaning *the aggregate* — the total across every core — so "total plus each core" is a single selection.
+
+A device entry may also be an object, in which case its extra keys override the shared body for that device alone:
+
+```json
+"devices": [
+  {"id": "all", "show-text": true},
+  {"id": "0", "show-text": false},
+  {"id": "1", "show-text": false}
+]
+```
+
+Preferences writes this longer form and only ever puts `show-text` in it, but any config key works — the override is a plain sparse patch applied over the shared settings.
+
+Writing configs by hand (for a test preset, say), the bare list of ids is enough. The older single-`device` form still loads too:
+
+```json
+{"uuid": "cfg-cpu", "type": "cpu", "device": "all"}
+```
+
+### What a widget sees
+
+Each expanded widget receives a config with `device` set to its own id, so nothing in a widget changes. Two extra fields identify where it came from:
+
+| Field         | Description                                                  |
+|---------------|--------------------------------------------------------------|
+| `device`      | This widget's device id — what `this.device_id` reads         |
+| `monitorUuid` | The uuid of the preferences entry that produced this widget    |
+| `uuid`        | Internal widget key; not addressable by the user, do not log it |
+
+A widget's device never changes over its lifetime. The widget key is derived from (monitor uuid, device id), so changing which devices a monitor covers adds and removes widgets rather than mutating one — which is why `device_id` can be cached in the constructor.
+
+The config's `device` field determines which device to monitor:
 
 ```javascript
 constructor(extension, config) {
@@ -256,6 +352,7 @@ constructor(extension, config) {
         this.coreIndex = parseInt(this.device_id);
         this.label.text = 'CPU' + (this.coreIndex + 1);
         this.item_name = _('CPU') + ' ' + (this.coreIndex + 1);
+        this.device_name = String(this.coreIndex + 1);
     }
 }
 ```
@@ -266,7 +363,50 @@ Common device_id patterns:
 - `'0'`, `'1'`, ... — indexed device (CPU core, GPU index)
 - Sensor label string — named device (thermal/fan sensors)
 
-Users add multi-device instances through the preferences "Add Monitor" dialog.
+Users pick devices from a checklist in the preferences "Add Monitor" dialog, and can change the selection later from the monitor's row.
+
+### How a monitor's devices reach the popup menu
+
+The menu has **one entry per monitor**, not one row per widget. A monitor with one visible device is a plain row titled `item_name`; a monitor with several writes its type once and then each device beside its own numbers, wrapped over as many lines as they need:
+
+```
+CPU     All: 3 %   1: 1 %   2: 5 %   3: 2 %
+        4: 7 %
+Net     enp1s0: 12 KiB/s ↓  3 KiB/s ↑
+```
+
+So a widget sets `item_name` for the first case and `device_name` for the second. `device_name` defaults to the device id, which is already the right answer wherever the id *is* the name — interfaces, block devices, sensor labels, GPU indices — and to `All` for the aggregate, matching the word the preferences picker uses. Override it only when the id is not the name: `cpu` and `freq` do, because their ids count from zero and their names count from one.
+
+`item_name` is not derived from the other two, and should not be: `thermal` and `fan` use the sensor label with no type in front of it, and `prometheus` uses the metric from its config, so what belongs in a title is the widget's own decision.
+
+A widget's `menu_items` are its own for its whole life — the menu borrows them, and gives them back before it rebuilds — so `_applyMenu` writes to the same labels whichever shape the entry has.
+
+### Declaring a new type's devices
+
+Preferences builds that checklist from `detectCatalog(type)` in `prefs.js`, which returns one of two shapes:
+
+```javascript
+// Nothing to choose: the source is the machine itself (memory, swap, battery)
+{kind: 'singleton', device: {id: 'default', name: 'Default'}}
+
+// A set of members, optionally with a total folded over them
+{kind: 'set', aggregate: {id: 'all', name: 'All cores (total)'}, members: [{id: '0', name: 'Core 1'}, ...]}
+```
+
+Use `aggregate: null` when the type has no meaningful total (GPUs, thermal sensors, fans). Members carry a display name because a checklist reading "0 1 2 3" is unusable — and if detection cannot confirm a device but the widget might still work with it, keep the entry and say so in its name rather than presenting it as found.
+
+An aggregate may carry a `note`, which replaces the row's default subtitle ("Combined figure for every device"):
+
+```javascript
+{id: 'all', name: 'All physical interfaces (total)', note: 'Excludes VPN, bridge and container interfaces — …'}
+```
+
+Reach for it only when the total is *not* a plain fold over the members listed beneath it. Two types are like that, and for the same reason — both traffic and block I/O are layered, so the same bytes appear at more than one member:
+
+- `net` sums the interfaces at the machine's edge, because counting a tunnel and the hardware carrying it reports the same bytes twice.
+- `disk` sums the devices where I/O reaches physical storage, because the block layer accounts a request at every device it traverses — the logical volume, the encrypted device under it, the partition, and the disk.
+
+A user who sees a checklist of eight devices under a row labelled "all" and gets the sum of two has been lied to unless the row says so. Where the members are layered, order the summed ones first: the aggregate's claim then becomes checkable by looking, and the excluded devices stay one click away for whoever wants the view from inside the tunnel or the encrypted volume.
 
 ## Declarative Layouts
 
@@ -342,7 +482,7 @@ After writing the widget class, register it with the extension:
        loadavg: LoadAvg,
    };
    ```
-4. Add the type to `MONITOR_TYPES` in `prefs.js` and provide entries in `COLOR_MAP`, `DEFAULT_COLORS`, and `detectDevices()` for the new type
+4. Add the type to `MONITOR_TYPES` in `prefs.js` and provide entries in `TYPE_NAMES`, `COLOR_MAP`, `DEFAULT_COLORS`, and `detectCatalog()` for the new type
 5. Add color key(s) to the schema XML if the widget has configurable colors
 
 ## Examples by Complexity

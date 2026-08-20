@@ -1,0 +1,38 @@
+{
+    "description": "A disk total beside the medium it sums and the layers it must not, for the double-count test. Build the layered case on the VM first: 'truncate -s 64M /tmp/back{1,2,3}.img; L1=$(losetup -f --show /tmp/back1.img); dmsetup create m04btest --table \"0 $(blockdev --getsz $L1) linear $L1 0\"; mdadm --create /dev/md0 --level=1 --raid-devices=2 --run /dev/loop1 /dev/loop2; modprobe nbd'. Then push a known volume with 'dd oflag=direct' and read the rows together: the total must match the vda row, not the sum of vda and its partitions, because the block layer accounts one request at every device it traverses. The layer rows still report their own I/O, which is what a user who wants the view from inside an encrypted volume selects. Teardown: 'mdadm --stop /dev/md0; dmsetup remove m04btest; losetup -D; rmmod nbd'.",
+    "monitors": [
+        {
+            "uuid": "cfg-disk-total",
+            "type": "disk",
+            "devices": ["all"],
+            "display": true,
+            "style": "both",
+            "graph-width": 100,
+            "refresh-time": 1000,
+            "show-menu": true,
+            "colors": {"read": "#c65000", "write": "#ff6700"}
+        },
+        {
+            "uuid": "cfg-disk-medium",
+            "type": "disk",
+            "devices": [{"id": "vda", "show-text": true}],
+            "display": true,
+            "style": "digit",
+            "graph-width": 100,
+            "refresh-time": 1000,
+            "show-menu": true,
+            "colors": {"read": "#c65000", "write": "#ff6700"}
+        },
+        {
+            "uuid": "cfg-disk-layers",
+            "type": "disk",
+            "devices": [{"id": "vda4", "show-text": true}, {"id": "dm-0", "show-text": true}, {"id": "md0", "show-text": true}],
+            "display": true,
+            "style": "digit",
+            "graph-width": 100,
+            "refresh-time": 1000,
+            "show-menu": true,
+            "colors": {"read": "#c65000", "write": "#ff6700"}
+        }
+    ]
+}

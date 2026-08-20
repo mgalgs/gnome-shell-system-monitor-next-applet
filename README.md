@@ -6,8 +6,12 @@ A GNOME Shell extension that displays system resource usage in the top panel.
 
 ![Standard View](screenshots/standard.png)
 
+**A figure on your panel changed after an update?** [CHANGELOG.md](CHANGELOG.md)
+says which way it moved and why.
+
 ## Table of Contents
 
+- [Changelog](CHANGELOG.md)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
   - [Browser Installation](#browser-installation)
@@ -30,12 +34,12 @@ Before installing, ensure you have the necessary system packages (note that if y
 
 - Ubuntu/Debian:
   ```
-  sudo apt install gir1.2-gtop-2.0 gir1.2-nm-1.0 gir1.2-clutter-1.0 gnome-system-monitor
+  sudo apt install gir1.2-gtop-2.0 gir1.2-clutter-1.0 gnome-system-monitor
   ```
 
 - Fedora:
   ```
-  sudo dnf install libgtop2-devel NetworkManager-libnm-devel gnome-system-monitor
+  sudo dnf install libgtop2-devel gnome-system-monitor
   ```
 
 - Arch Linux:
@@ -50,11 +54,11 @@ Before installing, ensure you have the necessary system packages (note that if y
 
 - Mageia 64-bit:
   ```
-  sudo urpmi lib64gtop-gir2.0 lib64nm-gir1.0 lib64clutter-gir1.0 gnome-system-monitor
+  sudo urpmi lib64gtop-gir2.0 lib64clutter-gir1.0 gnome-system-monitor
   ```
   or
   ```
-  sudo dnf install lib64gtop-gir2.0 lib64nm-gir1.0 lib64clutter-gir1.0 gnome-system-monitor
+  sudo dnf install lib64gtop-gir2.0 lib64clutter-gir1.0 gnome-system-monitor
   ```
 
 - NixOS:
