@@ -3,13 +3,12 @@
 # This file is distributed under the same license as the system-monitor package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
-#: base.js:615
 #, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: system-monitor\n"
 "Report-Msgid-Bugs-To: paradoxxx.zero@gmail.com\n"
-"POT-Creation-Date: 2026-06-11 19:02-0700\n"
+"POT-Creation-Date: 2026-08-26 16:36+0700\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -26,19 +25,19 @@ msgstr ""
 msgid "Display"
 msgstr ""
 
-#: prefs.js:357 prefs.js:470
+#: prefs.js:357 prefs.js:470 prefs.js:554
 msgid "Refresh Time"
 msgstr ""
 
-#: prefs.js:362 prefs.js:455
+#: prefs.js:362 prefs.js:455 prefs.js:539
 msgid "Graph Width"
 msgstr ""
 
-#: prefs.js:348 prefs.js:437
+#: prefs.js:348 prefs.js:437 prefs.js:521
 msgid "Show Text"
 msgstr ""
 
-#: prefs.js:367 prefs.js:444
+#: prefs.js:367 prefs.js:444 prefs.js:528
 msgid "Display Style"
 msgstr ""
 
@@ -58,7 +57,7 @@ msgstr ""
 msgid "Display Individual Cores"
 msgstr ""
 
-#: prefs.js:419 prefs.js:537
+#: prefs.js:419 prefs.js:537 prefs.js:657
 msgid "Show network speed in bits"
 msgstr ""
 
@@ -117,7 +116,7 @@ msgstr ""
 msgid "Used"
 msgstr ""
 
-#: extension.js:1781 widgets/network.js:61
+#: extension.js:1781 widgets/network.js:61 widgets/network.js:43
 msgid "Net"
 msgstr ""
 
@@ -185,11 +184,11 @@ msgstr ""
 msgid "disk"
 msgstr ""
 
-#: extension.js:2536 extension.js:354
+#: extension.js:2536 extension.js:354 extension.js:354
 msgid "Preferences..."
 msgstr ""
 
-#: extension.js:2530 extension.js:347
+#: extension.js:2530 extension.js:347 extension.js:347
 msgid "System Monitor..."
 msgstr ""
 
@@ -243,22 +242,24 @@ msgstr ""
 
 #: extension.js:211 extension.js:1805 extension.js:1900 extension.js:1912
 #: extension.js:1942 extension.js:1953 extension.js:1964 base.js:167
-#: widgets/network.js:67 widgets/network.js:159
+#: widgets/network.js:67 widgets/network.js:159 base.js:188
+#: widgets/network.js:49 widgets/network.js:171
 msgid "KiB/s"
 msgstr ""
 
 #: extension.js:210 extension.js:212 extension.js:1498 extension.js:1903
-#: extension.js:1915 base.js:166 base.js:168 widgets/network.js:160
+#: extension.js:1915 base.js:166 base.js:168 widgets/network.js:160 base.js:187
+#: base.js:189 widgets/network.js:172
 msgid "MiB/s"
 msgstr ""
 
 #: extension.js:214 extension.js:1875 extension.js:1887 base.js:170
-#: widgets/network.js:154
+#: widgets/network.js:154 base.js:191 widgets/network.js:166
 msgid "kbit/s"
 msgstr ""
 
 #: extension.js:215 extension.js:1878 extension.js:1890 base.js:171
-#: widgets/network.js:155
+#: widgets/network.js:155 base.js:192 widgets/network.js:167
 msgid "Mbit/s"
 msgstr ""
 
@@ -270,46 +271,48 @@ msgstr ""
 msgid "GiB"
 msgstr ""
 
-#: extension.js:228 base.js:185
+#: extension.js:228 base.js:185 base.js:206
 msgid "kB"
 msgstr ""
 
-#: extension.js:227 extension.js:229 base.js:184 base.js:186
+#: extension.js:227 extension.js:229 base.js:184 base.js:186 base.js:205
+#: base.js:207
 msgid "MB"
 msgstr ""
 
 #: extension.js:2089 extension.js:2094 widgets/thermal.js:25
+#: widgets/thermal.js:28
 msgid "Thermal"
 msgstr ""
 
 msgid "thermal"
 msgstr ""
 
-#: prefs.js:352 prefs.js:433
+#: prefs.js:352 prefs.js:433 prefs.js:517
 msgid "Show In Menu"
 msgstr ""
 
-#: prefs.js:427 prefs.js:549
+#: prefs.js:427 prefs.js:549 prefs.js:669
 msgid "Show Time Remaining"
 msgstr ""
 
-#: prefs.js:431 prefs.js:559
+#: prefs.js:431 prefs.js:559 prefs.js:679
 msgid "Hide System Icon"
 msgstr ""
 
-#: prefs.js:435 ui/prefsGeneralSettings.ui:91
+#: prefs.js:435 ui/prefsGeneralSettings.ui:91 ui/prefsGeneralSettings.ui:119
 msgid "Usage Style"
 msgstr ""
 
-#: prefs.js:436 ui/prefsGeneralSettings.ui:96
+#: prefs.js:436 ui/prefsGeneralSettings.ui:96 ui/prefsGeneralSettings.ui:124
 msgid "pie"
 msgstr ""
 
-#: prefs.js:436 ui/prefsGeneralSettings.ui:97
+#: prefs.js:436 ui/prefsGeneralSettings.ui:97 ui/prefsGeneralSettings.ui:125
 msgid "bar"
 msgstr ""
 
-#: prefs.js:436 ui/prefsGeneralSettings.ui:98
+#: prefs.js:436 ui/prefsGeneralSettings.ui:98 ui/prefsGeneralSettings.ui:126
 msgid "none"
 msgstr ""
 
@@ -317,7 +320,7 @@ msgstr ""
 msgid "System Monitor Extension"
 msgstr ""
 
-#: extension.js:316 prefs.js:773
+#: extension.js:316 prefs.js:773 prefs.js:917
 msgid "Cancel"
 msgstr ""
 
@@ -335,7 +338,7 @@ msgstr ""
 msgid "freq"
 msgstr ""
 
-#: extension.js:2163 widgets/fan.js:23
+#: extension.js:2163 widgets/fan.js:23 widgets/fan.js:26
 msgid "Fan"
 msgstr ""
 
@@ -354,7 +357,7 @@ msgstr ""
 msgid "CPU"
 msgstr ""
 
-#: prefs.js:448 prefs.js:511
+#: prefs.js:448 prefs.js:511 prefs.js:640
 msgid "Display temperature in Fahrenheit"
 msgstr ""
 
@@ -362,7 +365,7 @@ msgstr ""
 msgid "Temperature threshold (0 to disable)"
 msgstr ""
 
-#: prefs.js:34 prefs.js:27
+#: prefs.js:34 prefs.js:27 prefs.js:27
 #, javascript-format
 msgid "#%02x%02x%02x%02x"
 msgstr ""
@@ -407,164 +410,164 @@ msgid ""
 msgstr ""
 
 #: extension.js:213 extension.js:1907 extension.js:1919 base.js:169
-#: widgets/network.js:161
+#: widgets/network.js:161 base.js:190 widgets/network.js:173
 msgid "GiB/s"
 msgstr ""
 
 #: extension.js:216 extension.js:1882 extension.js:1894 base.js:172
-#: widgets/network.js:156
+#: widgets/network.js:156 base.js:193 widgets/network.js:168
 msgid "Gbit/s"
 msgstr ""
 
-#: extension.js:230 base.js:187
+#: extension.js:230 base.js:187 base.js:208
 msgid "GB"
 msgstr ""
 
-#: prefs.js:572
+#: prefs.js:572 prefs.js:692
 msgid "Max across all cores"
 msgstr ""
 
-#: prefs.js:573
+#: prefs.js:573 prefs.js:693
 msgid "Average across all cores"
 msgstr ""
 
-#: prefs.js:575
+#: prefs.js:575 prefs.js:695
 msgid "Display Mode"
 msgstr ""
 
-#: prefs.js:588 prefs.js:736
+#: prefs.js:588 prefs.js:736 prefs.js:708 prefs.js:862
 msgid "Exporter URL"
 msgstr ""
 
-#: prefs.js:598 prefs.js:738
+#: prefs.js:598 prefs.js:738 prefs.js:718 prefs.js:864
 msgid "Metric (e.g. node_load1 or metric{label=\"val\"})"
 msgstr ""
 
-#: prefs.js:619
+#: prefs.js:619 prefs.js:739
 msgid "Monitors"
 msgstr ""
 
-#: prefs.js:629
+#: prefs.js:629 prefs.js:755
 msgid "Active Monitors"
 msgstr ""
 
-#: prefs.js:630
+#: prefs.js:630 prefs.js:756
 msgid "Drag to reorder. Changes apply immediately."
 msgstr ""
 
-#: prefs.js:647
+#: prefs.js:647 prefs.js:773
 msgid "Add Monitor…"
 msgstr ""
 
-#: prefs.js:706
+#: prefs.js:706 prefs.js:832
 msgid "Add Monitor"
 msgstr ""
 
-#: prefs.js:729
+#: prefs.js:729 prefs.js:855
 msgid "Type"
 msgstr ""
 
-#: prefs.js:733
+#: prefs.js:733 prefs.js:859
 msgid "Device"
 msgstr ""
 
-#: prefs.js:760
+#: prefs.js:760 prefs.js:904
 msgid "No devices detected"
 msgstr ""
 
-#: prefs.js:778
+#: prefs.js:778 prefs.js:922
 msgid "Add"
 msgstr ""
 
-#: prefs.js:812
+#: prefs.js:812 prefs.js:956
 msgid "About"
 msgstr ""
 
-#: prefs.js:819
+#: prefs.js:819 prefs.js:963
 msgid ""
 "Modular, config-driven system monitoring for your GNOME desktop. Add, "
 "remove, and reorder monitors freely — each with independent settings."
 msgstr ""
 
-#: prefs.js:824
+#: prefs.js:824 prefs.js:968
 msgid "What's New"
 msgstr ""
 
-#: prefs.js:830
+#: prefs.js:830 prefs.js:974
 msgid "Multi-Device Monitoring"
 msgstr ""
 
-#: prefs.js:831
+#: prefs.js:831 prefs.js:975
 msgid ""
 "Add multiple instances of any monitor type. Track individual CPU cores, "
 "specific network interfaces, or separate GPU devices — each with its own "
 "colors and refresh rate."
 msgstr ""
 
-#: prefs.js:836
+#: prefs.js:836 prefs.js:980
 msgid "Prometheus Metrics"
 msgstr ""
 
-#: prefs.js:837
+#: prefs.js:837 prefs.js:981
 msgid ""
 "Graph any metric from a Prometheus-compatible exporter directly in your "
 "panel. Monitor custom application metrics, hardware sensors, or anything "
 "with a metrics endpoint — no code changes required."
 msgstr ""
 
-#: prefs.js:842
+#: prefs.js:842 prefs.js:986
 msgid "Drag &amp; Drop Reordering"
 msgstr ""
 
-#: prefs.js:843
+#: prefs.js:843 prefs.js:987
 msgid ""
 "Reorder monitors by dragging them in the Monitors tab. Changes apply "
 "instantly — no shell restart required."
 msgstr ""
 
-#: prefs.js:848
+#: prefs.js:848 prefs.js:992
 msgid "Theme Integration"
 msgstr ""
 
-#: prefs.js:849
+#: prefs.js:849 prefs.js:993
 msgid ""
 "Panel widgets automatically use your desktop theme's foreground color for "
 "text and labels, blending seamlessly with any theme."
 msgstr ""
 
-#: prefs.js:853
+#: prefs.js:853 prefs.js:997
 msgid "Learn More"
 msgstr ""
 
-#: prefs.js:858
+#: prefs.js:858 prefs.js:1002
 msgid "Custom Metrics Guide"
 msgstr ""
 
-#: prefs.js:859
+#: prefs.js:859 prefs.js:1003
 msgid "Graph any metric using Prometheus exporters"
 msgstr ""
 
-#: prefs.js:864
+#: prefs.js:864 prefs.js:1008
 msgid "Widget Development"
 msgstr ""
 
-#: prefs.js:865
+#: prefs.js:865 prefs.js:1009
 msgid "Create new widget types for the extension"
 msgstr ""
 
-#: prefs.js:870
+#: prefs.js:870 prefs.js:1014
 msgid "Project Homepage"
 msgstr ""
 
-#: prefs.js:871
+#: prefs.js:871 prefs.js:1015
 msgid "Report issues, contribute, or star the project"
 msgstr ""
 
-#: prefs.js:920
+#: prefs.js:920 prefs.js:1064
 msgid "System Monitor Next Preferences"
 msgstr ""
 
-#: widgets/battery.js:133
+#: widgets/battery.js:133 widgets/battery.js:137
 #, javascript-format
 msgctxt "battery time remaining"
 msgid "%d:%02d"
@@ -612,22 +615,73 @@ msgid ""
 "in terms of recent spikes)"
 msgstr ""
 
-#: ui/prefsGeneralSettings.ui:92
+#: ui/prefsGeneralSettings.ui:92 ui/prefsGeneralSettings.ui:120
 msgid "How disk usage is shown in the dropdown menu"
 msgstr ""
 
-#: ui/prefsGeneralSettings.ui:106
+#: ui/prefsGeneralSettings.ui:106 ui/prefsGeneralSettings.ui:134
 msgid "Custom System Monitor Command"
 msgstr ""
 
-#: ui/prefsGeneralSettings.ui:107
+#: ui/prefsGeneralSettings.ui:107 ui/prefsGeneralSettings.ui:135
 msgid "Use a custom command instead of GNOME System Monitor"
 msgstr ""
 
-#: ui/prefsGeneralSettings.ui:112
+#: ui/prefsGeneralSettings.ui:112 ui/prefsGeneralSettings.ui:140
 msgid "Command (e.g. 'missioncenter')"
 msgstr ""
 
-#: ui/prefsGeneralSettings.ui:113
+#: ui/prefsGeneralSettings.ui:113 ui/prefsGeneralSettings.ui:141
 msgid "Command to run instead of GNOME System Monitor"
+msgstr ""
+
+#: base.js:1075
+#, javascript-format
+msgid "%s is high"
+msgstr ""
+
+#: base.js:1076
+#, javascript-format
+msgid "%s is at %s (threshold %s)"
+msgstr ""
+
+#: mounts.js:258
+msgid "Filesystem almost full"
+msgstr ""
+
+#: mounts.js:259
+#, javascript-format
+msgid "%s is %d%% full"
+msgstr ""
+
+#: prefs.js:605
+msgid "Alert threshold (0 to disable)"
+msgstr ""
+
+#: prefs.js:617
+msgid "Notify when threshold is exceeded"
+msgstr ""
+
+#: prefs.js:888
+msgid "Detecting devices…"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:91
+msgid "Alert notifications"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:92
+msgid "Allow monitors to notify when a value crosses its threshold"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:97
+msgid "Filesystem full warning"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:98
+msgid "Percent full a filesystem must pass before warning (0 to disable)"
+msgstr ""
+
+#: ui/prefsGeneralSettings.ui:114
+msgid "Notify about full filesystems"
 msgstr ""
