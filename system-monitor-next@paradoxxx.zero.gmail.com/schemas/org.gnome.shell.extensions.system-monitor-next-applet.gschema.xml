@@ -367,6 +367,16 @@
       <summary>Enable alert notifications</summary>
       <description>Master switch for threshold alert notifications. When off, no monitor raises a desktop notification regardless of its own setting. Defaults to on because each monitor opts into notifications individually.</description>
     </key>
+    <key name="fs-usage-threshold" type="i">
+      <default>0</default>
+      <summary>Filesystem usage alert threshold</summary>
+      <description>Warn when any monitored filesystem is more than this percentage full. Set to 0 to disable.</description>
+    </key>
+    <key name="fs-usage-notify" type="b">
+      <default>false</default>
+      <summary>Notify about full filesystems</summary>
+      <description>Raise a desktop notification when a filesystem passes the usage threshold.</description>
+    </key>
     <key name="memory-program-color" type="s">
       <default>'#00b35b'</default>
       <summary>Color of program memory in the chart</summary>
