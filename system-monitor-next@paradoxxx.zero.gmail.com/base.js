@@ -42,6 +42,10 @@ const ALERT_STYLE = 'color: rgba(255, 0, 0, 1)';
 // threshold again (percentage points, or degrees for thermal).
 export const ALERT_HYSTERESIS = 5;
 
+// Shortest gap between two notifications from the same source. A metric that
+// crosses, recovers and crosses again still only reports once per period.
+export const ALERT_REARM_MIN_US = 300 * 1e6;
+
 Clutter.Actor.prototype.raise_top = function raise_top() {
     const parent = this.get_parent();
     if (!parent) {
@@ -644,6 +648,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         // null until the first reading classifies the widget as over or under
         // its threshold; see _checkAlert().
         this._alertActive = null;
+        this._lastAlertNotify = 0;
 
         // Maximum value preserved during cooldown period
         this.graph_scale_max_including_cooldown = 0;
@@ -1047,8 +1052,31 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         // Between the hysteresis band and the threshold the previous state
         // stands, so a value oscillating around the threshold raises one alert.
     }
-    // Overridden once notifications land; the styling above stands alone.
-    _onAlertRaised(_value, _threshold) {
+    // Unit appended to values in alert notifications. Every alert-capable
+    // widget but thermal reports a percentage, and thermal overrides this to
+    // follow its Celsius/Fahrenheit setting.
+    _alertUnit() {
+        return '%';
+    }
+    _formatAlert(value) {
+        return Math.round(value).toString() + this._alertUnit();
+    }
+    _onAlertRaised(value, threshold) {
+        if (!this.config['alert-notify'])
+            return;
+
+        const now = GLib.get_monotonic_time();
+        if (this._lastAlertNotify &&
+            now - this._lastAlertNotify < ALERT_REARM_MIN_US)
+            return;
+        this._lastAlertNotify = now;
+
+        this.extension._Notifier?.notify(
+            _('%s is high').format(this.item_name),
+            _('%s is at %s (threshold %s)').format(
+                this.item_name,
+                this._formatAlert(value),
+                this._formatAlert(threshold)));
     }
     _logUpdateError(e) {
         if (this._updateErrorLogged)

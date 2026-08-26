@@ -33,6 +33,7 @@ import { sm_log } from './utils.js';
 import { migrateSettings } from './migration.js';
 import { color_from_string, smStyleManager, build_menu_info } from './base.js';
 import { smMountsMonitor, Bar, Pie } from './mounts.js';
+import { smNotifier } from './notifications.js';
 import { Battery } from './widgets/battery.js';
 import { Cpu } from './widgets/cpu.js';
 import { Disk } from './widgets/disk.js';
@@ -236,6 +237,7 @@ export default class SystemMonitorExtension extends Extension {
 
         this._Style = new smStyleManager(this);
         this._MountsMonitor = new smMountsMonitor(this);
+        this._Notifier = new smNotifier(this);
 
         this._Background = color_from_string(this._Schema.get_string('background'));
 
@@ -386,6 +388,11 @@ export default class SystemMonitorExtension extends Extension {
         if (this._MountsMonitor) {
             this._MountsMonitor.stopListening();
             this._MountsMonitor = null;
+        }
+
+        if (this._Notifier) {
+            this._Notifier.destroy();
+            this._Notifier = null;
         }
 
         if (this._Style) {

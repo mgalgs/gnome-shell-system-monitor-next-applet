@@ -76,6 +76,10 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
         });
     }
 
+    _alertUnit() {
+        return this._symbol();
+    }
+
     // Temperature in the unit the panel displays. The threshold is entered in
     // that same unit, so the comparison has to use this rather than the raw
     // Celsius reading.
