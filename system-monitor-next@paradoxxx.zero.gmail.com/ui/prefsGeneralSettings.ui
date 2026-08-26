@@ -93,6 +93,28 @@
           </object>
         </child>
         <child>
+          <object class="AdwSpinRow" id="fs_usage_threshold">
+            <property name="title" translatable="yes">Filesystem full warning</property>
+            <property name="subtitle" translatable="yes">Percent full a filesystem must pass before warning (0 to disable)</property>
+            <property name="numeric">true</property>
+            <property name="update-policy">if-valid</property>
+            <property name="adjustment">
+              <object class="GtkAdjustment">
+                <property name="lower">0</property>
+                <property name="upper">100</property>
+                <property name="value">0</property>
+                <property name="step_increment">5</property>
+                <property name="page-increment">10</property>
+              </object>
+            </property>
+          </object>
+        </child>
+        <child>
+          <object class="AdwSwitchRow" id="fs_usage_notify">
+            <property name="title" translatable="yes">Notify about full filesystems</property>
+          </object>
+        </child>
+        <child>
           <object class="AdwComboRow" id="disk_usage_style">
             <property name="title" translatable="yes">Usage Style</property>
             <property name="subtitle" translatable="yes">How disk usage is shown in the dropdown menu</property>

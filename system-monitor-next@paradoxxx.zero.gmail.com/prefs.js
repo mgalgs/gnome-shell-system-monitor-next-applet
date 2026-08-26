@@ -39,7 +39,8 @@ const SMGeneralPrefsPage = GObject.registerClass({
     InternalChildren: ['background', 'icon_display', 'show_tooltip', 'move_clock',
         'compact_display', 'center_display', 'left_display', 'rotate_labels',
         'tooltip_delay_ms', 'graph_delay_m', 'disk_usage_style',
-        'alerts_enabled', 'custom_monitor_switch', 'custom_monitor_command'],
+        'alerts_enabled', 'fs_usage_threshold', 'fs_usage_notify',
+        'custom_monitor_switch', 'custom_monitor_command'],
 }, class SMGeneralPrefsPage extends Adw.PreferencesPage {
     constructor(settings, params = {}) {
         super(params);
@@ -108,6 +109,18 @@ const SMGeneralPrefsPage = GObject.registerClass({
         this._settings.bind('alerts-enabled', this._alerts_enabled,
             'active', Gio.SettingsBindFlags.DEFAULT
         );
+        this._settings.bind('fs-usage-threshold', this._fs_usage_threshold,
+            'value', Gio.SettingsBindFlags.DEFAULT
+        );
+        this._settings.bind('fs-usage-notify', this._fs_usage_notify,
+            'active', Gio.SettingsBindFlags.DEFAULT
+        );
+
+        // Nothing to notify about without a threshold to cross.
+        this._fs_usage_notify.sensitive = this._settings.get_int('fs-usage-threshold') > 0;
+        this._settings.connect('changed::fs-usage-threshold', () => {
+            this._fs_usage_notify.sensitive = this._settings.get_int('fs-usage-threshold') > 0;
+        });
 
         // Enum key: bind() can't map a combo index to the enum nick.
         this._disk_usage_style.selected = this._settings.get_enum('disk-usage-style');
