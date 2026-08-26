@@ -565,23 +565,29 @@ const SMMonitorRow = GObject.registerClass({
                 title: _('Display temperature in Fahrenheit'),
                 active: c['fahrenheit-unit'] || false,
             });
-            fahrenheit.connect('notify::active', w => {
-                c['fahrenheit-unit'] = w.active;
-                this._emitChanged();
-            });
             this.add_row(fahrenheit);
 
+            // The threshold is compared in the displayed unit, so name that
+            // unit here; upper covers 300 °C expressed in °F.
+            let tempUnit = () => c['fahrenheit-unit'] ? '°F' : '°C';
             let threshold = new Adw.SpinRow({
                 title: _('Temperature threshold (0 to disable)'),
+                subtitle: tempUnit(),
                 numeric: true,
                 adjustment: new Gtk.Adjustment({
-                    value: c.threshold || 0, lower: 0, upper: 300,
+                    value: c.threshold || 0, lower: 0, upper: 600,
                     step_increment: 5, page_increment: 10,
                 }),
             });
             this.add_row(threshold);
             threshold.connect('notify::value', w => {
                 c.threshold = w.value;
+                this._emitChanged();
+            });
+
+            fahrenheit.connect('notify::active', w => {
+                c['fahrenheit-unit'] = w.active;
+                threshold.subtitle = tempUnit();
                 this._emitChanged();
             });
             break;

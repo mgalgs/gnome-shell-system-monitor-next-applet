@@ -67,8 +67,9 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
             this._temperature = Math.round(value / 1000);
             this.fahrenheit_unit = this.config['fahrenheit-unit'] || false;
             let symbol = this._symbol();
-            this.temp_over_threshold = this._temperature !== null &&
-                this._temperature > (this.config.threshold || 0);
+            let displayTemp = this._displayTemp();
+            this.temp_over_threshold = displayTemp !== null &&
+                displayTemp > (this.config.threshold || 0);
             this.threshold();
             callback({
                 metrics: {tz0: this._temperature},
@@ -94,12 +95,21 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
         }
     }
 
-    _formatTemp() {
+    // Temperature in the unit the panel displays. The threshold is entered in
+    // that same unit, so the comparison has to use this rather than the raw
+    // Celsius reading.
+    _displayTemp() {
         if (this._temperature === null)
-            return '-- ';
-        let t = this._temperature;
+            return null;
         if (this.fahrenheit_unit)
-            t = Math.round(t * 1.8 + 32);
+            return Math.round(this._temperature * 1.8 + 32);
+        return this._temperature;
+    }
+
+    _formatTemp() {
+        let t = this._displayTemp();
+        if (t === null)
+            return '-- ';
         return t.toString();
     }
 
