@@ -362,6 +362,11 @@
       <summary>Optimize view for small displays</summary>
       <description>Optimize texts sizes to fit on a small display </description>
     </key>
+    <key name="alerts-enabled" type="b">
+      <default>true</default>
+      <summary>Enable alert notifications</summary>
+      <description>Master switch for threshold alert notifications. When off, no monitor raises a desktop notification regardless of its own setting. Defaults to on because each monitor opts into notifications individually.</description>
+    </key>
     <key name="memory-program-color" type="s">
       <default>'#00b35b'</default>
       <summary>Color of program memory in the chart</summary>
