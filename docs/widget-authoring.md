@@ -187,6 +187,38 @@ collect() {
 | `icon`        | `Gio.Icon` for `'icon'` panel layout                      |
 | `tipVals`     | Array overriding auto-mapped tooltip values               |
 | `tipUnits`    | Array overriding tooltip unit labels                      |
+| `alertValue`  | Value compared against the configured threshold           |
+
+### Threshold Alerts
+
+A widget becomes alert-capable by returning `alertValue` from `collect()`. When the
+user sets a threshold, `ElementBase` turns the panel value red above it and, if the
+monitor has `alert-notify` set, raises a desktop notification on each crossing.
+
+```javascript
+collect() {
+    let percent = …;
+    return { metrics: { used: percent / 100 }, display: `${percent}`, alertValue: percent };
+}
+```
+
+Three things to get right:
+
+- **Report it in the unit the user sees**, since that is the unit they typed the
+  threshold in. Widgets reporting a ratio between zero and one as their metric must
+  still return a percentage here, or a threshold of `90` will never be reached.
+- **Omit it when there is no reading.** A return without `alertValue` clears the
+  styling rather than leaving it asserted on stale data.
+- **Override `_alertUnit()`** if the widget is not a percentage; it supplies the unit
+  shown in the notification text.
+
+Alerts re-arm only once the value falls `ALERT_HYSTERESIS` below the threshold, and no
+monitor notifies twice within `ALERT_REARM_MIN_US`, so a value resting on the boundary
+reports once rather than on every refresh.
+
+Finally, add the type to `ALERT_UNITS` in `prefs.js` — that table decides which
+monitors are offered a threshold row, and it cannot be derived from the widget because
+prefs runs in a separate process that cannot import `base.js`.
 
 ### collectAsync(callback) — async data
 
