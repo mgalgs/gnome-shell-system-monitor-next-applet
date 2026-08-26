@@ -163,6 +163,18 @@ const DEFAULT_COLORS = {
 
 const STYLE_OPTIONS = ['digit', 'graph', 'both'];
 
+// Monitor types that support a threshold, and the unit their threshold is
+// entered in. This mirrors the widgets returning alertValue from collect();
+// prefs runs in the GTK process and cannot import them, since base.js pulls in
+// St and Clutter. Keep in sync by hand, as with COLOR_MAP.
+const ALERT_UNITS = {
+    cpu: '%', memory: '%', swap: '%', gpu: '%', thermal: '°',
+};
+
+// Percentages cap at 100; a temperature threshold has to reach 300 °C
+// expressed in °F.
+const ALERT_MAX = {thermal: 600};
+
 // ** Device Detection **
 
 function getCpuCores() {
@@ -358,10 +370,10 @@ function buildDefaultConfig(type, device) {
         'show-menu': true,
         colors: {...(DEFAULT_COLORS[type] || {})},
     };
-    if (type === 'thermal') {
-        config['fahrenheit-unit'] = false;
+    if (ALERT_UNITS[type] !== undefined)
         config['threshold'] = 0;
-    }
+    if (type === 'thermal')
+        config['fahrenheit-unit'] = false;
     if (type === 'net')
         config['speed-in-bits'] = false;
     if (type === 'battery') {
@@ -555,7 +567,41 @@ const SMMonitorRow = GObject.registerClass({
             this.add_row(actionRow);
         }
 
+        this._buildThreshold(c);
         this._buildTypeSpecific(c);
+    }
+
+    // The unit a threshold is entered in, which for thermal follows the
+    // widget's own Fahrenheit setting.
+    _alertUnitLabel(c) {
+        if (c.type === 'thermal')
+            return c['fahrenheit-unit'] ? '°F' : '°C';
+        return ALERT_UNITS[c.type] ?? '';
+    }
+
+    _buildThreshold(c) {
+        if (ALERT_UNITS[c.type] === undefined)
+            return;
+
+        this._thresholdRow = new Adw.SpinRow({
+            title: _('Alert threshold (0 to disable)'),
+            subtitle: this._alertUnitLabel(c),
+            numeric: true,
+            adjustment: new Gtk.Adjustment({
+                value: c.threshold || 0, lower: 0,
+                upper: ALERT_MAX[c.type] ?? 100,
+                step_increment: 5, page_increment: 10,
+            }),
+        });
+        // An Adw.SpinRow does not pick up its adjustment's initial value, so
+        // the row would read 0 whatever the monitor is set to; the graph width
+        // and refresh time rows above assign it for the same reason.
+        this._thresholdRow.value = c.threshold || 0;
+        this.add_row(this._thresholdRow);
+        this._thresholdRow.connect('notify::value', w => {
+            c.threshold = w.value;
+            this._emitChanged();
+        });
     }
 
     _buildTypeSpecific(c) {
@@ -567,27 +613,12 @@ const SMMonitorRow = GObject.registerClass({
             });
             this.add_row(fahrenheit);
 
-            // The threshold is compared in the displayed unit, so name that
-            // unit here; upper covers 300 °C expressed in °F.
-            let tempUnit = () => c['fahrenheit-unit'] ? '°F' : '°C';
-            let threshold = new Adw.SpinRow({
-                title: _('Temperature threshold (0 to disable)'),
-                subtitle: tempUnit(),
-                numeric: true,
-                adjustment: new Gtk.Adjustment({
-                    value: c.threshold || 0, lower: 0, upper: 600,
-                    step_increment: 5, page_increment: 10,
-                }),
-            });
-            this.add_row(threshold);
-            threshold.connect('notify::value', w => {
-                c.threshold = w.value;
-                this._emitChanged();
-            });
-
             fahrenheit.connect('notify::active', w => {
                 c['fahrenheit-unit'] = w.active;
-                threshold.subtitle = tempUnit();
+                // The threshold is compared in the displayed unit, so relabel
+                // the row that _buildThreshold() added above.
+                if (this._thresholdRow)
+                    this._thresholdRow.subtitle = this._alertUnitLabel(c);
                 this._emitChanged();
             });
             break;
