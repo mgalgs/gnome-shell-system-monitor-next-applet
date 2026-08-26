@@ -39,7 +39,7 @@ const SMGeneralPrefsPage = GObject.registerClass({
     InternalChildren: ['background', 'icon_display', 'show_tooltip', 'move_clock',
         'compact_display', 'center_display', 'left_display', 'rotate_labels',
         'tooltip_delay_ms', 'graph_delay_m', 'disk_usage_style',
-        'custom_monitor_switch', 'custom_monitor_command'],
+        'alerts_enabled', 'custom_monitor_switch', 'custom_monitor_command'],
 }, class SMGeneralPrefsPage extends Adw.PreferencesPage {
     constructor(settings, params = {}) {
         super(params);
@@ -104,6 +104,9 @@ const SMGeneralPrefsPage = GObject.registerClass({
         );
         this._settings.bind('graph-cooldown-delay-m', this._graph_delay_m,
             'value', Gio.SettingsBindFlags.DEFAULT
+        );
+        this._settings.bind('alerts-enabled', this._alerts_enabled,
+            'active', Gio.SettingsBindFlags.DEFAULT
         );
 
         // Enum key: bind() can't map a combo index to the enum nick.
@@ -370,8 +373,10 @@ function buildDefaultConfig(type, device) {
         'show-menu': true,
         colors: {...(DEFAULT_COLORS[type] || {})},
     };
-    if (ALERT_UNITS[type] !== undefined)
+    if (ALERT_UNITS[type] !== undefined) {
         config['threshold'] = 0;
+        config['alert-notify'] = false;
+    }
     if (type === 'thermal')
         config['fahrenheit-unit'] = false;
     if (type === 'net')
@@ -598,8 +603,23 @@ const SMMonitorRow = GObject.registerClass({
         // and refresh time rows above assign it for the same reason.
         this._thresholdRow.value = c.threshold || 0;
         this.add_row(this._thresholdRow);
+
+        let notifyRow = new Adw.SwitchRow({
+            title: _('Notify when threshold is exceeded'),
+            active: c['alert-notify'] || false,
+            // A notification with no threshold to cross would never fire, so
+            // show the dependency rather than leaving it to be discovered.
+            sensitive: (c.threshold || 0) > 0,
+        });
+        this.add_row(notifyRow);
+        notifyRow.connect('notify::active', w => {
+            c['alert-notify'] = w.active;
+            this._emitChanged();
+        });
+
         this._thresholdRow.connect('notify::value', w => {
             c.threshold = w.value;
+            notifyRow.sensitive = w.value > 0;
             this._emitChanged();
         });
     }

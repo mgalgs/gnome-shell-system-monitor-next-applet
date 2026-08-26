@@ -87,6 +87,12 @@
           </object>
         </child>
         <child>
+          <object class="AdwSwitchRow" id="alerts_enabled">
+            <property name="title" translatable="yes">Alert notifications</property>
+            <property name="subtitle" translatable="yes">Allow monitors to notify when a value crosses its threshold</property>
+          </object>
+        </child>
+        <child>
           <object class="AdwComboRow" id="disk_usage_style">
             <property name="title" translatable="yes">Usage Style</property>
             <property name="subtitle" translatable="yes">How disk usage is shown in the dropdown menu</property>
