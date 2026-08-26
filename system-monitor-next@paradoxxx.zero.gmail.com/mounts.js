@@ -7,6 +7,7 @@ import St from "gi://St";
 import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 import { parse_bytearray } from './common.js';
 import { sm_log } from './utils.js';
+import { ALERT_HYSTERESIS, ALERT_REARM_MIN_US } from './base.js';
 
 // Visual distinction between adjacent mount rings/bars; cycled per index.
 const MOUNT_SHADE_ALPHAS = [1.0, 0.7, 0.5];
@@ -34,7 +35,12 @@ export function interesting_mountpoint(mount) {
 
 // Class to deal with volumes insertion / ejection
 export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
-    constructor() {
+    constructor(extension) {
+        // extension.js has always passed this; it was unused until usage
+        // alerts needed the settings and the notifier.
+        this._extension = extension;
+        this._usage_alerts = new Map();
+        this._usage_alert_timer_id = null;
         this.files = [];
         this.num_mounts = -1;
         this.listeners = [];
@@ -101,6 +107,9 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
             // A later entry shadows an earlier one for the same mountpoint.
             table.set(mpath, {
                 fstype: fields[2].toLowerCase(),
+                // Backing device. Subvolumes and bind mounts of one
+                // filesystem share it, which is what usage alerts dedupe on.
+                source: fields[0],
                 // A network mount's source names the remote: //server/share
                 // (SMB), server:/path (NFS-style) or scheme://... (davfs and
                 // friends). Catches network filesystems whose fstype is not
@@ -144,6 +153,15 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
         for (const mpath of this._usage.keys()) {
             if (this.mounts.indexOf(mpath) === -1) {
                 this._usage.delete(mpath);
+            }
+        }
+        // Drop alert state for filesystems that are no longer mounted, so
+        // remounting a full disk reports it again rather than staying silent
+        // on the stale state.
+        let live = new Set([...this._usage.values()].map(u => u.fsid));
+        for (const fsid of this._usage_alerts.keys()) {
+            if (!live.has(fsid)) {
+                this._usage_alerts.delete(fsid);
             }
         }
         for (let i in this.listeners) {
@@ -193,16 +211,88 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
                     // runs out of space.
                     let used = info.get_attribute_uint64(Gio.FILE_ATTRIBUTE_FILESYSTEM_USED);
                     let total = used + info.get_attribute_uint64(Gio.FILE_ATTRIBUTE_FILESYSTEM_FREE);
+                    // Subvolumes and bind mounts of one filesystem report
+                    // identical usage, so alerts are tracked per backing
+                    // device rather than per mountpoint. query_filesystem_info
+                    // cannot supply this: id::filesystem is a file attribute,
+                    // so take it from the mount table we already parse.
+                    let fsid = this._lookup_mount(Gio.File.new_for_path(mpath))?.source || mpath;
                     let prev = this._usage.get(mpath);
                     if (prev && prev.used === used && prev.total === total) {
                         return;
                     }
-                    this._usage.set(mpath, {used, total});
+                    this._usage.set(mpath, {used, total, fsid});
+                    this._check_usage_alert(fsid, mpath, total > 0 ? (used / total) * 100 : 0);
                     for (let i in this.listeners) {
                         this.listeners[i](this.mounts);
                     }
                 });
         }
+    }
+    // Nothing else polls usage: the dropdown's bar and pie only refresh it
+    // while they are on screen, and mount events are rare. Without a timer a
+    // filesystem that fills up during a session is never noticed, so run one
+    // for as long as a threshold is set.
+    _sync_usage_alert_timer() {
+        const USAGE_ALERT_POLL_S = 60;
+        let schema = this._extension?._Schema;
+        let wanted = !!schema && schema.get_int('fs-usage-threshold') > 0;
+
+        if (wanted && !this._usage_alert_timer_id) {
+            this._usage_alert_timer_id = GLib.timeout_add_seconds(
+                GLib.PRIORITY_DEFAULT, USAGE_ALERT_POLL_S, () => {
+                    this.refresh_usage();
+                    return GLib.SOURCE_CONTINUE;
+                });
+        } else if (!wanted && this._usage_alert_timer_id) {
+            GLib.Source.remove(this._usage_alert_timer_id);
+            this._usage_alert_timer_id = null;
+        }
+    }
+    // Mirrors ElementBase's threshold handling: an alert re-arms only once the
+    // mount drops ALERT_HYSTERESIS below the threshold, and no mount notifies
+    // twice within ALERT_REARM_MIN_US. A filesystem sitting just under its
+    // threshold would otherwise report on every usage refresh.
+    _check_usage_alert(fsid, mpath, percent) {
+        let schema = this._extension?._Schema;
+        if (!schema) {
+            return;
+        }
+        let threshold = schema.get_int('fs-usage-threshold');
+        if (!threshold) {
+            this._usage_alerts.delete(fsid);
+            return;
+        }
+
+        let state = this._usage_alerts.get(fsid);
+        if (!state) {
+            state = {active: false, lastNotified: 0};
+            this._usage_alerts.set(fsid, state);
+        }
+
+        if (percent <= threshold) {
+            if (percent < threshold - ALERT_HYSTERESIS) {
+                state.active = false;
+            }
+            return;
+        }
+
+        let wasActive = state.active;
+        state.active = true;
+        if (wasActive || !schema.get_boolean('fs-usage-notify')) {
+            return;
+        }
+
+        let now = GLib.get_monotonic_time();
+        if (state.lastNotified &&
+            now - state.lastNotified < ALERT_REARM_MIN_US) {
+            return;
+        }
+        state.lastNotified = now;
+
+        this._extension._Notifier?.notify(
+            _('Filesystem almost full'),
+            _('%s is %d%% full').format(mpath, Math.round(percent)));
     }
     add_listener(cb) {
         this.listeners.push(cb);
@@ -254,6 +344,12 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
                 'mount-removed', this.refresh.bind(this),
                 this
             );
+            this._extension?._Schema?.connectObject(
+                'changed::fs-usage-threshold',
+                () => this._sync_usage_alert_timer(),
+                this
+            );
+            this._sync_usage_alert_timer();
             // need to add the other signals here
             this.connected = true;
         } catch (e) {
@@ -267,9 +363,14 @@ export const smMountsMonitor = class SystemMonitor_smMountsMonitor {
         this._cancellable = null;
         this._usage_cancellable?.cancel();
         this._usage_cancellable = null;
+        if (this._usage_alert_timer_id) {
+            GLib.Source.remove(this._usage_alert_timer_id);
+            this._usage_alert_timer_id = null;
+        }
         if (!this.connected) {
             return;
         }
+        this._extension?._Schema?.disconnectObject(this);
         this.manager.disconnectObject(this);
         this.connected = false;
     }
