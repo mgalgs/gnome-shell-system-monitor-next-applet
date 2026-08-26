@@ -36,7 +36,6 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
         }
 
         this.tip_format(this._symbol());
-        this.reset_style();
     }
 
     collectAsync(callback) {
@@ -67,32 +66,14 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
             this._temperature = Math.round(value / 1000);
             this.fahrenheit_unit = this.config['fahrenheit-unit'] || false;
             let symbol = this._symbol();
-            let displayTemp = this._displayTemp();
-            this.temp_over_threshold = displayTemp !== null &&
-                displayTemp > (this.config.threshold || 0);
-            this.threshold();
             callback({
                 metrics: {tz0: this._temperature},
                 display: this._formatTemp(),
                 unit: symbol,
                 tipUnits: [_(symbol)],
+                alertValue: this._displayTemp(),
             });
         });
-    }
-
-    reset_style() {
-        this.text_items[0].set_style(null);
-    }
-
-    threshold() {
-        if (this.config.threshold) {
-            if (this.temp_over_threshold)
-                this.text_items[0].set_style('color: rgba(255, 0, 0, 1)');
-            else
-                this.text_items[0].set_style(null);
-        } else {
-            this.text_items[0].set_style(null);
-        }
     }
 
     // Temperature in the unit the panel displays. The threshold is entered in
