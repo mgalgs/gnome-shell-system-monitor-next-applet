@@ -97,6 +97,8 @@ const Net = class SystemMonitor_Net extends ElementBase {
             for (let j = 0; j < iface_list.length; j++) {
                 if (iface_list[j].state === NetworkManager.DeviceState.ACTIVATED) {
                     let iface = iface_list[j].get_ip_iface() || iface_list[j].get_iface();
+                    if (!iface)
+                        continue;
                     if (this.device_id === 'all' || this.device_id === iface)
                         this.ifs.push(iface);
                 }
