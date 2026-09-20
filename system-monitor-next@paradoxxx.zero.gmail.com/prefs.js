@@ -370,6 +370,10 @@ function buildDefaultConfig(type, device) {
     }
     if (type === 'freq')
         config['display-mode'] = 'max';
+    if (type === 'cpu') {
+        config['graph-average'] = false;
+        config['restore-average'] = false;
+    }
     if (type === 'prometheus') {
         config.server = 'http://localhost:9100';
         config.metric = 'node_load1';
@@ -657,6 +661,30 @@ const SMMonitorRow = GObject.registerClass({
                 this._emitChanged();
             });
             this.add_row(metricRow);
+            break;
+        }
+        case 'cpu': {
+            let graphAverage = new Adw.SwitchRow({
+                title: _('Graph Average'),
+                subtitle: _('Show average CPU usage next to graph'),
+                active: c['graph-average'] || false,
+            });
+            graphAverage.connect('notify::active', w => {
+                c['graph-average'] = w.active;
+                this._emitChanged();
+            });
+            this.add_row(graphAverage);
+
+            let restoreGraphAverage = new Adw.SwitchRow({
+                title: _('Restore Graph Average'),
+                subtitle: _('Restore the graph average after the extension is recreated'),
+                active: c['restore-average'] || false,
+            });
+            restoreGraphAverage.connect('notify::active', w => {
+                c['restore-average'] = w.active;
+                this._emitChanged();
+            });
+            this.add_row(restoreGraphAverage);
             break;
         }
         }
