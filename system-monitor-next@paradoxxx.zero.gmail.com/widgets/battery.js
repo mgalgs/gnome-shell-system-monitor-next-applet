@@ -6,7 +6,7 @@ import Gio from "gi://Gio";
 import UPowerGlib from "gi://UPowerGlib";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import { sm_log } from '../utils.js';
-import { ElementBase, build_menu_info } from '../base.js';
+import { ElementBase, build_menu_info, source_remove_if_alive } from '../base.js';
 
 const UPower = UPowerGlib;
 
@@ -174,7 +174,7 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
             this._proxy = null;
         }
         if (this._poll_handler_id) {
-            GLib.source_remove(this._poll_handler_id);
+            source_remove_if_alive(this._poll_handler_id);
             this._poll_handler_id = undefined;
         }
         ElementBase.prototype.destroy.call(this);
