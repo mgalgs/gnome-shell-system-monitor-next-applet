@@ -32,11 +32,12 @@ const Net = class SystemMonitor_Net extends ElementBase {
     constructor(extension, config) {
         super(extension, config);
         this.ifs = [];
+        this._ifaceGeneration = 0;
+        this._last = [0, 0, 0, 0, 0];
+        this._lastTime = 0;
+        this._resetNetloadBaseline = true;
         this.client = NM.Client.new(null);
         this.update_iface_list();
-
-        if (!this.ifs.length)
-            this._detectInterfacesAsync();
 
         if (this.device_id !== 'all') {
             this.label.text = this.device_id;
@@ -44,8 +45,6 @@ const Net = class SystemMonitor_Net extends ElementBase {
         }
 
         this.gtop = new GTop.glibtop_netload();
-        this._last = [0, 0, 0, 0, 0];
-        this._lastTime = 0;
         this.tip_format([_('KiB/s'), '/s', _('KiB/s'), '/s', '/s']);
         try {
             let iface_list = this.client.get_devices();
@@ -60,49 +59,91 @@ const Net = class SystemMonitor_Net extends ElementBase {
         }
     }
 
-    _detectInterfacesAsync() {
-        Gio.File.new_for_path('/proc/net/dev').load_contents_async(null, (file, result) => {
+    _detectInterfacesAsync(generation) {
+        Gio.File.new_for_path('/proc/net/dev').load_contents_async(null, async (file, result) => {
             if (this._destroyed) return;
             try {
                 let [, contents] = file.load_contents_finish(result);
                 let lines = new TextDecoder().decode(contents).split('\n');
-                for (let i = 2; i < lines.length - 1; i++) {
-                    let ifc = lines[i].replace(/^\s+/g, '').split(':')[0];
-                    if (ifc.indexOf('br') >= 0 || ifc.indexOf('lo') >= 0)
-                        continue;
-                    this._checkOperstate(ifc);
-                }
+                let candidates = lines.slice(2, -1)
+                    .map(line => line.replace(/^\s+/g, '').split(':')[0]);
+                let interfaces = await Promise.all(candidates.map(ifc => this._checkFallbackInterface(ifc)));
+                if (!this._destroyed && generation === this._ifaceGeneration)
+                    this._replaceInterfaces(interfaces.filter(ifc => ifc !== null));
             } catch { /* /proc/net/dev unavailable */ }
         });
     }
 
-    _checkOperstate(ifc) {
-        Gio.File.new_for_path('/sys/class/net/' + ifc + '/operstate')
-            .load_contents_async(null, (opFile, opResult) => {
-                if (this._destroyed) return;
-                try {
-                    let [, opContents] = opFile.load_contents_finish(opResult);
-                    if (new TextDecoder().decode(opContents).replace(/\s/g, '') === 'up') {
-                        if (this.device_id === 'all' || this.device_id === ifc)
-                            this.ifs.push(ifc);
+    _checkFallbackInterface(ifc) {
+        return new Promise(resolve => {
+            Gio.File.new_for_path('/sys/class/net/' + ifc + '/operstate')
+                .load_contents_async(null, (opFile, opResult) => {
+                    if (this._destroyed) {
+                        resolve(null);
+                        return;
                     }
-                } catch { /* operstate file may not exist */ }
+                    try {
+                        let [, opContents] = opFile.load_contents_finish(opResult);
+                        let up = new TextDecoder().decode(opContents).trim() === 'up';
+                        if (this.device_id === ifc) {
+                            resolve(ifc);
+                        } else if (!up) {
+                            resolve(null);
+                        } else if (this.device_id === 'all') {
+                            this._checkPhysicalInterface(ifc, resolve);
+                        } else {
+                            resolve(null);
+                        }
+                    } catch {
+                        resolve(null);
+                    }
+                });
+        });
+    }
+
+    _checkPhysicalInterface(ifc, resolve) {
+        Gio.File.new_for_path('/sys/class/net/' + ifc + '/device')
+            .query_info_async('standard::type', Gio.FileQueryInfoFlags.NONE,
+                GLib.PRIORITY_DEFAULT, null, (file, result) => {
+                try {
+                    file.query_info_finish(result);
+                    resolve(ifc);
+                } catch {
+                    resolve(null);
+                }
             });
     }
 
+    _replaceInterfaces(interfaces) {
+        let next = [...new Set(interfaces)];
+        if (next.length === this.ifs.length && next.every((ifc, i) => ifc === this.ifs[i]))
+            return;
+        this.ifs = next;
+        this._resetNetloadBaseline = true;
+    }
+
     update_iface_list() {
+        let generation = ++this._ifaceGeneration;
         try {
-            this.ifs = [];
+            let interfaces = [];
             let iface_list = this.client.get_devices();
             for (let j = 0; j < iface_list.length; j++) {
-                if (iface_list[j].state === NetworkManager.DeviceState.ACTIVATED) {
-                    let iface = iface_list[j].get_ip_iface() || iface_list[j].get_iface();
-                    if (this.device_id === 'all' || this.device_id === iface)
-                        this.ifs.push(iface);
+                let device = iface_list[j];
+                if (device.state === NetworkManager.DeviceState.ACTIVATED) {
+                    let iface = device.get_ip_iface() || device.get_iface();
+                    if (!iface)
+                        continue;
+                    if (this.device_id === iface || (this.device_id === 'all' && !device.is_software()))
+                        interfaces.push(iface);
                 }
             }
+            this._replaceInterfaces(interfaces);
+            if (!interfaces.length)
+                this._detectInterfacesAsync(generation);
         } catch {
             console.error('Please install Network Manager Gobject Introspection Bindings');
+            this._replaceInterfaces([]);
+            this._detectInterfacesAsync(generation);
         }
     }
 
@@ -120,7 +161,10 @@ const Net = class SystemMonitor_Net extends ElementBase {
         let time = GLib.get_monotonic_time() * 0.001024;
         let delta = time - this._lastTime;
         let usage = [0, 0, 0, 0, 0];
-        if (delta > 0) {
+        if (this._resetNetloadBaseline) {
+            this._last = accum;
+            this._resetNetloadBaseline = false;
+        } else if (delta > 0) {
             for (let i = 0; i < 5; i++) {
                 usage[i] = Math.round((accum[i] - this._last[i]) / delta);
                 this._last[i] = accum[i];
