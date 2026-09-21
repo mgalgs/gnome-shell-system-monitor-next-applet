@@ -529,7 +529,7 @@ export const TipBox = class SystemMonitor_TipBox {
     }
     stop_in_timer() {
         if (this.in_to) {
-            GLib.Source.remove(this.in_to);
+            source_remove_if_alive(this.in_to);
             this.in_to = 0;
         }
     }
@@ -544,7 +544,7 @@ export const TipBox = class SystemMonitor_TipBox {
     }
     stop_out_timer() {
         if (this.out_to) {
-            GLib.Source.remove(this.out_to);
+            source_remove_if_alive(this.out_to);
             this.out_to = 0;
         }
     }
@@ -978,8 +978,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
                 if (!this._asyncPending) {
                     this._asyncPending = true;
                     const gen = ++this._asyncGen;
-                    if (this._asyncTimeoutId)
-                        GLib.Source.remove(this._asyncTimeoutId);
+                    source_remove_if_alive(this._asyncTimeoutId);
                     this._asyncTimeoutId = GLib.timeout_add_seconds(
                         GLib.PRIORITY_DEFAULT, 30, () => {
                             this._asyncTimeoutId = null;
@@ -993,10 +992,8 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
                         if (this._asyncGen !== gen)
                             return;
                         this._asyncPending = false;
-                        if (this._asyncTimeoutId) {
-                            GLib.Source.remove(this._asyncTimeoutId);
-                            this._asyncTimeoutId = null;
-                        }
+                        source_remove_if_alive(this._asyncTimeoutId);
+                        this._asyncTimeoutId = null;
                         if (this._destroyed)
                             return;
                         this._applyCollected(data);
