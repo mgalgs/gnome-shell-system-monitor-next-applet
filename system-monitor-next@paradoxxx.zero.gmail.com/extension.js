@@ -49,6 +49,10 @@ import { Prometheus } from './widgets/prometheus.js';
 
 const PANEL_ICON_SIZE = 16;
 
+// Seconds of 1 Hz watchdog ticks with nothing to repair before it backs off to
+// the WallClock's default minute-granular ticks.
+const WATCHDOG_QUIET_SECONDS = 300;
+
 const WIDGET_CLASSES = {
     cpu: Cpu,
     memory: Mem,
@@ -379,28 +383,45 @@ export default class SystemMonitorExtension extends Extension {
      * is why this can repair timers that cannot repair themselves.
      */
     _startTimerWatchdog() {
-        // force_seconds so notify::clock arrives every second: widgets refresh
-        // on sub-second to few-second intervals, and a minute-granular
-        // watchdog would leave the panel visibly dead for far too long.
+        // force_seconds makes notify::clock arrive every second instead of
+        // every minute: widgets refresh on sub-second to few-second
+        // intervals, so a minute-granular watchdog would leave the panel
+        // visibly dead for far too long after a sweep.
         this._wallClock = new GnomeDesktop.WallClock({force_seconds: true});
-        this._wallClockId = this._wallClock.connect('notify::clock', () => {
-            if (!this.__sm)
-                return;
-            let revived = 0;
-            for (const elt of this.__sm.elts) {
-                if (elt.revive_timers?.())
-                    revived++;
-            }
-            // The pie repaint timer is only armed while the menu is open, so
-            // absence is only a fault in that state.
-            if (this.__sm.tray.menu.isOpen && !source_is_alive(this.menuTimeout)) {
-                this.menuTimeout = null;
-                this._startMenuRepaintTimer();
+        this._watchdogQuietSeconds = 0;
+        this._wallClockId = this._wallClock.connect('notify::clock',
+            () => this._onWatchdogTick());
+    }
+
+    _onWatchdogTick() {
+        if (!this.__sm)
+            return;
+        let revived = 0;
+        for (const elt of this.__sm.elts) {
+            if (elt.revive_timers?.())
                 revived++;
-            }
-            if (revived)
-                sm_log(`re-armed ${revived} timer(s) destroyed during GC`, 'warn');
-        });
+        }
+        // The pie repaint timer is only armed while the menu is open, so
+        // absence is only a fault in that state.
+        if (this.__sm.tray.menu.isOpen && !source_is_alive(this.menuTimeout)) {
+            this.menuTimeout = null;
+            this._startMenuRepaintTimer();
+            revived++;
+        }
+
+        if (revived) {
+            sm_log(`re-armed ${revived} timer(s) destroyed during GC`, 'warn');
+            this._watchdogQuietSeconds = 0;
+            this._wallClock.force_seconds = true;
+        } else if (this._wallClock.force_seconds &&
+                   ++this._watchdogQuietSeconds >= WATCHDOG_QUIET_SECONDS) {
+            // Drop back to the default minute-granular ticks. A permanent 1 Hz
+            // wakeup plus an O(widgets) scan is a poor trade once nothing has
+            // needed repair for this long, and the sweeps that destroy sources
+            // cluster around startup and large collections rather than
+            // arriving steadily. Any repair puts it back to 1 Hz at once.
+            this._wallClock.force_seconds = false;
+        }
     }
 
     _stopTimerWatchdog() {
@@ -408,7 +429,13 @@ export default class SystemMonitorExtension extends Extension {
             this._wallClock.disconnect(this._wallClockId);
             this._wallClockId = null;
         }
-        this._wallClock = null;
+        if (this._wallClock) {
+            // Disconnecting alone leaves the clock's C-side timer running
+            // until GJS happens to collect the wrapper, which means a source
+            // outliving disable().
+            this._wallClock.run_dispose();
+            this._wallClock = null;
+        }
     }
 
     disable() {
