@@ -8,7 +8,7 @@ A GNOME Shell extension that displays system resource usage (CPU, memory, disk, 
 
 **Extension UUID:** `system-monitor-next@paradoxxx.zero.gmail.com`
 
-**Supported GNOME Shell versions:** 45, 46, 47, 48, 49
+**Supported GNOME Shell versions:** 45, 46, 47, 48, 49, 50, 51
 
 ## Prerequisites
 
