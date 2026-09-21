@@ -236,6 +236,7 @@ After `super(extension, config)`, these are available:
 | `this.text_items` | Array of `St.Label`/`St.Icon` — panel value display elements                 |
 | `this.menu_items` | Array of `St.Label` — popup menu display elements                            |
 | `this.chart`      | `Chart` instance — the area graph                                            |
+| `this.graph_min_scale` | Lower bound for an auto-scaled graph, in the widget's own units (default `1`)  |
 | `this.color_name` | Array of metric keys that have colors                                        |
 | `this.colors`     | Array of parsed color values for chart rendering                             |
 | `this.vals`       | Array of current chart values (set in `_apply()` or auto-set by `collect()`) |

@@ -296,7 +296,11 @@ export const Chart = class SystemMonitor_Chart {
             max = this.parentC.max;
         } else {
             max = Math.max.apply(this, this.data[this.data.length - 1]);
-            max = Math.max(1, Math.pow(2, Math.ceil(Math.log(max) / Math.log(2))));
+            // Floor the scale. Without it, a widget sitting near zero at login
+            // scales to whatever trickle it sees first, so a few KiB/s of
+            // background chatter draws a completely full graph.
+            max = Math.max(this.parentC.graph_min_scale,
+                Math.pow(2, Math.ceil(Math.log(max) / Math.log(2))));
             if (this.parentC.graph_scale_cooldown_delay_minutes !== 0) {
                 if (max > this.parentC.graph_scale_max_including_cooldown) {
                     // Restart the cooldown period with this new max.
@@ -629,6 +633,11 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this.timeout = null;
         this._updateErrorLogged = false;
         this._asyncGen = 0;
+
+        // Lower bound for an auto-scaled graph, in the widget's own units.
+        // Widgets with a meaningful resting range raise this; 1 keeps the
+        // previous behaviour for the rest.
+        this.graph_min_scale = 1;
 
         // Maximum value preserved during cooldown period
         this.graph_scale_max_including_cooldown = 0;

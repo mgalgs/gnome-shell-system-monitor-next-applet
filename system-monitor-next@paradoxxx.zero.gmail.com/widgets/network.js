@@ -36,6 +36,8 @@ const Net = class SystemMonitor_Net extends ElementBase {
         this._last = [0, 0, 0, 0, 0];
         this._lastTime = 0;
         this._resetNetloadBaseline = true;
+        // collect() reports KiB/s, so this floors the graph at 64 KiB/s.
+        this.graph_min_scale = 64;
         this.client = NM.Client.new(null);
         this.update_iface_list();
 
