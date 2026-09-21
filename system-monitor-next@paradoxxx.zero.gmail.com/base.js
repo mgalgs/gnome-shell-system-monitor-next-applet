@@ -917,15 +917,51 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this._lastInterval = interval;
     }
     /**
-     * Re-arms the update timer if the GC destroyed its source. Called by the
-     * extension's watchdog; returns true if a repair was needed.
+     * Re-arms this widget's sources if the GC destroyed them. Called by the
+     * extension's watchdog; returns true if a repair was needed. Subclasses
+     * owning further sources override this and call super.
+     *
+     * Not every source is worth reviving. Covered here are the ones whose
+     * loss is permanent: the update timer (panel stops moving) and the
+     * async-collect watchdog, whose death leaves _asyncPending latched with
+     * nothing left to clear it, so update() never starts another collect --
+     * the same silent freeze this series exists to fix. The graph scale
+     * cooldown is covered because losing it pins the chart's scale to its
+     * cooldown maximum for the rest of the session.
+     *
+     * Deliberately not covered: _initialUpdateId, a one-shot whose loss just
+     * defers the first paint by one refresh interval, and the TipBox hover
+     * timers, which self-heal because the next enter/leave clears the stale
+     * id before re-arming.
      */
-    revive_update_timer() {
-        if (this._destroyed || source_is_alive(this.timeout))
+    revive_timers() {
+        if (this._destroyed)
             return false;
-        this.timeout = null;
-        this.restart_update_timer();
-        return true;
+        let revived = false;
+        // Clear a latched async collect before the update below, so that
+        // update() is free to start a fresh one rather than seeing the stale
+        // _asyncPending and doing nothing.
+        if (this._asyncPending && !source_is_alive(this._asyncTimeoutId)) {
+            this._asyncTimeoutId = null;
+            this._asyncPending = false;
+            revived = true;
+        }
+        if (!source_is_alive(this.timeout)) {
+            this.timeout = null;
+            this.restart_update_timer();
+            // Repaired widgets would otherwise keep showing pre-sweep values
+            // for one more interval on top of the detection delay.
+            this.update();
+            revived = true;
+        }
+        if (this.graph_scale_cooldown_timer_id && !source_is_alive(this.graph_scale_cooldown_timer_id)) {
+            this.graph_scale_cooldown_timer_id = null;
+            // Preserve the current maximum: the cooldown restarts, which is
+            // the conservative choice over dropping the scale immediately.
+            this.restart_cooldown_timer(this.graph_scale_max_including_cooldown);
+            revived = true;
+        }
+        return revived;
     }
     tip_format(unit) {
         if (typeof (unit) === 'undefined') {

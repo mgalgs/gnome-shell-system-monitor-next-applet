@@ -32,7 +32,7 @@ import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 
 import { sm_log } from './utils.js';
 import { migrateSettings } from './migration.js';
-import { color_from_string, smStyleManager, build_menu_info, source_remove_if_alive } from './base.js';
+import { color_from_string, smStyleManager, build_menu_info, source_remove_if_alive, source_is_alive } from './base.js';
 import { smMountsMonitor, Bar, Pie } from './mounts.js';
 import { Battery } from './widgets/battery.js';
 import { Cpu } from './widgets/cpu.js';
@@ -324,15 +324,7 @@ export default class SystemMonitorExtension extends Extension {
             (menu, isOpen) => {
                 if (isOpen) {
                     this.__sm.pie.actor.queue_repaint();
-
-                    this.menuTimeout = GLib.timeout_add_seconds(
-                        GLib.PRIORITY_DEFAULT,
-                        5,
-                        () => {
-                            if (!this.__sm) return GLib.SOURCE_REMOVE;
-                            this.__sm.pie.actor.queue_repaint();
-                            return GLib.SOURCE_CONTINUE;
-                        });
+                    this._startMenuRepaintTimer();
                 } else {
                     source_remove_if_alive(this.menuTimeout);
                     this.menuTimeout = null;
@@ -361,8 +353,19 @@ export default class SystemMonitorExtension extends Extension {
         this._startTimerWatchdog();
     }
 
+    _startMenuRepaintTimer() {
+        this.menuTimeout = GLib.timeout_add_seconds(
+            GLib.PRIORITY_DEFAULT,
+            5,
+            () => {
+                if (!this.__sm) return GLib.SOURCE_REMOVE;
+                this.__sm.pie.actor.queue_repaint();
+                return GLib.SOURCE_CONTINUE;
+            });
+    }
+
     /**
-     * Watches for update timers destroyed by the GC and re-arms them.
+     * Watches for sources destroyed by the GC and re-arms them.
      *
      * GJS blocks JS callbacks while the GC is sweeping, and a blocked
      * SourceFunc is read as G_SOURCE_REMOVE, so every widget's timeout can be
@@ -385,11 +388,18 @@ export default class SystemMonitorExtension extends Extension {
                 return;
             let revived = 0;
             for (const elt of this.__sm.elts) {
-                if (elt.revive_update_timer?.())
+                if (elt.revive_timers?.())
                     revived++;
             }
+            // The pie repaint timer is only armed while the menu is open, so
+            // absence is only a fault in that state.
+            if (this.__sm.tray.menu.isOpen && !source_is_alive(this.menuTimeout)) {
+                this.menuTimeout = null;
+                this._startMenuRepaintTimer();
+                revived++;
+            }
             if (revived)
-                sm_log(`re-armed ${revived} update timer(s) destroyed during GC`, 'warn');
+                sm_log(`re-armed ${revived} timer(s) destroyed during GC`, 'warn');
         });
     }
 
