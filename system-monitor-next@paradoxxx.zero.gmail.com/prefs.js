@@ -885,7 +885,7 @@ const PROJECT_URL = 'https://github.com/mgalgs/gnome-shell-system-monitor-next-a
 const SMWhatsNewPage = GObject.registerClass({
     GTypeName: 'SMWhatsNewPage',
 }, class SMWhatsNewPage extends Adw.PreferencesPage {
-    constructor(params = {}) {
+    constructor(metadata = {}, params = {}) {
         super({
             title: _('About'),
             icon_name: 'dialog-information-symbolic',
@@ -897,6 +897,14 @@ const SMWhatsNewPage = GObject.registerClass({
             description: _('Modular, config-driven system monitoring for your GNOME desktop. Add, remove, and reorder monitors freely — each with independent settings.'),
         });
         this.add(aboutGroup);
+
+        let versionRow = new Adw.ActionRow({ title: _('Version') });
+        versionRow.add_suffix(new Gtk.Label({
+            label: this._versionLabel(metadata),
+            css_classes: ['dim-label'],
+            valign: Gtk.Align.CENTER,
+        }));
+        aboutGroup.add(versionRow);
 
         let featuresGroup = new Adw.PreferencesGroup({
             title: _("What's New"),
@@ -951,6 +959,17 @@ const SMWhatsNewPage = GObject.registerClass({
         );
     }
 
+    // extensions.gnome.org rewrites metadata.json's integer `version` to its
+    // own upload counter, so it does not match the project's release number.
+    // `version-name` survives that rewrite, so prefer it when present.
+    _versionLabel(metadata) {
+        if (metadata['version-name'])
+            return metadata['version-name'];
+        if (Number.isInteger(metadata.version) && metadata.version > 0)
+            return String(metadata.version);
+        return _('development build');
+    }
+
     _addFeatureRow(group, iconName, title, subtitle) {
         let row = new Adw.ActionRow({
             title: title,
@@ -992,7 +1011,7 @@ export default class SystemMonitorExtensionPreferences extends ExtensionPreferen
         let monitorsPage = new SMMonitorsPage(settings);
         window.add(monitorsPage);
 
-        let whatsNewPage = new SMWhatsNewPage();
+        let whatsNewPage = new SMWhatsNewPage(this.metadata);
         window.add(whatsNewPage);
 
         window.set_title(_('System Monitor Next Preferences'));
