@@ -187,6 +187,7 @@ collect() {
 | `icon`        | `Gio.Icon` for `'icon'` panel layout                      |
 | `tipVals`     | Array overriding auto-mapped tooltip values               |
 | `tipUnits`    | Array overriding tooltip unit labels                      |
+| `extra`       | Text for `create_extra_text_items()` items, by key        |
 
 ### collectAsync(callback) — async data
 
@@ -330,6 +331,36 @@ collect() {
 }
 ```
 
+## Extra Panel Items
+
+A widget can show extra labels next to its graph by defining `create_extra_text_items()`. It returns an object of `St` widgets; the framework places them beside the chart and shows or hides them together.
+
+```javascript
+create_extra_text_items() {
+    const Style = this.extension._Style;
+    return {
+        average: new St.Label({
+            text: '',
+            style_class: Style.get('sm-status-value'),
+            y_align: Clutter.ActorAlign.CENTER,
+        }),
+        unit: new St.Label({
+            text: '%',
+            style_class: Style.get('sm-perc-label'),
+            y_align: Clutter.ActorAlign.CENTER,
+        }),
+    };
+}
+
+collect() {
+    return { /* ... */ extra: { average: '42' } };
+}
+```
+
+Each key in the `extra` return value sets the `text` of the item with the same name. A key with no matching item is ignored.
+
+The items are visible only while the monitor's `graph-average` config key is true and the graph itself is shown. The CPU widget is the reference: it shows a running average over the samples currently in the graph, next to the graph, toggled by the "Graph Average" switch. Its `restore-average` key makes the average survive the extension being disabled and re-enabled.
+
 ## Wiring a New Widget
 
 After writing the widget class, register it with the extension:
@@ -344,7 +375,8 @@ After writing the widget class, register it with the extension:
    };
    ```
 4. Add the type to `MONITOR_TYPES` in `prefs.js` and provide entries in `COLOR_MAP`, `DEFAULT_COLORS`, and `detectDevices()` for the new type
-5. Add color key(s) to the schema XML if the widget has configurable colors
+5. If the widget has per-instance options, add their defaults to `buildDefaultConfig()` in `prefs.js` and a row for each in `_buildTypeSpecific()`. Config keys are kebab-case (`speed-in-bits`, `graph-average`). Read them with a falsy fallback (`c['my-option'] || false`), because configs saved before the option existed don't have the key
+6. Add color key(s) to the schema XML if the widget has configurable colors
 
 ## Examples by Complexity
 
@@ -359,5 +391,7 @@ After writing the widget class, register it with the extension:
 **Dynamic units** — Network widget: dual layout with `dualIcons` for panel arrows, collect() returns changing `unit`/`unit2` (KiB/s → MiB/s → GiB/s)
 
 **Icon layout** — Battery widget: `panelLayout: 'icon'`, collect() returns `{icon, unit}` to update the battery icon and toggle between % and hours
+
+**Extra panel items** — CPU widget: `create_extra_text_items()` plus the `extra` return key show a running average next to the graph
 
 **Event-driven** — Battery — doesn't use the refresh timer at all; updates via UPower D-Bus proxy callbacks
