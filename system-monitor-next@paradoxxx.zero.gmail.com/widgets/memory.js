@@ -70,6 +70,8 @@ const Mem = class SystemMonitor_Mem extends ElementBase {
                 cache: cacheRatio,
             },
             display: percent.toLocaleString(this.extension._Locale),
+            // The program metric above is a ratio; the threshold is a percentage.
+            alertValue: percent,
             detail: this._pad(mem[0]) + sep + this._pad(total),
             detailUnit: this._unitStr(),
             tipVals: [

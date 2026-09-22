@@ -60,6 +60,7 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
                             memory: memPct,
                         },
                         display: Math.round(this._percentage).toLocaleString(Locale),
+                        alertValue: this._percentage,
                         detail: this._pad(this._mem).toLocaleString(Locale) +
                             sep + this._pad(this._total).toLocaleString(Locale),
                         detailUnit: unitStr,

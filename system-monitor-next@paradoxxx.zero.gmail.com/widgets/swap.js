@@ -47,6 +47,8 @@ const Swap = class SystemMonitor_Swap extends ElementBase {
         return {
             metrics: {used: ratio},
             display: percent.toString(),
+            // The used metric above is a ratio; the threshold is a percentage.
+            alertValue: percent,
             detail: this._pad(swap) + sep + this._pad(total),
             detailUnit: this._unitStr(),
         };

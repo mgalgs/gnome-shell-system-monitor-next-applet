@@ -117,6 +117,7 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
                 other: other,
             },
             display: percent.toString(),
+            alertValue: percent,
         };
     }
 }

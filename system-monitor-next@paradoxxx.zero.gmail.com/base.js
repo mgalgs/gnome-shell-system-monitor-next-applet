@@ -33,6 +33,19 @@ import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 import { sm_log } from './utils.js';
 import { parse_bytearray } from './common.js';
 
+// Styling applied to a widget's panel value while it sits above its
+// configured threshold.
+const ALERT_STYLE = 'color: rgba(255, 0, 0, 1)';
+
+// A value hovering at the threshold would otherwise cross it on every
+// refresh, so an alert only re-arms once the value falls this far below the
+// threshold again (percentage points, or degrees for thermal).
+export const ALERT_HYSTERESIS = 5;
+
+// Shortest gap between two notifications from the same source. A metric that
+// crosses, recovers and crosses again still only reports once per period.
+export const ALERT_REARM_MIN_US = 300 * 1e6;
+
 Clutter.Actor.prototype.raise_top = function raise_top() {
     const parent = this.get_parent();
     if (!parent) {
@@ -612,6 +625,9 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
      *   icon           - Gio.Icon for 'icon' panel layout
      *   tipVals        - Array overriding auto-mapped tooltip values
      *   tipUnits       - Array overriding tooltip unit labels
+     *   alertValue     - Value compared against config.threshold, in the unit
+     *                    the panel displays. Omit if the widget has no
+     *                    meaningful threshold (rate metrics, icons).
      *
      * Constructor receives a config object with per-instance settings:
      *   { uuid, type, device, display, style, graph-width, refresh-time,
@@ -633,6 +649,10 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this.timeout = null;
         this._updateErrorLogged = false;
         this._asyncGen = 0;
+        // null until the first reading classifies the widget as over or under
+        // its threshold; see _checkAlert().
+        this._alertActive = null;
+        this._lastAlertNotify = 0;
 
         // Lower bound for an auto-scaled graph, in the widget's own units.
         // Widgets with a meaningful resting range raise this; 1 keeps the
@@ -758,6 +778,11 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
             this.menu_visible = newConfig['show-menu'];
             build_menu_info(this.extension);
         }
+
+        // A changed threshold invalidates the recorded state; the update below
+        // reclassifies the widget and clears the styling if it was cleared.
+        if (oldConfig.threshold !== newConfig.threshold)
+            this._alertActive = null;
 
         this.update();
     }
@@ -992,11 +1017,75 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         try {
             if (data)
                 this._autoApply(data);
+            // Deliberately outside the data check: a collection that failed
+            // must clear the alert styling rather than leave it asserted on a
+            // stale reading.
+            this._checkAlert(data);
             this._postApply();
             this._updateErrorLogged = false;
         } catch (e) {
             this._logUpdateError(e);
         }
+    }
+    // The panel item holding the primary value. 'simple' puts it first, while
+    // 'dual' and 'icon' put a label or an icon there instead.
+    _alertValueItem() {
+        const layout = this.constructor.metadata?.panelLayout ?? 'simple';
+        return layout === 'simple' ? this.text_items[0] : this.text_items[1];
+    }
+    _checkAlert(data) {
+        const item = this._alertValueItem();
+        if (!item)
+            return;
+
+        const threshold = this.config.threshold || 0;
+        const value = data?.alertValue;
+        if (!threshold || typeof value !== 'number' || Number.isNaN(value)) {
+            item.set_style(null);
+            this._alertActive = null;
+            return;
+        }
+
+        // The styling tracks the raw state so the panel stays honest about the
+        // current value; only the notification is rate limited.
+        const over = value > threshold;
+        item.set_style(over ? ALERT_STYLE : null);
+
+        if (over) {
+            if (this._alertActive !== true)
+                this._onAlertRaised(value, threshold);
+            this._alertActive = true;
+        } else if (value < threshold - ALERT_HYSTERESIS) {
+            this._alertActive = false;
+        }
+        // Between the hysteresis band and the threshold the previous state
+        // stands, so a value oscillating around the threshold raises one alert.
+    }
+    // Unit appended to values in alert notifications. Every alert-capable
+    // widget but thermal reports a percentage, and thermal overrides this to
+    // follow its Celsius/Fahrenheit setting.
+    _alertUnit() {
+        return '%';
+    }
+    _formatAlert(value) {
+        return Math.round(value).toString() + this._alertUnit();
+    }
+    _onAlertRaised(value, threshold) {
+        if (!this.config['alert-notify'])
+            return;
+
+        const now = GLib.get_monotonic_time();
+        if (this._lastAlertNotify &&
+            now - this._lastAlertNotify < ALERT_REARM_MIN_US)
+            return;
+        this._lastAlertNotify = now;
+
+        this.extension._Notifier?.notify(
+            _('%s is high').format(this.item_name),
+            _('%s is at %s (threshold %s)').format(
+                this.item_name,
+                this._formatAlert(value),
+                this._formatAlert(threshold)));
     }
     _logUpdateError(e) {
         if (this._updateErrorLogged)

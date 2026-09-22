@@ -39,6 +39,7 @@ const SMGeneralPrefsPage = GObject.registerClass({
     InternalChildren: ['background', 'icon_display', 'show_tooltip', 'move_clock',
         'compact_display', 'center_display', 'left_display', 'rotate_labels',
         'tooltip_delay_ms', 'graph_delay_m', 'disk_usage_style',
+        'alerts_enabled', 'fs_usage_threshold', 'fs_usage_notify',
         'custom_monitor_switch', 'custom_monitor_command'],
 }, class SMGeneralPrefsPage extends Adw.PreferencesPage {
     constructor(settings, params = {}) {
@@ -105,6 +106,21 @@ const SMGeneralPrefsPage = GObject.registerClass({
         this._settings.bind('graph-cooldown-delay-m', this._graph_delay_m,
             'value', Gio.SettingsBindFlags.DEFAULT
         );
+        this._settings.bind('alerts-enabled', this._alerts_enabled,
+            'active', Gio.SettingsBindFlags.DEFAULT
+        );
+        this._settings.bind('fs-usage-threshold', this._fs_usage_threshold,
+            'value', Gio.SettingsBindFlags.DEFAULT
+        );
+        this._settings.bind('fs-usage-notify', this._fs_usage_notify,
+            'active', Gio.SettingsBindFlags.DEFAULT
+        );
+
+        // Nothing to notify about without a threshold to cross.
+        this._fs_usage_notify.sensitive = this._settings.get_int('fs-usage-threshold') > 0;
+        this._settings.connect('changed::fs-usage-threshold', () => {
+            this._fs_usage_notify.sensitive = this._settings.get_int('fs-usage-threshold') > 0;
+        });
 
         // Enum key: bind() can't map a combo index to the enum nick.
         this._disk_usage_style.selected = this._settings.get_enum('disk-usage-style');
@@ -162,6 +178,18 @@ const DEFAULT_COLORS = {
 };
 
 const STYLE_OPTIONS = ['digit', 'graph', 'both'];
+
+// Monitor types that support a threshold, and the unit their threshold is
+// entered in. This mirrors the widgets returning alertValue from collect();
+// prefs runs in the GTK process and cannot import them, since base.js pulls in
+// St and Clutter. Keep in sync by hand, as with COLOR_MAP.
+const ALERT_UNITS = {
+    cpu: '%', memory: '%', swap: '%', gpu: '%', thermal: '°',
+};
+
+// Percentages cap at 100; a temperature threshold has to reach 300 °C
+// expressed in °F.
+const ALERT_MAX = {thermal: 600};
 
 // ** Device Detection **
 
@@ -358,10 +386,12 @@ function buildDefaultConfig(type, device) {
         'show-menu': true,
         colors: {...(DEFAULT_COLORS[type] || {})},
     };
-    if (type === 'thermal') {
-        config['fahrenheit-unit'] = false;
+    if (ALERT_UNITS[type] !== undefined) {
         config['threshold'] = 0;
+        config['alert-notify'] = false;
     }
+    if (type === 'thermal')
+        config['fahrenheit-unit'] = false;
     if (type === 'net')
         config['speed-in-bits'] = false;
     if (type === 'battery') {
@@ -555,7 +585,56 @@ const SMMonitorRow = GObject.registerClass({
             this.add_row(actionRow);
         }
 
+        this._buildThreshold(c);
         this._buildTypeSpecific(c);
+    }
+
+    // The unit a threshold is entered in, which for thermal follows the
+    // widget's own Fahrenheit setting.
+    _alertUnitLabel(c) {
+        if (c.type === 'thermal')
+            return c['fahrenheit-unit'] ? '°F' : '°C';
+        return ALERT_UNITS[c.type] ?? '';
+    }
+
+    _buildThreshold(c) {
+        if (ALERT_UNITS[c.type] === undefined)
+            return;
+
+        this._thresholdRow = new Adw.SpinRow({
+            title: _('Alert threshold (0 to disable)'),
+            subtitle: this._alertUnitLabel(c),
+            numeric: true,
+            adjustment: new Gtk.Adjustment({
+                value: c.threshold || 0, lower: 0,
+                upper: ALERT_MAX[c.type] ?? 100,
+                step_increment: 5, page_increment: 10,
+            }),
+        });
+        // An Adw.SpinRow does not pick up its adjustment's initial value, so
+        // the row would read 0 whatever the monitor is set to; the graph width
+        // and refresh time rows above assign it for the same reason.
+        this._thresholdRow.value = c.threshold || 0;
+        this.add_row(this._thresholdRow);
+
+        let notifyRow = new Adw.SwitchRow({
+            title: _('Notify when threshold is exceeded'),
+            active: c['alert-notify'] || false,
+            // A notification with no threshold to cross would never fire, so
+            // show the dependency rather than leaving it to be discovered.
+            sensitive: (c.threshold || 0) > 0,
+        });
+        this.add_row(notifyRow);
+        notifyRow.connect('notify::active', w => {
+            c['alert-notify'] = w.active;
+            this._emitChanged();
+        });
+
+        this._thresholdRow.connect('notify::value', w => {
+            c.threshold = w.value;
+            notifyRow.sensitive = w.value > 0;
+            this._emitChanged();
+        });
     }
 
     _buildTypeSpecific(c) {
@@ -565,23 +644,14 @@ const SMMonitorRow = GObject.registerClass({
                 title: _('Display temperature in Fahrenheit'),
                 active: c['fahrenheit-unit'] || false,
             });
-            fahrenheit.connect('notify::active', w => {
-                c['fahrenheit-unit'] = w.active;
-                this._emitChanged();
-            });
             this.add_row(fahrenheit);
 
-            let threshold = new Adw.SpinRow({
-                title: _('Temperature threshold (0 to disable)'),
-                numeric: true,
-                adjustment: new Gtk.Adjustment({
-                    value: c.threshold || 0, lower: 0, upper: 300,
-                    step_increment: 5, page_increment: 10,
-                }),
-            });
-            this.add_row(threshold);
-            threshold.connect('notify::value', w => {
-                c.threshold = w.value;
+            fahrenheit.connect('notify::active', w => {
+                c['fahrenheit-unit'] = w.active;
+                // The threshold is compared in the displayed unit, so relabel
+                // the row that _buildThreshold() added above.
+                if (this._thresholdRow)
+                    this._thresholdRow.subtitle = this._alertUnitLabel(c);
                 this._emitChanged();
             });
             break;

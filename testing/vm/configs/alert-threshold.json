@@ -1,0 +1,38 @@
+{
+    "description": "Thresholds low enough to trip immediately, for checking alert styling and notifications",
+    "settings": {
+        "alerts-enabled": true,
+        "fs-usage-threshold": 1,
+        "fs-usage-notify": true
+    },
+    "monitors": [
+        {
+            "uuid": "cfg-alert-mem",
+            "type": "memory",
+            "device": "default",
+            "display": true,
+            "style": "both",
+            "graph-width": 100,
+            "refresh-time": 3000,
+            "show-text": true,
+            "show-menu": true,
+            "colors": {"program": "#00b35b", "buffer": "#00ff82", "cache": "#aaf5d0"},
+            "threshold": 1,
+            "alert-notify": true
+        },
+        {
+            "uuid": "cfg-alert-cpu",
+            "type": "cpu",
+            "device": "all",
+            "display": true,
+            "style": "both",
+            "graph-width": 100,
+            "refresh-time": 1500,
+            "show-text": true,
+            "show-menu": true,
+            "colors": {"user": "#0072b3", "system": "#0092e6", "nice": "#00a3ff", "iowait": "#002f3d", "other": "#001d26"},
+            "threshold": 99,
+            "alert-notify": false
+        }
+    ]
+}

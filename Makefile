@@ -9,6 +9,7 @@ BASE_MODULES = \
   $(UUID)/base.js \
   $(UUID)/mounts.js \
   $(UUID)/utils.js \
+  $(UUID)/notifications.js \
   $(UUID)/migration.js \
   $(UUID)/common.js \
   $(UUID)/README* \
