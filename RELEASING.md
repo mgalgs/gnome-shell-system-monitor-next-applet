@@ -58,6 +58,11 @@ The release stops with an error if any check fails:
 - ESLint, the whitespace check, or shexli finds a problem.
 - The version inside the built zip does not match the tag.
 
+A shexli rule can be waived in `WAIVED_RULES` in
+`scripts/check-shexli.sh`, for the case where shexli itself is wrong. A
+waived rule is still printed, and the release fails once the rule stops
+firing, so a waiver cannot outlive the problem it works around.
+
 ## Version numbers
 
 The tag is `v3.N`. The extension version in `metadata.json` is `N`. The
