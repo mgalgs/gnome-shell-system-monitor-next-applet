@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        fedora-version: ['fc43', 'fc42', 'fc41']
+        fedora-version: ['fc44', 'fc43', 'fc42', 'fc41']
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
