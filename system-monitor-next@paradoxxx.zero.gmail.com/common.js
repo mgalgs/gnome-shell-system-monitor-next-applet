@@ -10,6 +10,28 @@ function parse_bytearray(maybeBA) {
     return decoder.decode(maybeBA);
 }
 
+// hwmon chips expose a `device` symlink pointing at the underlying device node.
+// Returns the symlink basename when it names a block device (nvme0, sda, mmcblk0,
+// vda), or null when there is no symlink / it is not a disk-like name.
+// Only disk-like names are used: thermal chips symlink to thermal zones, GPU and
+// battery devices to unrelated nodes, and those basenames are no better than the
+// chip's own `name` file.
+function _device_label_for(chip_dir) {
+    const device_path = chip_dir.get_child('device').get_path();
+    // GLib.file_read_link returns the raw symlink target (e.g. "../../nvme0");
+    // Gio.File.query_symlink_target / unix::symlink are not usable on this GJS.
+    let target = null;
+    try {
+        target = GLib.file_read_link(device_path);
+    } catch {
+        return null;
+    }
+    if (!target)
+        return null;
+    const basename = target.split('/').pop();
+    return /^(nvme\d+|sd[a-z]+|mmcblk\d+|vd[a-z]+)$/.test(basename) ? basename : null;
+}
+
 function _check_sensors_sysfs_async(sensor_type, callback) {
     const hwmon_path = '/sys/class/hwmon/';
     const hwmon_dir = Gio.file_new_for_path(hwmon_path);
@@ -51,8 +73,11 @@ function _check_sensors_sysfs_async(sensor_type, callback) {
         }
 
         const input_entry_regex = new RegExp(`^${sensor_type}(\\d+)_input$`);
+
+        // Collect all sensor info first, so the enumerator is fully consumed before
+        // any async label read resolves.
+        let sensorInfos = [];
         let info;
-        let added = false;
         while ((info = chip_children.next_file(null))) {
             if (info.get_file_type() !== Gio.FileType.REGULAR)
                 continue;
@@ -60,16 +85,31 @@ function _check_sensors_sysfs_async(sensor_type, callback) {
             if (!matches)
                 continue;
             const input_ordinal = matches[1];
-            const input = chip_children.get_child(info);
+            const input = chip_dir.get_child(info.get_name());
             const label_file = chip_dir.get_child(`${sensor_type}${input_ordinal}_label`);
+            sensorInfos.push({input, label_file, input_ordinal});
+        }
+        chip_children.close(null);
 
-            added = true;
+        if (sensorInfos.length === 0) {
+            done(false);
+            return;
+        }
+
+        // A hwmon chip's `device` symlink names the underlying device. Several chips of
+        // the same driver share an identical `name` file (both NVMe drives report "nvme"),
+        // so the symlink basename (nvme0, nvme1) is what keeps them apart.
+        const deviceLabel = _device_label_for(chip_dir) || chip_label;
+
+        sensorInfos.forEach(({input, label_file, input_ordinal}) => {
             read_label_async(label_file, input_label => {
-                const label = `${chip_label} - ${input_label || input_ordinal}`;
+                // Match the lm-sensors "chipLabel - sensorLabel" shape, falling back to the
+                // full sensor name (temp1) rather than a bare ordinal.
+                const label = `${deviceLabel} - ${input_label || `${sensor_type}${input_ordinal}`}`;
                 sensors[label] = {sysfsPath: input.get_path()};
             });
-        }
-        done(added);
+        });
+        done(true);
     }
 
     const hwmon_children = hwmon_dir.enumerate_children(
@@ -98,18 +138,7 @@ function _check_sensors_sysfs_async(sensor_type, callback) {
         chips_pending++;
         read_label_async(chip.get_child('name'), chip_label => {
             chip_label = chip_label || chip.get_basename();
-            add_sensors_from(chip, chip_label, added => {
-                if (!added) {
-                    const device = chip.get_child('device');
-                    if (device.query_exists(null)) {
-                        read_label_async(device.get_child('name'), dev_label => {
-                            add_sensors_from(device, dev_label || chip_label, () => chip_finished());
-                        });
-                        return;
-                    }
-                }
-                chip_finished();
-            });
+            add_sensors_from(chip, chip_label, () => chip_finished());
         });
     }
     chips_done = true;
@@ -122,16 +151,6 @@ function _check_sensors_sysfs_async(sensor_type, callback) {
 const SENSORS_ENUM_CACHE_US = 60 * 1e6;
 let _sensors_json_cache;
 let _sensors_json_cache_time = 0;
-
-function _merge_sensors(lm_sensors, sysfs_sensors) {
-    if (!lm_sensors)
-        return sysfs_sensors;
-    for (const [label, info] of Object.entries(sysfs_sensors)) {
-        if (!(label in lm_sensors))
-            lm_sensors[label] = info;
-    }
-    return lm_sensors;
-}
 
 function _run_sensors_json_async(callback) {
     const now = GLib.get_monotonic_time();
@@ -190,6 +209,9 @@ function _check_sensors_lm_async(sensor_type, callback) {
                 if (!inputKey)
                     continue;
 
+                // When there are multiple chips with the same driver, chipName is already unique
+                // (e.g., nvme-pci-e100, nvme-pci-e200), so we don't need to add hwmonId
+                // When there's only one chip, chipLabel is just the driver name (e.g., nvme)
                 let label = `${chipLabel} - ${sensorLabel}`;
                 sensors[label] = {chip: chipName, sensorLabel, rawKey: inputKey};
             }
@@ -200,10 +222,15 @@ function _check_sensors_lm_async(sensor_type, callback) {
 }
 
 function check_sensors_async(sensor_type, callback) {
+    // Use lm-sensors if available, otherwise fall back to sysfs
     _check_sensors_lm_async(sensor_type, lm_sensors => {
-        _check_sensors_sysfs_async(sensor_type, sysfs_sensors => {
-            callback(_merge_sensors(lm_sensors, sysfs_sensors));
-        });
+        if (lm_sensors && Object.keys(lm_sensors).length > 0) {
+            callback(lm_sensors);
+        } else {
+            _check_sensors_sysfs_async(sensor_type, sysfs_sensors => {
+                callback(sysfs_sensors);
+            });
+        }
     });
 }
 

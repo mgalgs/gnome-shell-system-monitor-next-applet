@@ -11,7 +11,7 @@ import Adw from "gi://Adw";
 
 import { ExtensionPreferences, gettext as _ } from "resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js";
 
-import { parse_bytearray } from './common.js';
+import { check_sensors_async } from './common.js';
 
 const N_ = function (e) {
     return e;
@@ -272,43 +272,6 @@ function getDrmGpuDevices() {
     return ['0'];
 }
 
-function detectSensors(sensorType) {
-    const sensors = {};
-    try {
-        const hwmonDir = Gio.File.new_for_path('/sys/class/hwmon/');
-        const hwmonEnum = hwmonDir.enumerate_children(
-            'standard::name,standard::type', Gio.FileQueryInfoFlags.NONE, null);
-        let hwmonInfo;
-        while ((hwmonInfo = hwmonEnum.next_file(null))) {
-            if (hwmonInfo.get_file_type() !== Gio.FileType.DIRECTORY ||
-                !hwmonInfo.get_name().match(/^hwmon\d+$/))
-                continue;
-            const chip = hwmonEnum.get_child(hwmonInfo);
-            let chipLabel = chip.get_basename();
-            try {
-                let [ok, c] = chip.get_child('name').load_contents(null);
-                if (ok) chipLabel = parse_bytearray(c).trim();
-            } catch { /* no name file */ }
-
-            const chipEnum = chip.enumerate_children(
-                'standard::name,standard::type', Gio.FileQueryInfoFlags.NONE, null);
-            const regex = new RegExp(`^${sensorType}(\\d+)_input$`);
-            let fInfo;
-            while ((fInfo = chipEnum.next_file(null))) {
-                const m = fInfo.get_name().match(regex);
-                if (!m) continue;
-                let inputLabel = m[1];
-                try {
-                    let [ok, c] = chip.get_child(`${sensorType}${m[1]}_label`).load_contents(null);
-                    if (ok) inputLabel = parse_bytearray(c).trim();
-                } catch { /* no label file */ }
-                sensors[`${chipLabel} - ${inputLabel}`] = true;
-            }
-        }
-    } catch { /* hwmon unavailable */ }
-    return Object.keys(sensors);
-}
-
 // Calls back with the device list; synchronously for every type except gpu,
 // where nvidia-smi is consulted asynchronously.
 function detectDevices(type, callback) {
@@ -331,12 +294,20 @@ function detectDevices(type, callback) {
     case 'gpu':
         getGpuDevices(callback);
         break;
-    case 'thermal':
-        callback(detectSensors('temp'));
+    case 'thermal': {
+        // Use the same detection used at runtime so labels match exactly.
+        check_sensors_async('temp', sensors => {
+            callback(sensors ? Object.keys(sensors) : []);
+        });
         break;
+    }
     case 'fan':
-        callback(detectSensors('fan'));
+    {
+        check_sensors_async('fan', sensors => {
+            callback(sensors ? Object.keys(sensors) : []);
+        });
         break;
+    }
     case 'prometheus':
         callback(['default']);
         break;
