@@ -31,7 +31,7 @@ import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 
 import { sm_log } from './utils.js';
-import { parse_bytearray } from './common.js';
+import { parse_bytearray, source_is_alive, source_remove_if_alive } from './common.js';
 
 Clutter.Actor.prototype.raise_top = function raise_top() {
     const parent = this.get_parent();
@@ -506,7 +506,7 @@ export const TipBox = class SystemMonitor_TipBox {
     }
     stop_in_timer() {
         if (this.in_to) {
-            GLib.Source.remove(this.in_to);
+            source_remove_if_alive(this.in_to);
             this.in_to = 0;
         }
     }
@@ -521,7 +521,7 @@ export const TipBox = class SystemMonitor_TipBox {
     }
     stop_out_timer() {
         if (this.out_to) {
-            GLib.Source.remove(this.out_to);
+            source_remove_if_alive(this.out_to);
             this.out_to = 0;
         }
     }
@@ -869,9 +869,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
      * max - Maximum value to preserve during cooldown
      */
     restart_cooldown_timer(max = 0) {
-        if (this.graph_scale_cooldown_timer_id) {
-            GLib.Source.remove(this.graph_scale_cooldown_timer_id);
-        }
+        source_remove_if_alive(this.graph_scale_cooldown_timer_id);
         this.graph_scale_max_including_cooldown = max;
         this.graph_scale_cooldown_delay_minutes = this.extension._Schema.get_int('graph-cooldown-delay-m');
         if (this.graph_scale_cooldown_delay_minutes !== 0) {
@@ -892,15 +890,60 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
             sm_log("Invalid call to restart_update_timer", 'error');
             return;
         }
-        if (this.timeout) {
-            GLib.Source.remove(this.timeout);
-        }
+        source_remove_if_alive(this.timeout);
         this.timeout = GLib.timeout_add(
             GLib.PRIORITY_DEFAULT_IDLE,
             interval,
             this.update.bind(this),
         );
         this._lastInterval = interval;
+    }
+    /**
+     * Re-arms this widget's sources if the GC destroyed them. Called by the
+     * extension's watchdog; returns true if a repair was needed. Subclasses
+     * owning further sources override this and call super.
+     *
+     * Not every source is worth reviving. Covered here are the ones whose
+     * loss is permanent: the update timer (panel stops moving) and the
+     * async-collect watchdog, whose death leaves _asyncPending latched with
+     * nothing left to clear it, so update() never starts another collect --
+     * the same silent freeze this series exists to fix. The graph scale
+     * cooldown is covered because losing it pins the chart's scale to its
+     * cooldown maximum for the rest of the session.
+     *
+     * Deliberately not covered: _initialUpdateId, a one-shot whose loss just
+     * defers the first paint by one refresh interval, and the TipBox hover
+     * timers, which self-heal because the next enter/leave clears the stale
+     * id before re-arming.
+     */
+    revive_timers() {
+        if (this._destroyed)
+            return false;
+        let revived = false;
+        // Clear a latched async collect before the update below, so that
+        // update() is free to start a fresh one rather than seeing the stale
+        // _asyncPending and doing nothing.
+        if (this._asyncPending && !source_is_alive(this._asyncTimeoutId)) {
+            this._asyncTimeoutId = null;
+            this._asyncPending = false;
+            revived = true;
+        }
+        if (!source_is_alive(this.timeout)) {
+            this.timeout = null;
+            this.restart_update_timer();
+            // Repaired widgets would otherwise keep showing pre-sweep values
+            // for one more interval on top of the detection delay.
+            this.update();
+            revived = true;
+        }
+        if (this.graph_scale_cooldown_timer_id && !source_is_alive(this.graph_scale_cooldown_timer_id)) {
+            this.graph_scale_cooldown_timer_id = null;
+            // Preserve the current maximum: the cooldown restarts, which is
+            // the conservative choice over dropping the scale immediately.
+            this.restart_cooldown_timer(this.graph_scale_max_including_cooldown);
+            revived = true;
+        }
+        return revived;
     }
     tip_format(unit) {
         if (typeof (unit) === 'undefined') {
@@ -953,8 +996,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
                 if (!this._asyncPending) {
                     this._asyncPending = true;
                     const gen = ++this._asyncGen;
-                    if (this._asyncTimeoutId)
-                        GLib.Source.remove(this._asyncTimeoutId);
+                    source_remove_if_alive(this._asyncTimeoutId);
                     this._asyncTimeoutId = GLib.timeout_add_seconds(
                         GLib.PRIORITY_DEFAULT, 30, () => {
                             this._asyncTimeoutId = null;
@@ -968,10 +1010,8 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
                         if (this._asyncGen !== gen)
                             return;
                         this._asyncPending = false;
-                        if (this._asyncTimeoutId) {
-                            GLib.Source.remove(this._asyncTimeoutId);
-                            this._asyncTimeoutId = null;
-                        }
+                        source_remove_if_alive(this._asyncTimeoutId);
+                        this._asyncTimeoutId = null;
                         if (this._destroyed)
                             return;
                         this._applyCollected(data);
@@ -1109,21 +1149,13 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         if (this.chart)
             this.chart.destroy();
         TipBox.prototype.destroy.call(this);
-        if (this._initialUpdateId) {
-            GLib.Source.remove(this._initialUpdateId);
-            this._initialUpdateId = null;
-        }
-        if (this.timeout) {
-            GLib.Source.remove(this.timeout);
-            this.timeout = null;
-        }
-        if (this.graph_scale_cooldown_timer_id) {
-            GLib.Source.remove(this.graph_scale_cooldown_timer_id);
-            this.graph_scale_cooldown_timer_id = null;
-        }
-        if (this._asyncTimeoutId) {
-            GLib.Source.remove(this._asyncTimeoutId);
-            this._asyncTimeoutId = null;
-        }
+        source_remove_if_alive(this._initialUpdateId);
+        this._initialUpdateId = null;
+        source_remove_if_alive(this.timeout);
+        this.timeout = null;
+        source_remove_if_alive(this.graph_scale_cooldown_timer_id);
+        this.graph_scale_cooldown_timer_id = null;
+        source_remove_if_alive(this._asyncTimeoutId);
+        this._asyncTimeoutId = null;
     }
 }

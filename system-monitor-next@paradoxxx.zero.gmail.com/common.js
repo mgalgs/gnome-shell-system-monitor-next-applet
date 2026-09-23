@@ -10,6 +10,37 @@ function parse_bytearray(maybeBA) {
     return decoder.decode(maybeBA);
 }
 
+/**
+ * Whether a GLib source id still refers to a live source on the default main
+ * context. GJS refuses to enter JS while the GC is sweeping, and a refused
+ * SourceFunc yields no return value, which GLib reads as G_SOURCE_REMOVE — so
+ * a source can be destroyed without the extension ever being told. Anything
+ * holding a source id has to be able to ask.
+ *
+ * Lives here rather than in base.js so that prefs.js — a separate process
+ * that cannot import base.js, since that pulls in shell-only UI modules —
+ * can use it too.
+ *
+ * id - GLib source id, or a falsy value
+ */
+function source_is_alive(id) {
+    if (!id)
+        return false;
+    return GLib.MainContext.default().find_source_by_id(id) !== null;
+}
+
+/**
+ * Removes a GLib source only if it is still alive, so that a source already
+ * destroyed behind our back does not produce a "Source ID N was not found when
+ * attempting to remove it" critical.
+ *
+ * id - GLib source id, or a falsy value
+ */
+function source_remove_if_alive(id) {
+    if (source_is_alive(id))
+        GLib.Source.remove(id);
+}
+
 function _check_sensors_sysfs_async(sensor_type, callback) {
     const hwmon_path = '/sys/class/hwmon/';
     const hwmon_dir = Gio.file_new_for_path(hwmon_path);
@@ -286,4 +317,4 @@ function read_sensor_async(sensorInfo, callback) {
     }
 }
 
-export { parse_bytearray, check_sensors_async, read_sensor_async };
+export { parse_bytearray, source_is_alive, source_remove_if_alive, check_sensors_async, read_sensor_async };
