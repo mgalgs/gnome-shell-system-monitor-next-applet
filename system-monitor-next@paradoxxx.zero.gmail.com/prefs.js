@@ -11,7 +11,7 @@ import Adw from "gi://Adw";
 
 import { ExtensionPreferences, gettext as _ } from "resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js";
 
-import { parse_bytearray } from './common.js';
+import { parse_bytearray, source_is_alive, source_remove_if_alive } from './common.js';
 
 const N_ = function (e) {
     return e;
@@ -651,7 +651,7 @@ const SMMonitorsPage = GObject.registerClass({
         this._monitors = [];
         this._saveTimerId = null;
         this.connect('destroy', () => {
-            if (this._saveTimerId) {
+            if (this._saveTimerId && source_is_alive(this._saveTimerId)) {
                 GLib.Source.remove(this._saveTimerId);
                 this._saveTimerId = null;
             }
@@ -700,8 +700,7 @@ const SMMonitorsPage = GObject.registerClass({
     }
 
     _saveMonitors() {
-        if (this._saveTimerId)
-            GLib.Source.remove(this._saveTimerId);
+        source_remove_if_alive(this._saveTimerId);
         this._saveTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => {
             this._saveTimerId = null;
             let ordered = this._getOrderedConfigs();
