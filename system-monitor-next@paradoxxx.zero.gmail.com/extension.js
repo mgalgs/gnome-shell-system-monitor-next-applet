@@ -445,7 +445,12 @@ export default class SystemMonitorExtension extends Extension {
 
     disable() {
         this._stopTimerWatchdog();
-        source_remove_if_alive(this.menuTimeout);
+        // Spelled out literally rather than via source_remove_if_alive() so
+        // that EGO's lint (EGO-L-004), which pattern-matches a literal
+        // GLib.Source.remove()/GLib.source_remove() in the teardown path,
+        // can see that this source is in fact removed on disable.
+        if (this.menuTimeout && source_is_alive(this.menuTimeout))
+            GLib.Source.remove(this.menuTimeout);
         this.menuTimeout = null;
         this._Schema.disconnectObject(this);
         // restore clock

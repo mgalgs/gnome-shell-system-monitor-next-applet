@@ -7,7 +7,7 @@ import UPowerGlib from "gi://UPowerGlib";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import { sm_log } from '../utils.js';
 import { ElementBase, build_menu_info } from '../base.js';
-import { source_remove_if_alive, source_is_alive } from '../common.js';
+import { source_is_alive } from '../common.js';
 
 const UPower = UPowerGlib;
 
@@ -191,7 +191,12 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
             this._proxy = null;
         }
         if (this._poll_handler_id) {
-            source_remove_if_alive(this._poll_handler_id);
+            // Spelled out literally rather than via source_remove_if_alive()
+            // so that EGO's lint (EGO-L-004), which pattern-matches a literal
+            // GLib.Source.remove()/GLib.source_remove() in the teardown path,
+            // can see that this source is in fact removed on destroy.
+            if (source_is_alive(this._poll_handler_id))
+                GLib.source_remove(this._poll_handler_id);
             this._poll_handler_id = undefined;
         }
         ElementBase.prototype.destroy.call(this);
