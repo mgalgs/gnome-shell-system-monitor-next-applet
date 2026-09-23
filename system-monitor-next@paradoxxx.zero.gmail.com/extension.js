@@ -32,7 +32,8 @@ import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 
 import { sm_log } from './utils.js';
 import { migrateSettings } from './migration.js';
-import { color_from_string, smStyleManager, build_menu_info, source_remove_if_alive, source_is_alive } from './base.js';
+import { color_from_string, smStyleManager, build_menu_info } from './base.js';
+import { source_remove_if_alive, source_is_alive } from './common.js';
 import { smMountsMonitor, Bar, Pie } from './mounts.js';
 import { Battery } from './widgets/battery.js';
 import { Cpu } from './widgets/cpu.js';

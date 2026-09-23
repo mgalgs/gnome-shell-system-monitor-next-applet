@@ -6,7 +6,8 @@ import Gio from "gi://Gio";
 import UPowerGlib from "gi://UPowerGlib";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import { sm_log } from '../utils.js';
-import { ElementBase, build_menu_info, source_remove_if_alive, source_is_alive } from '../base.js';
+import { ElementBase, build_menu_info } from '../base.js';
+import { source_remove_if_alive, source_is_alive } from '../common.js';
 
 const UPower = UPowerGlib;
 
