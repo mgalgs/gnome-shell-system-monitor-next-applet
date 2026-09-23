@@ -432,9 +432,13 @@ export default class SystemMonitorExtension extends Extension {
         }
         if (this._wallClock) {
             // Disconnecting alone leaves the clock's C-side timer running
-            // until GJS happens to collect the wrapper, which means a source
-            // outliving disable().
-            this._wallClock.run_dispose();
+            // until GJS happens to collect the wrapper, so a source does
+            // outlive disable(). run_dispose() would close that, but EGO
+            // review flags it (EGO-X-003) since it forcibly disposes a
+            // GObject a reviewer can't verify nothing else holds a
+            // reference to. Dropping to minute-granular ticks instead
+            // leaves a far smaller thing behind than 1 Hz until collection.
+            this._wallClock.force_seconds = false;
             this._wallClock = null;
         }
     }
