@@ -31,7 +31,7 @@ import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 
 import { sm_log } from './utils.js';
-import { parse_bytearray } from './common.js';
+import { parse_bytearray, source_is_alive, source_remove_if_alive } from './common.js';
 
 Clutter.Actor.prototype.raise_top = function raise_top() {
     const parent = this.get_parent();
@@ -58,33 +58,6 @@ function tr(text) {
 
 export function l_limit(t) {
     return (t > 0) ? t : 1000;
-}
-
-/**
- * Whether a GLib source id still refers to a live source on the default main
- * context. GJS refuses to enter JS while the GC is sweeping, and a refused
- * SourceFunc yields no return value, which GLib reads as G_SOURCE_REMOVE — so
- * a source can be destroyed without the extension ever being told. Anything
- * holding a source id has to be able to ask.
- *
- * id - GLib source id, or a falsy value
- */
-export function source_is_alive(id) {
-    if (!id)
-        return false;
-    return GLib.MainContext.default().find_source_by_id(id) !== null;
-}
-
-/**
- * Removes a GLib source only if it is still alive, so that a source already
- * destroyed behind our back does not produce a "Source ID N was not found when
- * attempting to remove it" critical.
- *
- * id - GLib source id, or a falsy value
- */
-export function source_remove_if_alive(id) {
-    if (source_is_alive(id))
-        GLib.Source.remove(id);
 }
 
 export function change_text() {
