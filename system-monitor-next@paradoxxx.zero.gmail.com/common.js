@@ -10,6 +10,20 @@ function parse_bytearray(maybeBA) {
     return decoder.decode(maybeBA);
 }
 
+// Discriminator for a chip whose `name` collides with another chip of the same
+// sensor type. The `device` symlink names the underlying device node (nvme0 for
+// a drive, 0000:c1:00.0 for a GPU), which is both unique and stable across
+// reboots; the hwmon directory name is the fallback when there is no symlink.
+function _chip_discriminator(chip_dir) {
+    let target = null;
+    try {
+        // GLib.file_read_link returns the raw symlink target (e.g. "../../nvme0");
+        // Gio.File.query_symlink_target / unix::symlink are not usable on this GJS.
+        target = GLib.file_read_link(chip_dir.get_child('device').get_path());
+    } catch { /* no device symlink */ }
+    return target ? target.split('/').pop() : chip_dir.get_basename();
+}
+
 function _check_sensors_sysfs_async(sensor_type, callback) {
     const hwmon_path = '/sys/class/hwmon/';
     const hwmon_dir = Gio.file_new_for_path(hwmon_path);
@@ -45,17 +59,17 @@ function _check_sensors_sysfs_async(sensor_type, callback) {
         });
     }
 
-    function add_sensors_from(chip_dir, chip_label, done) {
+    // Enumerate this chip's sensors of the requested type. Returns [] when the
+    // chip exposes none.
+    function collect_sensors(chip_dir) {
         const chip_children = chip_dir.enumerate_children(
             'standard::name,standard::type', Gio.FileQueryInfoFlags.NONE, null);
-        if (!chip_children) {
-            done(false);
-            return;
-        }
+        if (!chip_children)
+            return [];
 
         const input_entry_regex = new RegExp(`^${sensor_type}(\\d+)_input$`);
+        const found = [];
         let info;
-        let added = false;
         while ((info = chip_children.next_file(null))) {
             if (info.get_file_type() !== Gio.FileType.REGULAR)
                 continue;
@@ -63,16 +77,14 @@ function _check_sensors_sysfs_async(sensor_type, callback) {
             if (!matches)
                 continue;
             const input_ordinal = matches[1];
-            const input = chip_children.get_child(info);
-            const label_file = chip_dir.get_child(`${sensor_type}${input_ordinal}_label`);
-
-            added = true;
-            read_label_async(label_file, input_label => {
-                const label = `${chip_label} - ${input_label || input_ordinal}`;
-                sensors[label] = {sysfsPath: input.get_path()};
+            found.push({
+                input: chip_dir.get_child(info.get_name()),
+                label_file: chip_dir.get_child(`${sensor_type}${input_ordinal}_label`),
+                input_ordinal,
             });
         }
-        done(added);
+        chip_children.close(null);
+        return found;
     }
 
     const hwmon_children = hwmon_dir.enumerate_children(
@@ -82,15 +94,37 @@ function _check_sensors_sysfs_async(sensor_type, callback) {
         return;
     }
 
+    // Pass 1 reads every chip's name and sensor list before pass 2 emits any
+    // label, so a name collision can gate the discriminator. Labels are
+    // persisted verbatim into config.device and re-matched on every collect,
+    // so a chip that does not collide must keep the bare name it has always
+    // had or existing configs silently break.
+    const chips = [];
     let chips_pending = 0;
     let chips_done = false;
 
     function chip_finished() {
         chips_pending--;
-        if (chips_done && chips_pending === 0) {
-            enumeration_done = true;
-            maybe_finish();
+        if (!(chips_done && chips_pending === 0))
+            return;
+
+        const name_counts = {};
+        for (const chip of chips)
+            name_counts[chip.name] = (name_counts[chip.name] || 0) + 1;
+
+        for (const chip of chips) {
+            const chip_label = name_counts[chip.name] > 1
+                ? _chip_discriminator(chip.dir)
+                : chip.name;
+            for (const {input, label_file, input_ordinal} of chip.sensors) {
+                read_label_async(label_file, input_label => {
+                    const label = `${chip_label} - ${input_label || input_ordinal}`;
+                    sensors[label] = {sysfsPath: input.get_path()};
+                });
+            }
         }
+        enumeration_done = true;
+        maybe_finish();
     }
 
     let chip_info;
@@ -98,21 +132,13 @@ function _check_sensors_sysfs_async(sensor_type, callback) {
         if (chip_info.get_file_type() !== Gio.FileType.DIRECTORY || !chip_info.get_name().match(/^hwmon\d+$/))
             continue;
         const chip = hwmon_children.get_child(chip_info);
+        const chip_sensors = collect_sensors(chip);
+        if (chip_sensors.length === 0)
+            continue;
         chips_pending++;
         read_label_async(chip.get_child('name'), chip_label => {
-            chip_label = chip_label || chip.get_basename();
-            add_sensors_from(chip, chip_label, added => {
-                if (!added) {
-                    const device = chip.get_child('device');
-                    if (device.query_exists(null)) {
-                        read_label_async(device.get_child('name'), dev_label => {
-                            add_sensors_from(device, dev_label || chip_label, () => chip_finished());
-                        });
-                        return;
-                    }
-                }
-                chip_finished();
-            });
+            chips.push({dir: chip, name: chip_label || chip.get_basename(), sensors: chip_sensors});
+            chip_finished();
         });
     }
     chips_done = true;
@@ -125,16 +151,6 @@ function _check_sensors_sysfs_async(sensor_type, callback) {
 const SENSORS_ENUM_CACHE_US = 60 * 1e6;
 let _sensors_json_cache;
 let _sensors_json_cache_time = 0;
-
-function _merge_sensors(lm_sensors, sysfs_sensors) {
-    if (!lm_sensors)
-        return sysfs_sensors;
-    for (const [label, info] of Object.entries(sysfs_sensors)) {
-        if (!(label in lm_sensors))
-            lm_sensors[label] = info;
-    }
-    return lm_sensors;
-}
 
 function _run_sensors_json_async(callback) {
     const now = GLib.get_monotonic_time();
@@ -193,6 +209,9 @@ function _check_sensors_lm_async(sensor_type, callback) {
                 if (!inputKey)
                     continue;
 
+                // When there are multiple chips with the same driver, chipName is already unique
+                // (e.g., nvme-pci-e100, nvme-pci-e200), so we don't need to add hwmonId
+                // When there's only one chip, chipLabel is just the driver name (e.g., nvme)
                 let label = `${chipLabel} - ${sensorLabel}`;
                 sensors[label] = {chip: chipName, sensorLabel, rawKey: inputKey};
             }
@@ -203,10 +222,15 @@ function _check_sensors_lm_async(sensor_type, callback) {
 }
 
 function check_sensors_async(sensor_type, callback) {
+    // Use lm-sensors if available, otherwise fall back to sysfs
     _check_sensors_lm_async(sensor_type, lm_sensors => {
-        _check_sensors_sysfs_async(sensor_type, sysfs_sensors => {
-            callback(_merge_sensors(lm_sensors, sysfs_sensors));
-        });
+        if (lm_sensors && Object.keys(lm_sensors).length > 0) {
+            callback(lm_sensors);
+        } else {
+            _check_sensors_sysfs_async(sensor_type, sysfs_sensors => {
+                callback(sysfs_sensors);
+            });
+        }
     });
 }
 
