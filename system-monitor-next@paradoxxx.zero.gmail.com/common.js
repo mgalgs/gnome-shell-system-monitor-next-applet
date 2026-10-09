@@ -17,10 +17,13 @@ function _check_sensors_sysfs_async(sensor_type, callback) {
     const sensors = {};
     let pending_labels = 0;
     let enumeration_done = false;
+    let finished = false;
 
     function maybe_finish() {
-        if (enumeration_done && pending_labels === 0)
-            callback(sensors);
+        if (finished || !enumeration_done || pending_labels > 0)
+            return;
+        finished = true;
+        callback(sensors);
     }
 
     function read_label_async(file, cb) {
