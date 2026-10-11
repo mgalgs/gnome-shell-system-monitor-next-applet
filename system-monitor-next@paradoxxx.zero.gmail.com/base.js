@@ -302,6 +302,8 @@ export const Chart = class SystemMonitor_Chart {
             max = Math.max(this.parentC.graph_min_scale,
                 Math.pow(2, Math.ceil(Math.log(max) / Math.log(2))));
             if (this.parentC.graph_scale_cooldown_delay_minutes !== 0) {
+                if (!Number.isFinite(this.parentC.graph_scale_max_including_cooldown))
+                    this.parentC.graph_scale_max_including_cooldown = 0;
                 if (max > this.parentC.graph_scale_max_including_cooldown) {
                     // Restart the cooldown period with this new max.
                         this.parentC.restart_cooldown_timer(max);
