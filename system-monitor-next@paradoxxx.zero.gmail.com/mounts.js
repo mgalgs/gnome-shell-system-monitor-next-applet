@@ -315,6 +315,11 @@ export const Graph = class SystemMonitor_Graph {
         this.actor.set_width(this.width * this.scale_factor * this.text_scaling);
         this.actor.set_height(this.height * this.scale_factor * this.text_scaling);
     }
+    updateStyle() {
+        this.actor.set_width(this.width * this.scale_factor * this.text_scaling);
+        this.actor.set_height(this.height * this.scale_factor * this.text_scaling);
+        this.actor.queue_repaint();
+    }
     set_text_scaling(interfaceSettings, key) {
         // FIXME: for some reason we only get this signal once, not on later
         // changes to the setting
@@ -382,6 +387,10 @@ export const Bar = class SystemMonitor_Bar extends Graph {
     update_mounts(mounts) {
         this.mounts = mounts;
         this.actor.queue_repaint();
+    }
+    updateStyle() {
+        this.width = this.extension._Style.bar_width();
+        super.updateStyle();
     }
     destroy() {
         this.extension._MountsMonitor?.remove_listener(this._mountListener);
@@ -458,6 +467,11 @@ export const Pie = class SystemMonitor_Pie extends Graph {
     update_mounts(mounts) {
         this.mounts = mounts;
         this.actor.queue_repaint();
+    }
+    updateStyle() {
+        this.width = this.extension._Style.pie_size();
+        this.height = this.width;
+        super.updateStyle();
     }
     destroy() {
         this.extension._MountsMonitor?.remove_listener(this._mountListener);

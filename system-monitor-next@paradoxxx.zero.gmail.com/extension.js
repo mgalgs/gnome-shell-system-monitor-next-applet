@@ -209,6 +209,58 @@ export default class SystemMonitorExtension extends Extension {
         build_menu_info(this);
     }
 
+    _panelForDisplay() {
+        if (this._Schema.get_boolean('center-display'))
+            return Main.panel._centerBox;
+        if (this._Schema.get_boolean('left-display'))
+            return Main.panel._leftBox;
+        return Main.panel._rightBox;
+    }
+
+    _updatePanelSpacing() {
+        const spacing = this._Schema.get_boolean('compact-display') ? '1' : '4';
+        this._box.style = 'spacing: ' + spacing + 'px;';
+    }
+
+    // _addToPanelBox() reparents the button's container, so moving between
+    // boxes only needs a call with the new target box.
+    _applyPanelPosition() {
+        const panel = this._panelForDisplay();
+        if (this.__sm.panelBox === panel)
+            return;
+        Main.panel._addToPanelBox('system-monitor', this.__sm.tray, 1, panel);
+        this.__sm.panelBox = panel;
+    }
+
+    _applyMoveClock() {
+        const shouldMove = this._Schema.get_boolean('move-clock');
+        const dateMenu = Main.panel.statusArea.dateMenu;
+        const tray = this.__sm.tray;
+        if (shouldMove && !tray.clockMoved) {
+            Main.panel._addToPanelBox('dateMenu', dateMenu, -1, Main.panel._rightBox);
+            tray.clockMoved = true;
+        } else if (!shouldMove && tray.clockMoved) {
+            Main.panel._addToPanelBox('dateMenu', dateMenu,
+                Main.sessionMode.panel.center.indexOf('dateMenu'), Main.panel._centerBox);
+            tray.clockMoved = false;
+        }
+    }
+
+    // Style classes and sizes are baked into the widgets at construction time,
+    // so a style change requires rebuilding them. Pie/Bar only need their
+    // actor size refreshed; their draw code reads the new style each frame.
+    _applyCompactDisplay() {
+        this._Style = new smStyleManager(this);
+        this._updatePanelSpacing();
+        for (const widget of this.__sm.widgetMap.values())
+            widget.destroy();
+        this.__sm.widgetMap.clear();
+        this.__sm.elts = [];
+        this._syncMonitors();
+        this.__sm.pie.updateStyle();
+        this.__sm.bar.updateStyle();
+    }
+
     enable() {
         sm_log('applet enable from ' + this.path);
 
@@ -242,13 +294,7 @@ export default class SystemMonitorExtension extends Extension {
         this.menuTimeout = null;
         this._settingsConnection = null;
 
-        let panel = Main.panel._rightBox;
-        if (this._Schema.get_boolean('center-display')) {
-            panel = Main.panel._centerBox;
-        }
-        else if (this._Schema.get_boolean('left-display')) {
-            panel = Main.panel._leftBox;
-        }
+        let panel = this._panelForDisplay();
 
         this._MountsMonitor.startListening();
 
@@ -262,17 +308,13 @@ export default class SystemMonitorExtension extends Extension {
         };
         let tray = this.__sm.tray;
 
-        if (this._Schema.get_boolean('move-clock')) {
-            let dateMenu = Main.panel.statusArea.dateMenu;
-            Main.panel._centerBox.remove_child(dateMenu.container);
-            Main.panel._addToPanelBox('dateMenu', dateMenu, -1, Main.panel._rightBox);
-            tray.clockMoved = true;
-        }
-
         Main.panel._addToPanelBox('system-monitor', tray, 1, panel);
+        this.__sm.panelBox = panel;
 
-        let spacing = this._Schema.get_boolean('compact-display') ? '1' : '4';
-        this._box = new St.BoxLayout({style: 'spacing: ' + spacing + 'px;'});
+        this._applyMoveClock();
+
+        this._box = new St.BoxLayout();
+        this._updatePanelSpacing();
         tray.add_child(this._box);
         this._box.add_child(this.__sm.icon.actor);
 
@@ -293,6 +335,10 @@ export default class SystemMonitorExtension extends Extension {
             },
             'changed::monitors', () => this._syncMonitors(),
             'changed::disk-usage-style', () => change_usage(this),
+            'changed::compact-display', () => this._applyCompactDisplay(),
+            'changed::center-display', () => this._applyPanelPosition(),
+            'changed::left-display', () => this._applyPanelPosition(),
+            'changed::move-clock', () => this._applyMoveClock(),
             this
         );
 
