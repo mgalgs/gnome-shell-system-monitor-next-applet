@@ -11,7 +11,7 @@ import Adw from "gi://Adw";
 
 import { ExtensionPreferences, gettext as _ } from "resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js";
 
-import { check_sensors_async } from './common.js';
+import { list_sensors_async } from './common.js';
 
 const N_ = function (e) {
     return e;
@@ -295,15 +295,14 @@ function detectDevices(type, callback) {
         getGpuDevices(callback);
         break;
     case 'thermal': {
-        // Use the same detection used at runtime so labels match exactly.
-        check_sensors_async('temp', sensors => {
+        list_sensors_async('temp', sensors => {
             callback(sensors ? Object.keys(sensors) : []);
         });
         break;
     }
     case 'fan':
     {
-        check_sensors_async('fan', sensors => {
+        list_sensors_async('fan', sensors => {
             callback(sensors ? Object.keys(sensors) : []);
         });
         break;

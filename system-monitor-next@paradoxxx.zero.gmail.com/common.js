@@ -221,8 +221,20 @@ function _check_sensors_lm_async(sensor_type, callback) {
     });
 }
 
+// Runtime lookup for a persisted config.device label. Includes sysfs labels
+// lm-sensors lacks, because the Add Monitor dialog used to offer sysfs labels
+// only and configs saved from it must keep matching.
 function check_sensors_async(sensor_type, callback) {
-    // Use lm-sensors if available, otherwise fall back to sysfs
+    _check_sensors_lm_async(sensor_type, lm_sensors => {
+        _check_sensors_sysfs_async(sensor_type, sysfs_sensors => {
+            callback({...sysfs_sensors, ...lm_sensors});
+        });
+    });
+}
+
+// Sensors to offer in the Add Monitor dialog: one source per sensor type, so
+// a chip isn't listed under both its lm-sensors and its sysfs label.
+function list_sensors_async(sensor_type, callback) {
     _check_sensors_lm_async(sensor_type, lm_sensors => {
         if (lm_sensors && Object.keys(lm_sensors).length > 0) {
             callback(lm_sensors);
@@ -313,4 +325,4 @@ function read_sensor_async(sensorInfo, callback) {
     }
 }
 
-export { parse_bytearray, check_sensors_async, read_sensor_async };
+export { parse_bytearray, check_sensors_async, list_sensors_async, read_sensor_async };
