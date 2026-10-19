@@ -5,6 +5,7 @@ import GTop from "gi://GTop";
 import St from "gi://St";
 import Clutter from "gi://Clutter";
 import GLib from "gi://GLib";
+import Gio from "gi://Gio";
 import { ElementBase } from '../base.js';
 
 const Cpu = class SystemMonitor_Cpu extends ElementBase {
@@ -169,15 +170,16 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
         ]);
     }
     _loadAvgState() {
+        const path = this._getAvgStateFile();
+        Gio.File.new_for_path(path).load_contents_async(null, (file, result) => {
+            if (this._destroyed)
+                return;
+            this._applyAvgState(file, result, path);
+        });
+    }
+    _applyAvgState(file, result, path) {
         try {
-            const path = this._getAvgStateFile();
-            if (!GLib.file_test(path, GLib.FileTest.EXISTS))
-                return;
-
-            const [ok, contents] = GLib.file_get_contents(path);
-            if (!ok)
-                return;
-
+            const [, contents] = file.load_contents_finish(result);
             const state = JSON.parse(new TextDecoder().decode(contents));
 
             if (typeof state.avg_sum === 'number' &&
