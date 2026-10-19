@@ -253,10 +253,16 @@ export const Chart = class SystemMonitor_Chart {
         this.actor = new St.DrawingArea({style_class: extension._Style.get('sm-chart'), reactive: false});
         this.parentC = parent;
         this.width = width;
+        this.height = height;
         let themeContext = St.ThemeContext.get_for_stage(global.stage);
         this.scale_factor = themeContext.scale_factor;
         this.actor.set_width(this.width * this.scale_factor);
-        this.actor.set_height(height);
+        // St.DrawingArea draws to its allocated content box, which is in
+        // logical pixels; the backing surface is device-scaled separately.
+        this.actor.set_height(this.height);
+        // The panel button allocates its child the full bar height, so without
+        // an explicit alignment the chart would be stretched to fill the bar.
+        this.actor.y_align = Clutter.ActorAlign.CENTER;
         this.data = [];
         for (let i = 0; i < this.parentC.colors.length; i++) {
             this.data[i] = [];
@@ -350,6 +356,10 @@ export const Chart = class SystemMonitor_Chart {
             }
         }
         this.actor.set_width(this.width * this.scale_factor); // repaints
+    }
+    setHeight(height) {
+        this.height = height;
+        this.actor.set_height(this.height);
     }
     rescale(themeContext) {
         this.scale_factor = themeContext.scale_factor;
@@ -650,7 +660,6 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         this.tip_unit_labels = [];
 
         const Style = extension._Style;
-        const IconSize = extension._IconSize;
 
         this.colors = [];
         for (let color of this.color_name) {
@@ -662,7 +671,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         if (Style.get('') === '-compact') {
             element_width = Math.round(element_width / 1.5);
         }
-        this.chart = new Chart(this.extension, element_width, IconSize, this);
+        this.chart = new Chart(this.extension, element_width, extension._ChartHeight, this);
 
         this.actor.visible = this.config.display;
 

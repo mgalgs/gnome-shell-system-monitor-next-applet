@@ -222,6 +222,37 @@ export default class SystemMonitorExtension extends Extension {
         this._box.style = 'spacing: ' + spacing + 'px;';
     }
 
+    // The mini chart fills the top bar vertically; the panel button's own
+    // vertical border/padding becomes the visual margin. The height is derived
+    // from the live panel geometry (logical pixels, like Main.panel.height) so
+    // HiDPI scale, text scaling and theme changes are respected instead of
+    // hardcoding a pixel value. Theme node lengths come back already scaled by
+    // the scale factor, hence the division.
+    _updateChartHeight() {
+        const stage = this.__sm?.tray?.get_stage?.();
+        const scale = stage
+            ? St.ThemeContext.get_for_stage(stage).scale_factor || 1
+            : 1;
+        const panelH = Main.panel.height;
+        let verticalSpace = 6; // 3px top + 3px bottom fallback (logical)
+        const node = this.__sm?.tray?.get_theme_node?.();
+        if (node) {
+            verticalSpace = (node.get_border_width(St.Side.TOP) +
+                node.get_border_width(St.Side.BOTTOM) +
+                node.get_padding(St.Side.TOP) +
+                node.get_padding(St.Side.BOTTOM)) / scale;
+        }
+        const available = panelH > 0
+            ? panelH - verticalSpace
+            : PANEL_ICON_SIZE * 26 / 16;
+        this._ChartHeight = Math.max(8, Math.round(available));
+    }
+
+    _applyChartHeight() {
+        for (const widget of this.__sm.elts)
+            widget.chart.setHeight(this._ChartHeight);
+    }
+
     // _addToPanelBox() reparents the button's container, so moving between
     // boxes only needs a call with the new target box.
     _applyPanelPosition() {
@@ -252,6 +283,7 @@ export default class SystemMonitorExtension extends Extension {
     _applyCompactDisplay() {
         this._Style = new smStyleManager(this);
         this._updatePanelSpacing();
+        this._updateChartHeight();
         for (const widget of this.__sm.widgetMap.values())
             widget.destroy();
         this.__sm.widgetMap.clear();
@@ -310,6 +342,7 @@ export default class SystemMonitorExtension extends Extension {
 
         Main.panel._addToPanelBox('system-monitor', tray, 1, panel);
         this.__sm.panelBox = panel;
+        this._updateChartHeight();
 
         this._applyMoveClock();
 
@@ -401,6 +434,14 @@ export default class SystemMonitorExtension extends Extension {
         });
         tray.menu.addMenuItem(item);
         Main.panel.menuManager.addMenu(tray.menu);
+
+        // The top bar can change height with text scaling or a theme change;
+        // keep the chart filling it in that case too.
+        Main.panel.connectObject('notify::height', () => {
+            if (!this.__sm) return;
+            this._updateChartHeight();
+            this._applyChartHeight();
+        }, this);
     }
 
     disable() {
@@ -417,6 +458,7 @@ export default class SystemMonitorExtension extends Extension {
         }
 
         this.__sm.tray.menu.disconnectObject(this);
+        Main.panel.disconnectObject(this);
         for (let elt of this.__sm.widgetMap.values()) {
             elt.destroy();
         }
