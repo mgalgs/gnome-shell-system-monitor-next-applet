@@ -6,7 +6,11 @@ import St from "gi://St";
 import Clutter from "gi://Clutter";
 import GLib from "gi://GLib";
 import Gio from "gi://Gio";
-import { ElementBase } from '../base.js';
+import { ElementBase, l_limit } from '../base.js';
+
+// GNOME Shell never calls disable() on logout or shutdown, so destroy() alone
+// cannot persist the average across a reboot.
+const AVG_SAVE_INTERVAL_US = 60 * GLib.USEC_PER_SEC;
 
 const Cpu = class SystemMonitor_Cpu extends ElementBase {
     static metadata = {
@@ -27,6 +31,7 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
         this.avg_sum = 0;
         this.avg_count = 0;
         this.avg_history = [];
+        this._lastAvgSave = GLib.get_monotonic_time();
 
         this.max = 100;
 
@@ -126,6 +131,14 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
         this.avg_count = this.avg_history.length;
         let avg = Math.round(this.avg_sum / this.avg_count);
 
+        if (this.config['restore-average']) {
+            const now = GLib.get_monotonic_time();
+            if (now - this._lastAvgSave >= AVG_SAVE_INTERVAL_US) {
+                this._lastAvgSave = now;
+                this._saveAvgStateAsync();
+            }
+        }
+
         let other = 100;
         for (let i = 0; i < this.usage.length; i++) {
             other -= this.usage[i];
@@ -182,9 +195,16 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
             const [, contents] = file.load_contents_finish(result);
             const state = JSON.parse(new TextDecoder().decode(contents));
 
+            // Once a full graph width of samples could have arrived since the
+            // save, every saved sample would have scrolled off the graph.
+            const window_ms = this.chart.width * l_limit(this.config['refresh-time']);
+            const age_ms = GLib.get_real_time() / 1000 - state.saved_at;
+
             if (typeof state.avg_sum === 'number' &&
                 typeof state.avg_count === 'number' &&
-                state.avg_count > 0) {
+                typeof state.saved_at === 'number' &&
+                state.avg_count > 0 &&
+                age_ms >= 0 && age_ms <= window_ms) {
 
                 const avg = state.avg_sum / state.avg_count;
                 if (this.chart.width < state.avg_count) {
@@ -226,17 +246,31 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
             // No saved state yet, or file unreadable/corrupt - start fresh.
         }
     }
+    _avgStateJson() {
+        return JSON.stringify({
+            avg_sum: this.avg_sum,
+            avg_count: this.avg_count,
+            saved_at: GLib.get_real_time() / 1000,
+        });
+    }
     _saveAvgState() {
         try {
-            const path = this._getAvgStateFile();
-            const data = JSON.stringify({
-                avg_sum: this.avg_sum,
-                avg_count: this.avg_count,
-            });
-            GLib.file_set_contents(path, data);
+            GLib.file_set_contents(this._getAvgStateFile(), this._avgStateJson());
         } catch (e) {
             console.error(e, 'SystemMonitor: failed to save CPU average state');
         }
+    }
+    _saveAvgStateAsync() {
+        const bytes = new GLib.Bytes(new TextEncoder().encode(this._avgStateJson()));
+        Gio.File.new_for_path(this._getAvgStateFile()).replace_contents_bytes_async(
+            bytes, null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, null,
+            (file, result) => {
+                try {
+                    file.replace_contents_finish(result);
+                } catch (e) {
+                    console.error(e, 'SystemMonitor: failed to save CPU average state');
+                }
+            });
     }
     destroy() {
         if (this.config['restore-average'])
