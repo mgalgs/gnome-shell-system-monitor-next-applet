@@ -10,7 +10,7 @@ import { ElementBase, l_limit } from '../base.js';
 
 // GNOME Shell never calls disable() on logout or shutdown, so destroy() alone
 // cannot persist the average across a reboot.
-const AVG_SAVE_INTERVAL_US = 60 * GLib.USEC_PER_SEC;
+const DEFAULT_AVG_SAVE_INTERVAL_SEC = 60;
 
 const Cpu = class SystemMonitor_Cpu extends ElementBase {
     static metadata = {
@@ -133,7 +133,9 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
 
         if (this.config['restore-average']) {
             const now = GLib.get_monotonic_time();
-            if (now - this._lastAvgSave >= AVG_SAVE_INTERVAL_US) {
+            const saveIntervalSec = this.config['average-save-interval'] ||
+                DEFAULT_AVG_SAVE_INTERVAL_SEC;
+            if (now - this._lastAvgSave >= saveIntervalSec * GLib.USEC_PER_SEC) {
                 this._lastAvgSave = now;
                 this._saveAvgStateAsync();
             }
@@ -195,16 +197,20 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
             const [, contents] = file.load_contents_finish(result);
             const state = JSON.parse(new TextDecoder().decode(contents));
 
-            // Once a full graph width of samples could have arrived since the
-            // save, every saved sample would have scrolled off the graph.
-            const window_ms = this.chart.width * l_limit(this.config['refresh-time']);
-            const age_ms = GLib.get_real_time() / 1000 - state.saved_at;
+            let ageIsValid = this.config['restore-average-any-age'] || false;
+            if (!ageIsValid) {
+                // Once a full graph width of samples could have arrived since the
+                // save, every saved sample would have scrolled off the graph.
+                const window_ms = this.chart.width * l_limit(this.config['refresh-time']);
+                const age_ms = GLib.get_real_time() / 1000 - state.saved_at;
+                ageIsValid = typeof state.saved_at === 'number' &&
+                    age_ms >= 0 && age_ms <= window_ms;
+            }
 
             if (typeof state.avg_sum === 'number' &&
                 typeof state.avg_count === 'number' &&
-                typeof state.saved_at === 'number' &&
                 state.avg_count > 0 &&
-                age_ms >= 0 && age_ms <= window_ms) {
+                ageIsValid) {
 
                 const avg = state.avg_sum / state.avg_count;
                 if (this.chart.width < state.avg_count) {
