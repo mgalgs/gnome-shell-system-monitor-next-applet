@@ -343,6 +343,8 @@ function buildDefaultConfig(type, device) {
     if (type === 'cpu') {
         config['graph-average'] = false;
         config['restore-average'] = false;
+        config['restore-average-any-age'] = false;
+        config['average-save-interval'] = 60;
     }
     if (type === 'prometheus') {
         config.server = 'http://localhost:9100';
@@ -655,6 +657,36 @@ const SMMonitorRow = GObject.registerClass({
                 this._emitChanged();
             });
             this.add_row(restoreGraphAverage);
+
+            let restoreGraphAverageAnyAge = new Adw.SwitchRow({
+                title: _('Restore Graph Average Regardless of Age'),
+                subtitle: _('Restore saved graph average even when it is older than the graph history window'),
+                active: c['restore-average-any-age'] || false,
+            });
+            restoreGraphAverageAnyAge.connect('notify::active', w => {
+                c['restore-average-any-age'] = w.active;
+                this._emitChanged();
+            });
+            this.add_row(restoreGraphAverageAnyAge);
+
+            let averageSaveInterval = new Adw.SpinRow({
+                title: _('Average Save Interval'),
+                subtitle: _('seconds'),
+                numeric: true,
+                adjustment: new Gtk.Adjustment({
+                    value: c['average-save-interval'] || 60,
+                    lower: 1,
+                    upper: 604800,
+                    step_increment: 5,
+                    page_increment: 60,
+                }),
+            });
+            averageSaveInterval.value = c['average-save-interval'] || 60;
+            averageSaveInterval.connect('notify::value', w => {
+                c['average-save-interval'] = w.value;
+                this._emitChanged();
+            });
+            this.add_row(averageSaveInterval);
             break;
         }
         }
