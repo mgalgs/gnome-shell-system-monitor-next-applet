@@ -49,6 +49,12 @@
           </object>
         </child>
         <child>
+          <object class="AdwSwitchRow" id="prefer_secondary_panel">
+            <property name="title" translatable="yes">Prefer Secondary Panel</property>
+            <property name="subtitle" translatable="yes">Requires Top Bar All Monitors</property>
+          </object>
+        </child>
+        <child>
           <object class="AdwSwitchRow" id="rotate_labels">
             <property name="title" translatable="yes">Rotate labels</property>
           </object>
