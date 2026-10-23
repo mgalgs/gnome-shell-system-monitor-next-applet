@@ -2,6 +2,8 @@
 
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
 import Gio from "gi://Gio";
+import St from "gi://St";
+import Clutter from "gi://Clutter";
 import { ElementBase } from '../base.js';
 
 const Gpu = class SystemMonitor_Gpu extends ElementBase {
@@ -22,10 +24,30 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
         this._mem = 0;
         this._total = 0;
         this._percentage = 0;
+        this._temperature = null;
+        this._syncPanelDetails();
 
         this.item_name = _('GPU') + (this.gpu_index !== '0' ? ' ' + this.gpu_index : '');
         if (this.gpu_index !== '0')
             this.label.text = _('gpu') + this.gpu_index;
+    }
+
+    create_text_items() {
+        const items = super.create_text_items();
+        const style = this.extension._Style.get('sm-status-value');
+        this._panelMemory = new St.Label({text: '', style_class: style, y_align: Clutter.ActorAlign.CENTER});
+        this._panelTemperature = new St.Label({text: '', style_class: style, y_align: Clutter.ActorAlign.CENTER});
+        return [...items, this._panelMemory, this._panelTemperature];
+    }
+
+    _syncPanelDetails() {
+        this._panelMemory.visible = Boolean(this.config['show-memory']);
+        this._panelTemperature.visible = Boolean(this.config['show-temperature']);
+    }
+
+    onSettingsChanged(config) {
+        super.onSettingsChanged(config);
+        this._syncPanelDetails();
     }
 
     collectAsync(callback) {
@@ -45,6 +67,10 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
                     return;
                 }
                 this._parseOutput(output);
+                this._panelMemory.text = this._total
+                    ? `  ${this._pad(this._mem)}/${this._pad(this._total)} ${this._unitStr()}` : '  --';
+                this._panelTemperature.text = this._temperature === null
+                    ? '  --\u00b0C' : `  ${this._temperature}\u00b0C`;
                 if (this._total === 0) {
                     callback({metrics: {used: 0, memory: 0}, display: '0',
                         detail: '', detailUnit: this._unitStr()});
@@ -79,6 +105,8 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
         let memTotal = this._parseInt(usage[0]);
         let memUsed = this._parseInt(usage[1]);
         this._percentage = this._parseInt(usage[2]);
+        const temperature = parseFloat(usage[3]);
+        this._temperature = Number.isFinite(temperature) ? Math.round(temperature) : null;
         if (typeof this.useGiB === 'undefined')
             this._initUnit(memTotal);
         if (this.useGiB) {

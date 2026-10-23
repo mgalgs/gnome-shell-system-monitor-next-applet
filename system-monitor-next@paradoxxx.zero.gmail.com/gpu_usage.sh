@@ -27,10 +27,9 @@ checkcommand()
 
 GPU_INDEX=${1:-0}
 
-# This will print three lines. The first one is the the total vRAM available,
-# the second one is the used vRAM and the third on is the GPU usage in %.
+# Print total VRAM, used VRAM, GPU usage and temperature on separate lines.
 if nvidia-smi --list-gpus > /dev/null 2>&1  ; then
-	nvidia-smi -i "$GPU_INDEX" --query-gpu=memory.total,memory.used,utilization.gpu --format=csv,noheader,nounits | while IFS=', ' read -r a b c; do echo "$a"; echo "$b"; echo "$c"; done
+	nvidia-smi -i "$GPU_INDEX" --query-gpu=memory.total,memory.used,utilization.gpu,temperature.gpu --format=csv,noheader,nounits | while IFS=', ' read -r a b c d; do echo "$a"; echo "$b"; echo "$c"; echo "$d"; done
 
 elif lsmod | grep amdgpu > /dev/null; then
 	# DRM card numbers don't always start at 0 (the GPU can be card1 with
@@ -55,6 +54,14 @@ elif lsmod | grep amdgpu > /dev/null; then
 	echo $((used / 1024 / 1024))
 
 	cat "/sys/class/drm/$card/device/gpu_busy_percent"
+	temperature=N/A
+	for temp_file in "/sys/class/drm/$card/device/hwmon"/hwmon*/temp1_input; do
+		[ -r "$temp_file" ] || continue
+		temperature_raw=$(cat "$temp_file")
+		temperature=$((temperature_raw / 1000))
+		break
+	done
+	echo "$temperature"
 
 elif checkcommand glxinfo; then
 	TOTALVRAM=$(glxinfo | grep -A2 -i GL_NVX_gpu_memory_info | grep -E -i 'dedicated')
@@ -66,5 +73,7 @@ elif checkcommand glxinfo; then
 	FREEVRAM=$((TOTALVRAM - AVAILVRAM))
 	echo "$TOTALVRAM"
 	echo "$FREEVRAM"
+	echo N/A
+	echo N/A
 
 fi

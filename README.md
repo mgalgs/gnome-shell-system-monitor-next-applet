@@ -124,6 +124,11 @@ and reloading GNOME Shell.
 
 ## Usage
 
+GPU monitors have optional **Show VRAM in Panel** and **Show GPU Temperature
+in Panel** switches. Both are off by default. VRAM shows used/total memory;
+temperature is in Celsius and displays `--` when the backend does not report
+it. NVIDIA uses `nvidia-smi`; AMD uses the selected card's hwmon sensor.
+
 After installation, the system monitor will appear in your top panel. You can configure its appearance and behavior through the GNOME Extensions app or by clicking on the panel and selecting "Preferences".
 
 You can also graph your own custom metrics using the Prometheus monitor and a simple script — see [Custom Metrics](docs/widget-authoring.md#custom-metrics-no-code-changes) for details.
