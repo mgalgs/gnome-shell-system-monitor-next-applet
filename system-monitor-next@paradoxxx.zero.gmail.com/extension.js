@@ -206,7 +206,28 @@ export default class SystemMonitorExtension extends Extension {
             widget.actor.visible = widget.config.display;
         }
 
+        this._syncMonitorGroups();
         build_menu_info(this);
+    }
+
+    _syncMonitorGroups() {
+        const enabled = this._Schema.get_boolean('monitor-separators');
+        const compact = this._Schema.get_boolean('compact-display');
+        this._box.set_style(`spacing: ${enabled ? 0 : compact ? 1 : 4}px;`);
+        if (enabled)
+            this._box.add_style_class_name('sm-grouped-monitors');
+        else
+            this._box.remove_style_class_name('sm-grouped-monitors');
+        let firstVisible = true;
+        for (const widget of this.__sm.elts) {
+            widget.actor.add_style_class_name('sm-monitor-group');
+            if (enabled && widget.config.display && !firstVisible)
+                widget.actor.add_style_class_name('sm-monitor-separated');
+            else
+                widget.actor.remove_style_class_name('sm-monitor-separated');
+            if (widget.config.display)
+                firstVisible = false;
+        }
     }
 
     enable() {
@@ -287,11 +308,13 @@ export default class SystemMonitorExtension extends Extension {
             }
         }
 
+        this._syncMonitorGroups();
         this._Schema.connectObject(
             'changed::background', (schema, key) => {
                 this._Background = color_from_string(this._Schema.get_string(key));
             },
             'changed::monitors', () => this._syncMonitors(),
+            'changed::monitor-separators', () => this._syncMonitorGroups(),
             'changed::disk-usage-style', () => change_usage(this),
             this
         );

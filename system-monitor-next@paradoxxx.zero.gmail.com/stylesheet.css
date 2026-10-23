@@ -3,6 +3,27 @@
     padding: 0px 25px 0px 0px;
 }
 
+.sm-grouped-monitors .sm-monitor-group {
+    spacing: 2px;
+}
+
+.sm-grouped-monitors .sm-monitor-separated {
+    border-left-width: 1px;
+    border-color: rgba(255, 255, 255, 0.4);
+    margin-left: 2px;
+    padding-left: 4px;
+}
+
+.sm-grouped-monitors .sm-status-label-compact {
+    padding: 0;
+}
+
+.sm-grouped-monitors .sm-status-value-compact,
+.sm-grouped-monitors .sm-net-value-compact,
+.sm-grouped-monitors .sm-disk-value-compact {
+    padding-left: 0;
+}
+
 .sm-label {
     opacity: 0.75;
     font-size: 0.75em;

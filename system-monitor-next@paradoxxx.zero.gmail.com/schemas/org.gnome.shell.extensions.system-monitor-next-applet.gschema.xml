@@ -362,6 +362,11 @@
       <summary>Optimize view for small displays</summary>
       <description>Optimize texts sizes to fit on a small display </description>
     </key>
+    <key name="monitor-separators" type="b">
+      <default>false</default>
+      <summary>Separate monitor groups in the panel</summary>
+      <description>Add spacing and vertical separators between visible monitors, keeping each label and value together.</description>
+    </key>
     <key name="memory-program-color" type="s">
       <default>'#00b35b'</default>
       <summary>Color of program memory in the chart</summary>
