@@ -332,6 +332,11 @@
       <summary>Display informations on the left side of the clock</summary>
       <description>True: Set information on the left, False: Set information in status bar (at top right)</description>
     </key>
+    <key name="prefer-secondary-panel" type="b">
+      <default>false</default>
+      <summary>Prefer a secondary monitor panel</summary>
+      <description>When Top Bar All Monitors provides a secondary panel, move the existing indicator there. Return to the primary panel when it is unavailable.</description>
+    </key>
     <key name="move-clock" type="b">
       <default>false</default>
       <summary>Move the clock to the right when center-display is true</summary>

@@ -25,6 +25,7 @@ import Shell from "gi://Shell";
 import Gio from "gi://Gio";
 import St from "gi://St";
 
+import { ExtensionState } from "resource:///org/gnome/shell/misc/extensionUtils.js";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import * as PanelMenu from "resource:///org/gnome/shell/ui/panelMenu.js";
 import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
@@ -47,6 +48,7 @@ import { Thermal } from './widgets/thermal.js';
 import { Prometheus } from './widgets/prometheus.js';
 
 const PANEL_ICON_SIZE = 16;
+const TOP_BAR_ALL_MONITORS_UUID = 'topbar-all-monitors@fa8i.github.io';
 
 const WIDGET_CLASSES = {
     cpu: Cpu,
@@ -209,6 +211,151 @@ export default class SystemMonitorExtension extends Extension {
         build_menu_info(this);
     }
 
+    _getPanelBox(panel) {
+        if (this._Schema.get_boolean('center-display'))
+            return panel._centerBox;
+        if (this._Schema.get_boolean('left-display'))
+            return panel._leftBox;
+        return panel._rightBox;
+    }
+
+    _findSecondaryPanel() {
+        if (!this._Schema.get_boolean('prefer-secondary-panel'))
+            return null;
+        const extension = Main.extensionManager.lookup(TOP_BAR_ALL_MONITORS_UUID);
+        if (extension?.state !== ExtensionState.ACTIVE)
+            return null;
+
+        const panelEntries = extension.stateObj?._panels;
+        if (!Array.isArray(panelEntries))
+            return null;
+
+        return panelEntries
+            .map(entry => entry?.panel)
+            .filter(panel => {
+                try {
+                    return panel && panel._monitorIndex !== Main.layoutManager.primaryIndex &&
+                        panel.get_parent() !== null;
+                } catch {
+                    return false;
+                }
+            })
+            .sort((a, b) => a._monitorIndex - b._monitorIndex)[0] ?? null;
+    }
+
+    _watchSecondaryPanel(panel) {
+        if (panel === Main.panel || this._secondaryPanelDestroyIds.has(panel))
+            return;
+
+        const destroyId = panel.connect('destroy', () => {
+            this._secondaryPanelDestroyIds.delete(panel);
+            if (!this.__sm || this._panelTarget !== panel)
+                return;
+
+            this._panelTarget = null;
+            this._moveTrayToPanel(Main.panel);
+            this._schedulePanelRelocation();
+        });
+        this._secondaryPanelDestroyIds.set(panel, destroyId);
+    }
+
+    _moveTrayToPanel(panel) {
+        const tray = this.__sm?.tray;
+        if (!tray?.container || !panel)
+            return false;
+
+        try {
+            const targetBox = this._getPanelBox(panel);
+            if (!targetBox)
+                return false;
+
+            if (tray.container.get_parent() !== targetBox) {
+                tray.menu?.close();
+                const parent = tray.container.get_parent();
+                if (parent)
+                    parent.remove_child(tray.container);
+                targetBox.insert_child_at_index(
+                    tray.container, Math.min(1, targetBox.get_n_children()));
+            }
+
+            this._panelTarget = panel;
+            this._watchSecondaryPanel(panel);
+            return true;
+        } catch (e) {
+            sm_log(`Failed to move indicator between panels: ${e.message}`, 'warn');
+            return false;
+        }
+    }
+
+    _schedulePanelRelocation() {
+        if (!this._panelRelocationEnabled || this._panelRelocationId)
+            return;
+
+        this._panelRelocationId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            this._panelRelocationId = 0;
+            if (!this._panelRelocationEnabled || !this.__sm)
+                return GLib.SOURCE_REMOVE;
+
+            this._moveTrayToPanel(this._findSecondaryPanel() ?? Main.panel);
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _setupPanelRelocation() {
+        this._panelRelocationEnabled = true;
+        this._panelRelocationId = 0;
+        this._panelTarget = Main.panel;
+        this._secondaryPanelDestroyIds = new Map();
+
+        this._Schema.connectObject('changed::prefer-secondary-panel',
+            () => this._schedulePanelRelocation(), this);
+
+        Main.layoutManager.connectObject('startup-complete', () => {
+            this._moveTrayToPanel(Main.panel);
+            this._schedulePanelRelocation();
+        }, this);
+
+        Main.layoutManager.connectObject('monitors-changed', () => {
+            // Rescue the indicator before Top Bar All Monitors destroys its panels.
+            this._moveTrayToPanel(Main.panel);
+            this._schedulePanelRelocation();
+        }, this);
+
+        Main.extensionManager.connectObject('extension-state-changed',
+            (_manager, extension) => {
+                if (extension.uuid !== TOP_BAR_ALL_MONITORS_UUID)
+                    return;
+
+                if (extension.state === ExtensionState.ACTIVE ||
+                    extension.state === ExtensionState.ACTIVATING) {
+                    this._schedulePanelRelocation();
+                } else {
+                    this._moveTrayToPanel(Main.panel);
+                }
+            }, this);
+
+        this._schedulePanelRelocation();
+    }
+
+    _stopPanelRelocation() {
+        this._panelRelocationEnabled = false;
+        if (this._panelRelocationId) {
+            GLib.Source.remove(this._panelRelocationId);
+            this._panelRelocationId = 0;
+        }
+
+        Main.layoutManager.disconnectObject(this);
+        Main.extensionManager.disconnectObject(this);
+        for (const [panel, destroyId] of this._secondaryPanelDestroyIds) {
+            try {
+                panel.disconnect(destroyId);
+            } catch {
+                // The secondary panel may already have been destroyed.
+            }
+        }
+        this._secondaryPanelDestroyIds.clear();
+    }
+
     enable() {
         sm_log('applet enable from ' + this.path);
 
@@ -355,9 +502,12 @@ export default class SystemMonitorExtension extends Extension {
         });
         tray.menu.addMenuItem(item);
         Main.panel.menuManager.addMenu(tray.menu);
+        this._setupPanelRelocation();
     }
 
     disable() {
+        this._stopPanelRelocation();
+        this._moveTrayToPanel(Main.panel);
         if (this.menuTimeout) {
             GLib.Source.remove(this.menuTimeout);
             this.menuTimeout = null;

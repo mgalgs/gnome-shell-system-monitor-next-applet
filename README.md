@@ -124,6 +124,17 @@ and reloading GNOME Shell.
 
 ## Usage
 
+The optional **Prefer Secondary Panel** setting places the indicator on the
+first non-primary panel supplied by **Top Bar All Monitors**
+(`topbar-all-monitors@fa8i.github.io`). It defaults to off. If no compatible
+secondary panel is available, the indicator stays on or returns to the
+primary panel. Monitor changes and delayed login-time panel creation are
+handled without starting a second set of monitors or sampling timers.
+
+This compatibility integration relies on the companion extension's panel
+objects; it is not support for arbitrary panel extensions such as Dash to
+Panel.
+
 After installation, the system monitor will appear in your top panel. You can configure its appearance and behavior through the GNOME Extensions app or by clicking on the panel and selecting "Preferences".
 
 You can also graph your own custom metrics using the Prometheus monitor and a simple script — see [Custom Metrics](docs/widget-authoring.md#custom-metrics-no-code-changes) for details.
