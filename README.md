@@ -124,6 +124,13 @@ and reloading GNOME Shell.
 
 ## Usage
 
+In a thermal monitor's **Additional Temperature Sensors** list, select extra
+probes to display the maximum temperature across them and the primary probe.
+With no extra probes selected, the existing single-sensor behavior is kept.
+The aggregate uses the panel label `max` and applies the temperature threshold
+to the highest reading. An unavailable selected probe displays `--` rather
+than silently showing a lower maximum from the remaining probes.
+
 After installation, the system monitor will appear in your top panel. You can configure its appearance and behavior through the GNOME Extensions app or by clicking on the panel and selecting "Preferences".
 
 You can also graph your own custom metrics using the Prometheus monitor and a simple script — see [Custom Metrics](docs/widget-authoring.md#custom-metrics-no-code-changes) for details.
