@@ -21,6 +21,7 @@
 import { Extension, gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
 
 import GLib from "gi://GLib";
+import GnomeDesktop from "gi://GnomeDesktop";
 import Shell from "gi://Shell";
 import Gio from "gi://Gio";
 import St from "gi://St";
@@ -32,6 +33,7 @@ import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 import { sm_log } from './utils.js';
 import { migrateSettings } from './migration.js';
 import { color_from_string, smStyleManager, build_menu_info } from './base.js';
+import { source_remove_if_alive, source_is_alive } from './common.js';
 import { smMountsMonitor, Bar, Pie } from './mounts.js';
 import { Battery } from './widgets/battery.js';
 import { Cpu } from './widgets/cpu.js';
@@ -47,6 +49,10 @@ import { Thermal } from './widgets/thermal.js';
 import { Prometheus } from './widgets/prometheus.js';
 
 const PANEL_ICON_SIZE = 16;
+
+// Seconds of 1 Hz watchdog ticks with nothing to repair before it backs off to
+// the WallClock's default minute-granular ticks.
+const WATCHDOG_QUIET_SECONDS = 300;
 
 const WIDGET_CLASSES = {
     cpu: Cpu,
@@ -323,17 +329,10 @@ export default class SystemMonitorExtension extends Extension {
             (menu, isOpen) => {
                 if (isOpen) {
                     this.__sm.pie.actor.queue_repaint();
-
-                    this.menuTimeout = GLib.timeout_add_seconds(
-                        GLib.PRIORITY_DEFAULT,
-                        5,
-                        () => {
-                            if (!this.__sm) return GLib.SOURCE_REMOVE;
-                            this.__sm.pie.actor.queue_repaint();
-                            return GLib.SOURCE_CONTINUE;
-                        });
+                    this._startMenuRepaintTimer();
                 } else {
-                    GLib.Source.remove(this.menuTimeout);
+                    source_remove_if_alive(this.menuTimeout);
+                    this.menuTimeout = null;
                 }
             },
             this
@@ -355,13 +354,104 @@ export default class SystemMonitorExtension extends Extension {
         });
         tray.menu.addMenuItem(item);
         Main.panel.menuManager.addMenu(tray.menu);
+
+        this._startTimerWatchdog();
+    }
+
+    _startMenuRepaintTimer() {
+        this.menuTimeout = GLib.timeout_add_seconds(
+            GLib.PRIORITY_DEFAULT,
+            5,
+            () => {
+                if (!this.__sm) return GLib.SOURCE_REMOVE;
+                this.__sm.pie.actor.queue_repaint();
+                return GLib.SOURCE_CONTINUE;
+            });
+    }
+
+    /**
+     * Watches for sources destroyed by the GC and re-arms them.
+     *
+     * GJS blocks JS callbacks while the GC is sweeping, and a blocked
+     * SourceFunc is read as G_SOURCE_REMOVE, so every widget's timeout can be
+     * destroyed at once — permanently, and with nothing logged. An incremental
+     * sweep spans many main loop iterations, so this is not rare: a shell
+     * re-exec on a large heap reliably kills all of them a few seconds in.
+     *
+     * GnomeDesktop.WallClock drives its 'clock' property from C, so
+     * notify::clock keeps arriving. A signal handler blocked mid-sweep only
+     * misses that one emission and stays connected, unlike a SourceFunc, which
+     * is why this can repair timers that cannot repair themselves.
+     */
+    _startTimerWatchdog() {
+        // force_seconds makes notify::clock arrive every second instead of
+        // every minute: widgets refresh on sub-second to few-second
+        // intervals, so a minute-granular watchdog would leave the panel
+        // visibly dead for far too long after a sweep.
+        this._wallClock = new GnomeDesktop.WallClock({force_seconds: true});
+        this._watchdogQuietSeconds = 0;
+        this._wallClockId = this._wallClock.connect('notify::clock',
+            () => this._onWatchdogTick());
+    }
+
+    _onWatchdogTick() {
+        if (!this.__sm)
+            return;
+        let revived = 0;
+        for (const elt of this.__sm.elts) {
+            if (elt.revive_timers?.())
+                revived++;
+        }
+        // The pie repaint timer is only armed while the menu is open, so
+        // absence is only a fault in that state.
+        if (this.__sm.tray.menu.isOpen && !source_is_alive(this.menuTimeout)) {
+            this.menuTimeout = null;
+            this._startMenuRepaintTimer();
+            revived++;
+        }
+
+        if (revived) {
+            sm_log(`re-armed ${revived} timer(s) destroyed during GC`, 'warn');
+            this._watchdogQuietSeconds = 0;
+            this._wallClock.force_seconds = true;
+        } else if (this._wallClock.force_seconds &&
+                   ++this._watchdogQuietSeconds >= WATCHDOG_QUIET_SECONDS) {
+            // Drop back to the default minute-granular ticks. A permanent 1 Hz
+            // wakeup plus an O(widgets) scan is a poor trade once nothing has
+            // needed repair for this long, and the sweeps that destroy sources
+            // cluster around startup and large collections rather than
+            // arriving steadily. Any repair puts it back to 1 Hz at once.
+            this._wallClock.force_seconds = false;
+        }
+    }
+
+    _stopTimerWatchdog() {
+        if (this._wallClockId) {
+            this._wallClock.disconnect(this._wallClockId);
+            this._wallClockId = null;
+        }
+        if (this._wallClock) {
+            // Disconnecting alone leaves the clock's C-side timer running
+            // until GJS happens to collect the wrapper, so a source does
+            // outlive disable(). run_dispose() would close that, but EGO
+            // review flags it (EGO-X-003) since it forcibly disposes a
+            // GObject a reviewer can't verify nothing else holds a
+            // reference to. Dropping to minute-granular ticks instead
+            // leaves a far smaller thing behind than 1 Hz until collection.
+            this._wallClock.force_seconds = false;
+            this._wallClock = null;
+        }
     }
 
     disable() {
-        if (this.menuTimeout) {
+        this._stopTimerWatchdog();
+        // Spelled out literally rather than via source_remove_if_alive() so
+        // that EGO's lint (EGO-L-004), which pattern-matches a literal
+        // GLib.Source.remove()/GLib.source_remove() in the teardown path,
+        // can see that this source is in fact removed on disable.
+        if (this.menuTimeout && source_is_alive(this.menuTimeout))
             GLib.Source.remove(this.menuTimeout);
-            this.menuTimeout = null;
-        }
+        this.menuTimeout = null;
         this._Schema.disconnectObject(this);
         // restore clock
         if (this.__sm.tray.clockMoved) {
