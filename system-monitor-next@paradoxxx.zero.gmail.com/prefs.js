@@ -535,6 +535,34 @@ const SMMonitorRow = GObject.registerClass({
     _buildTypeSpecific(c) {
         switch (c.type) {
         case 'thermal': {
+            const sensorsRow = new Adw.ExpanderRow({title: _('Additional Temperature Sensors')});
+            this.add_row(sensorsRow);
+            list_sensors_async('temp', sensors => {
+                const choices = new Set([...Object.keys(sensors || {}), ...(c['sensor-labels'] || [])]);
+                for (const label of [...choices].sort()) {
+                    if (label === c.device)
+                        continue;
+                    const row = new Adw.ActionRow({title: label, use_markup: false});
+                    if (!sensors?.[label])
+                        row.subtitle = _('Unavailable');
+                    const selected = new Gtk.CheckButton({
+                        active: (c['sensor-labels'] || []).includes(label),
+                        valign: Gtk.Align.CENTER,
+                    });
+                    selected.connect('toggled', button => {
+                        const labels = new Set([c.device, ...(c['sensor-labels'] || [])]);
+                        if (button.active)
+                            labels.add(label);
+                        else
+                            labels.delete(label);
+                        c['sensor-labels'] = [...labels];
+                        this._emitChanged();
+                    });
+                    row.add_suffix(selected);
+                    row.activatable_widget = selected;
+                    sensorsRow.add_row(row);
+                }
+            });
             let fahrenheit = new Adw.SwitchRow({
                 title: _('Display temperature in Fahrenheit'),
                 active: c['fahrenheit-unit'] || false,

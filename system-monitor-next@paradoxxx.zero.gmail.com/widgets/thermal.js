@@ -25,18 +25,28 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
         this._display_error = true;
         this._temperature = null;
 
-        this.item_name = this.sensor_label ? this.sensor_label : _('Thermal');
         this.fahrenheit_unit = this.config['fahrenheit-unit'] || false;
-
-        if (this.sensor_label) {
-            let shortLabel = this.sensor_label.split(' - ').pop();
-            if (shortLabel.length > 6)
-                shortLabel = shortLabel.substring(0, 6);
-            this.label.text = shortLabel;
-        }
+        this._syncSensorNames();
 
         this.tip_format(this._symbol());
         this.reset_style();
+    }
+
+    _sensorLabels() {
+        const selected = Array.isArray(this.config['sensor-labels']) ? this.config['sensor-labels'] : [];
+        return [...new Set([this.sensor_label, ...selected])].filter(label => label);
+    }
+
+    _syncSensorNames() {
+        const multiple = this._sensorLabels().length > 1;
+        this.item_name = multiple ? _('Maximum Temperature') : this.sensor_label || _('Thermal');
+        this.label.text = multiple ? _('max') : this.sensor_label
+            ? this.sensor_label.split(' - ').pop().substring(0, 6) : _('thrm');
+    }
+
+    onSettingsChanged(config) {
+        super.onSettingsChanged(config);
+        this._syncSensorNames();
     }
 
     collectAsync(callback) {
@@ -44,39 +54,55 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
             callback(null);
             return;
         }
-        let sensorInfo = this.sensors[this.sensor_label];
-        if (!sensorInfo) {
+        const labels = this._sensorLabels();
+        const missing = labels.filter(label => !this.sensors[label]);
+        if (labels.length === 0 || missing.length > 0) {
             if (this._display_error) {
                 const validLabels = Object.keys(this.sensors).join(', ');
-                sm_log(`Invalid thermal sensor label: "${this.sensor_label}" (valid choices: ${validLabels})`, 'error');
+                sm_log(`Invalid thermal sensor labels: "${missing.join(', ')}" (valid choices: ${validLabels})`, 'error');
                 this._display_error = false;
             }
-            callback(null);
+            callback({display: '--', unit: this._symbol()});
             return;
         }
-        read_sensor_async(sensorInfo, value => {
-            if (this._destroyed) { callback(null); return; }
-            if (value === null) {
-                if (this._display_error) {
-                    sm_log(`Error reading thermal sensor: "${this.sensor_label}"`, 'error');
-                    this._display_error = false;
-                }
-                callback(null);
+
+        let remaining = labels.length;
+        const readings = [];
+        let finished = false;
+        const finish = result => {
+            if (finished)
+                return;
+            finished = true;
+            callback(result);
+        };
+        const onReading = value => {
+            if (finished)
+                return;
+            if (this._destroyed) {
+                finish(null);
                 return;
             }
-            this._temperature = Math.round(value / 1000);
+            readings.push(value);
+            if (--remaining > 0)
+                return;
+            if (readings.some(reading => reading === null)) {
+                finish({display: '--', unit: this._symbol()});
+                return;
+            }
+            this._temperature = Math.round(Math.max(...readings) / 1000);
             this.fahrenheit_unit = this.config['fahrenheit-unit'] || false;
-            let symbol = this._symbol();
-            this.temp_over_threshold = this._temperature !== null &&
-                this._temperature > (this.config.threshold || 0);
+            const symbol = this._symbol();
+            this.temp_over_threshold = this._temperature > (this.config.threshold || 0);
             this.threshold();
-            callback({
+            finish({
                 metrics: {tz0: this._temperature},
                 display: this._formatTemp(),
                 unit: symbol,
                 tipUnits: [_(symbol)],
             });
-        });
+        };
+        for (const label of labels)
+            read_sensor_async(this.sensors[label], onReading);
     }
 
     reset_style() {
