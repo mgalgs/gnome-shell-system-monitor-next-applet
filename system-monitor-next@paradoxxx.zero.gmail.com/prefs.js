@@ -534,6 +534,20 @@ const SMMonitorRow = GObject.registerClass({
 
     _buildTypeSpecific(c) {
         switch (c.type) {
+        case 'gpu': {
+            for (const [key, title] of [
+                ['show-memory', _('Show VRAM in Panel')],
+                ['show-temperature', _('Show GPU Temperature in Panel')],
+            ]) {
+                const row = new Adw.SwitchRow({title, active: Boolean(c[key])});
+                row.connect('notify::active', w => {
+                    c[key] = w.active;
+                    this._emitChanged();
+                });
+                this.add_row(row);
+            }
+            break;
+        }
         case 'thermal': {
             let fahrenheit = new Adw.SwitchRow({
                 title: _('Display temperature in Fahrenheit'),
