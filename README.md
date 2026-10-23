@@ -124,6 +124,10 @@ and reloading GNOME Shell.
 
 ## Usage
 
+Enable **Separate Monitor Groups** in Preferences to add a subtle divider
+between visible monitors and keep their labels and values together. This is
+optional and can be changed without reloading the extension.
+
 After installation, the system monitor will appear in your top panel. You can configure its appearance and behavior through the GNOME Extensions app or by clicking on the panel and selecting "Preferences".
 
 You can also graph your own custom metrics using the Prometheus monitor and a simple script — see [Custom Metrics](docs/widget-authoring.md#custom-metrics-no-code-changes) for details.

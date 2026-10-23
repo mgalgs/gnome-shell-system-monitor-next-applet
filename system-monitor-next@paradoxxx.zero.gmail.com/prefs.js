@@ -39,7 +39,7 @@ const SMGeneralPrefsPage = GObject.registerClass({
     InternalChildren: ['background', 'icon_display', 'show_tooltip', 'move_clock',
         'compact_display', 'center_display', 'left_display', 'rotate_labels',
         'tooltip_delay_ms', 'graph_delay_m', 'disk_usage_style',
-        'custom_monitor_switch', 'custom_monitor_command'],
+        'custom_monitor_switch', 'custom_monitor_command', 'monitor_separators'],
 }, class SMGeneralPrefsPage extends Adw.PreferencesPage {
     constructor(settings, params = {}) {
         super(params);
@@ -74,6 +74,9 @@ const SMGeneralPrefsPage = GObject.registerClass({
             'active', Gio.SettingsBindFlags.DEFAULT
         );
         this._settings.bind('compact-display', this._compact_display,
+            'active', Gio.SettingsBindFlags.DEFAULT
+        );
+        this._settings.bind('monitor-separators', this._monitor_separators,
             'active', Gio.SettingsBindFlags.DEFAULT
         );
 
