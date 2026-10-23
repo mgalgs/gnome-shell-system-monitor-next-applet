@@ -32,8 +32,7 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
         this._lastTime = 0;
 
         if (this.device_id !== 'all') {
-            this.label.text = this.device_id.split('/').pop();
-            this.item_name = _('Disk') + ' ' + this.device_id;
+            this.setDisplayNames(this.device_id.split('/').pop(), _('Disk') + ' ' + this.device_id);
         }
     }
 

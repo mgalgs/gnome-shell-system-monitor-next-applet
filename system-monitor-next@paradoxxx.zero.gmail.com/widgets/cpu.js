@@ -62,10 +62,9 @@ const Cpu = class SystemMonitor_Cpu extends ElementBase {
             this._loadAvgState();
 
         if (this.cpuid !== -1) {
-            this.item_name = _('CPU') + ' ' + (this.cpuid + 1);
-            this.label.text = _('CPU') + (this.cpuid + 1);
+            this.setDisplayNames(_('CPU') + (this.cpuid + 1), _('CPU') + ' ' + (this.cpuid + 1));
         } else {
-            this.item_name = _('CPU');
+            this.setDisplayNames(this._defaultPanelLabel, _('CPU'));
         }
 
     }

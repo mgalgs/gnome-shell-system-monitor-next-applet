@@ -696,6 +696,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         const panelLabel = meta?.label || meta?.name?.toLowerCase()?.slice(0, 4) || this.elt;
         this.label = new St.Label({text: tr(panelLabel),
             style_class: Style.get('sm-status-label')});
+        this.setDisplayNames(tr(panelLabel), this.item_name);
         this.label.visible = this.config['show-text'];
 
         this.menu_visible = this.config['show-menu'];
@@ -761,6 +762,15 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
 
         this.tip_format(meta?.tooltipUnit ?? '');
     }
+    setDisplayNames(panelLabel, itemName) {
+        this._defaultPanelLabel = panelLabel;
+        this._defaultItemName = itemName;
+        this._syncDisplayNames();
+    }
+    _syncDisplayNames() {
+        this.label.text = this.config['panel-label'] || this._defaultPanelLabel;
+        this.item_name = this.config['item-name'] || this._defaultItemName;
+    }
     _activateTimers() {
         this.restart_update_timer(l_limit(this.config['refresh-time']));
         this._initialUpdateId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
@@ -772,6 +782,9 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
     onSettingsChanged(newConfig) {
         const oldConfig = this.config;
         this.config = newConfig;
+        this._syncDisplayNames();
+        if (oldConfig['item-name'] !== newConfig['item-name'])
+            build_menu_info(this.extension);
 
         if (oldConfig.display !== newConfig.display) {
             this.actor.visible = newConfig.display;
