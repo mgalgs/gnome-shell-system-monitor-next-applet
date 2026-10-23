@@ -1,5 +1,16 @@
 # Custom Metrics and Widget Authoring
 
+## Custom Display Names
+
+Every monitor can override its panel label and menu name in Preferences.
+Empty values use the widget's default names. Device identifiers and sampling
+are unaffected. Custom names are literal user text, not translation keys.
+
+Widgets with device-specific names should call
+`this.setDisplayNames(panelLabel, itemName)` after `super()`. This records the
+default names and applies any user overrides. Call it again when a setting
+changes the default name (for example, a Prometheus metric).
+
 ## Custom Metrics (No Code Changes)
 
 The Prometheus widget lets you graph any metric in the panel without modifying the extension. Write a script that serves a [Prometheus metrics](https://prometheus.io/docs/instrumenting/writing_exporters/) endpoint, then point a Prometheus monitor at it.

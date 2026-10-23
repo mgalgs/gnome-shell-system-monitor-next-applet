@@ -458,6 +458,18 @@ const SMMonitorRow = GObject.registerClass({
     _buildSettings() {
         let c = this._config;
 
+        for (const [key, title] of [
+            ['panel-label', _('Panel Label')],
+            ['item-name', _('Menu Name')],
+        ]) {
+            const row = new Adw.EntryRow({title, text: c[key] || '', show_apply_button: true});
+            row.connect('apply', () => {
+                c[key] = row.text.trim();
+                this._emitChanged();
+            });
+            this.add_row(row);
+        }
+
         let showMenu = new Adw.SwitchRow({title: _('Show In Menu'), active: c['show-menu']});
         showMenu.connect('notify::active', w => { c['show-menu'] = w.active; this._emitChanged(); });
         this.add_row(showMenu);
