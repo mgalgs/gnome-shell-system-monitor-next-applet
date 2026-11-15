@@ -6,6 +6,9 @@ import Gio from "gi://Gio";
 import { parse_bytearray } from '../common.js';
 import { ElementBase } from '../base.js';
 
+// /proc/diskstats counts 512-byte sectors, whatever the device's sector size.
+const SECTORS_PER_MIB = 2048;
+
 const Disk = class SystemMonitor_Disk extends ElementBase {
     static metadata = {
         name: 'Disk',
@@ -69,7 +72,7 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
             let usage = [0, 0];
             if (delta > 0) {
                 for (let i = 0; i < 2; i++) {
-                    usage[i] = (accum[i] - this._last[i]) / delta / 1024 / 8;
+                    usage[i] = (accum[i] - this._last[i]) / delta / SECTORS_PER_MIB;
                     this._last[i] = accum[i];
                 }
             }
