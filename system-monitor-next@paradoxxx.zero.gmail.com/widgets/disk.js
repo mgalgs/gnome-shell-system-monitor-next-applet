@@ -9,6 +9,20 @@ import { ElementBase } from '../base.js';
 // /proc/diskstats counts 512-byte sectors, whatever the device's sector size.
 const SECTORS_PER_MIB = 2048;
 
+function parse_diskstats(text) {
+    const devices = new Map();
+    for (const line of text.split('\n')) {
+        const fields = line.trim().split(/\s+/);
+        const readSectors = parseInt(fields[5]);
+        const writeSectors = parseInt(fields[9]);
+        // The last line is empty; no kernel since 2.6.25 prints a shorter row.
+        if (isNaN(readSectors) || isNaN(writeSectors))
+            continue;
+        devices.set(fields[2], {readSectors, writeSectors});
+    }
+    return devices;
+}
+
 const Disk = class SystemMonitor_Disk extends ElementBase {
     static metadata = {
         name: 'Disk',
@@ -33,7 +47,7 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
         extension._MountsMonitor.add_listener(this._mountListener);
         // A hand-written config may name the device by its /dev path.
         this._deviceName = this.device_id.split('/').pop();
-        this._last = [0, 0];
+        this._last = new Map();
         this._lastTime = 0;
 
         if (this.device_id !== 'all') {
@@ -56,36 +70,39 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
         file.load_contents_async(null, (source, result) => {
             if (this._destroyed) { callback(null); return; }
             let as_r = source.load_contents_finish(result);
-            let lines = parse_bytearray(as_r[1]).toString().split('\n');
-            let accum = [0, 0];
-
-            for (let i = 0; i < lines.length; i++) {
-                let entry = lines[i].trim().split(/[\s]+/);
-                if (typeof entry[1] === 'undefined')
-                    break;
-                if (this.device_id !== 'all' && entry[2] !== this._deviceName)
-                    continue;
-                accum[0] += parseInt(entry[5]);
-                accum[1] += parseInt(entry[9]);
+            const devices = parse_diskstats(parse_bytearray(as_r[1]));
+            const time = GLib.get_monotonic_time() / 1000;
+            const delta = (time - this._lastTime) / 1000;
+            if (delta <= 0) {
+                callback(null);
+                return;
             }
-
-            let time = GLib.get_monotonic_time() / 1000;
-            let delta = (time - this._lastTime) / 1000;
-            let usage = [0, 0];
-            if (delta > 0) {
-                for (let i = 0; i < 2; i++) {
-                    usage[i] = (accum[i] - this._last[i]) / delta / SECTORS_PER_MIB;
-                    this._last[i] = accum[i];
-                }
-            }
+            const last = this._last;
+            this._last = devices;
             this._lastTime = time;
 
-            let r = usage[0] < 10 ? Math.round(10 * usage[0]) / 10 : Math.round(usage[0]);
-            let w = usage[1] < 10 ? Math.round(10 * usage[1]) / 10 : Math.round(usage[1]);
+            const sectors = {read: 0, write: 0};
+            for (const [name, counters] of devices) {
+                if (this.device_id !== 'all' && name !== this._deviceName)
+                    continue;
+                // A device that is new since the last reading, or whose
+                // counters went back because it was recreated, has no
+                // baseline yet; it counts from the next tick.
+                const prev = last.get(name);
+                if (!prev || counters.readSectors < prev.readSectors || counters.writeSectors < prev.writeSectors)
+                    continue;
+                sectors.read += counters.readSectors - prev.readSectors;
+                sectors.write += counters.writeSectors - prev.writeSectors;
+            }
+            const read = sectors.read / delta / SECTORS_PER_MIB;
+            const write = sectors.write / delta / SECTORS_PER_MIB;
+
+            let r = read < 10 ? Math.round(10 * read) / 10 : Math.round(read);
+            let w = write < 10 ? Math.round(10 * write) / 10 : Math.round(write);
             const Locale = this.extension._Locale;
             const units = this.extension._Style.diskunits();
             callback({
-                metrics: {read: usage[0], write: usage[1]},
+                metrics: {read, write},
                 display: r.toLocaleString(Locale),
                 display2: w.toLocaleString(Locale),
                 unit: units, unit2: units,
