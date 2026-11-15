@@ -31,6 +31,8 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
         this.mounts = extension._MountsMonitor.get_mounts();
         this._mountListener = this.update_mounts.bind(this);
         extension._MountsMonitor.add_listener(this._mountListener);
+        // A hand-written config may name the device by its /dev path.
+        this._deviceName = this.device_id.split('/').pop();
         this._last = [0, 0];
         this._lastTime = 0;
 
@@ -61,7 +63,7 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
                 let entry = lines[i].trim().split(/[\s]+/);
                 if (typeof entry[1] === 'undefined')
                     break;
-                if (this.device_id !== 'all' && !this.device_id.includes(entry[2]))
+                if (this.device_id !== 'all' && entry[2] !== this._deviceName)
                     continue;
                 accum[0] += parseInt(entry[5]);
                 accum[1] += parseInt(entry[9]);
