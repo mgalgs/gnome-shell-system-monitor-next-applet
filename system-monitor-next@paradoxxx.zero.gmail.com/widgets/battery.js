@@ -7,6 +7,7 @@ import UPowerGlib from "gi://UPowerGlib";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import { sm_log } from '../utils.js';
 import { ElementBase, build_menu_info } from '../base.js';
+import { source_is_alive } from '../common.js';
 
 const UPower = UPowerGlib;
 
@@ -95,6 +96,22 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
         return GLib.SOURCE_REMOVE;
     }
 
+    // The proxy poll is a chain of one-shot timeouts, so a sweep that kills
+    // one link ends it for good: _proxy is never acquired, _onBatteryChanged
+    // never runs, and the widget shows 0% with the placeholder icon forever.
+    // A cleared _poll_handler_id means the chain finished on its own (proxy
+    // found, or attempts exhausted), which must not be restarted.
+    revive_timers() {
+        let revived = super.revive_timers();
+        if (!this._proxy && this._poll_handler_id && !source_is_alive(this._poll_handler_id)) {
+            this._poll_handler_id = GLib.timeout_add_seconds(
+                GLib.PRIORITY_DEFAULT, 1, this._poll_quickSettings.bind(this)
+            );
+            revived = true;
+        }
+        return revived;
+    }
+
     _onBatteryChanged() {
         let battery_found = false;
         if (typeof this._proxy.GetDevicesRemote === 'undefined') {
@@ -174,7 +191,12 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
             this._proxy = null;
         }
         if (this._poll_handler_id) {
-            GLib.source_remove(this._poll_handler_id);
+            // Spelled out literally rather than via source_remove_if_alive()
+            // so that EGO's lint (EGO-L-004), which pattern-matches a literal
+            // GLib.Source.remove()/GLib.source_remove() in the teardown path,
+            // can see that this source is in fact removed on destroy.
+            if (source_is_alive(this._poll_handler_id))
+                GLib.source_remove(this._poll_handler_id);
             this._poll_handler_id = undefined;
         }
         ElementBase.prototype.destroy.call(this);
