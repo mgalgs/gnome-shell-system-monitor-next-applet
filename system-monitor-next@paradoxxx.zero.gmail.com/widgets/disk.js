@@ -47,7 +47,7 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
         extension._MountsMonitor.add_listener(this._mountListener);
         // A hand-written config may name the device by its /dev path.
         this._deviceName = this.device_id.split('/').pop();
-        this._last = new Map();
+        this._last = null;
         this._lastTime = 0;
 
         if (this.device_id !== 'all') {
@@ -80,6 +80,11 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
             const last = this._last;
             this._last = devices;
             this._lastTime = time;
+            // The first reading has nothing to compare with, so no rate yet.
+            if (!last) {
+                callback(null);
+                return;
+            }
 
             const sectors = {read: 0, write: 0};
             for (const [name, counters] of devices) {
