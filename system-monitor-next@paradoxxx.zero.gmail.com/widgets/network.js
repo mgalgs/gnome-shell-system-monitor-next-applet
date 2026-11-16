@@ -53,12 +53,28 @@ const Net = class SystemMonitor_Net extends ElementBase {
             this._nmDevices = [];
             for (let j = 0; j < iface_list.length; j++) {
                 let device = iface_list[j];
-                device.connectObject('state-changed', this.update_iface_list.bind(this), this);
-                this._nmDevices.push(device);
+                this._watchDevice(device);
             }
+            this.client.connectObject(
+                'device-added', (client, device) => {
+                    this._watchDevice(device);
+                    this.update_iface_list();
+                },
+                'device-removed', (client, device) => {
+                    device.disconnectObject(this);
+                    this._nmDevices = this._nmDevices.filter(d => d !== device);
+                    this.update_iface_list();
+                },
+                this
+            );
         } catch (e) {
             console.error('Please install Network Manager Gobject Introspection Bindings: ' + e);
         }
+    }
+
+    _watchDevice(device) {
+        device.connectObject('state-changed', this.update_iface_list.bind(this), this);
+        this._nmDevices.push(device);
     }
 
     _detectInterfacesAsync(generation) {
@@ -234,6 +250,7 @@ const Net = class SystemMonitor_Net extends ElementBase {
 
     destroy() {
         if (this._nmDevices) {
+            this.client.disconnectObject(this);
             for (const device of this._nmDevices)
                 device.disconnectObject(this);
             this._nmDevices = null;
