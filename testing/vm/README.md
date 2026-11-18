@@ -249,6 +249,7 @@ testing/vm/
   vm-test.sh                # Test extension in a single VM
   vm-test-matrix.sh         # Test across all VMs, generate HTML report
   vm-config.sh              # Push monitor configs to a VM
+  vm-disk-layers.sh         # Attach a scratch disk and build a block stack on it
   vm-viewer.sh              # Open interactive graphical session
   vm-ssh.sh                 # SSH into a VM
   vm-destroy.sh             # Tear down VMs

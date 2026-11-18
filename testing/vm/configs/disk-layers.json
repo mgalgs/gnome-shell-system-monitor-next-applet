@@ -1,0 +1,89 @@
+{
+    "description": "Disk monitors over the block stack that vm-disk-layers.sh builds (run it first). The total should match iostat's sum over the devices with a hardware link (vda, vdb, sr0), and each named monitor its own row alone. md0, dm-10 (a name containing dm-1) and /dev/vdb (a hand-written path, which should read as vdb) are in the menu only.",
+    "monitors": [
+        {
+            "uuid": "cfg-disk-all",
+            "type": "disk",
+            "device": "all",
+            "display": true,
+            "style": "digit",
+            "graph-width": 100,
+            "refresh-time": 1000,
+            "show-text": true,
+            "show-menu": true,
+            "colors": {"read": "#c65000", "write": "#ff6700"}
+        },
+        {
+            "uuid": "cfg-disk-vdb",
+            "type": "disk",
+            "device": "vdb",
+            "display": true,
+            "style": "digit",
+            "graph-width": 100,
+            "refresh-time": 1000,
+            "show-text": true,
+            "show-menu": true,
+            "colors": {"read": "#c65000", "write": "#ff6700"}
+        },
+        {
+            "uuid": "cfg-disk-vdb1",
+            "type": "disk",
+            "device": "vdb1",
+            "display": true,
+            "style": "digit",
+            "graph-width": 100,
+            "refresh-time": 1000,
+            "show-text": true,
+            "show-menu": true,
+            "colors": {"read": "#c65000", "write": "#ff6700"}
+        },
+        {
+            "uuid": "cfg-disk-dm-0",
+            "type": "disk",
+            "device": "dm-0",
+            "display": true,
+            "style": "digit",
+            "graph-width": 100,
+            "refresh-time": 1000,
+            "show-text": true,
+            "show-menu": true,
+            "colors": {"read": "#c65000", "write": "#ff6700"}
+        },
+        {
+            "uuid": "cfg-disk-md0",
+            "type": "disk",
+            "device": "md0",
+            "display": false,
+            "style": "digit",
+            "graph-width": 100,
+            "refresh-time": 1000,
+            "show-text": true,
+            "show-menu": true,
+            "colors": {"read": "#c65000", "write": "#ff6700"}
+        },
+        {
+            "uuid": "cfg-disk-dm-10",
+            "type": "disk",
+            "device": "dm-10",
+            "display": false,
+            "style": "digit",
+            "graph-width": 100,
+            "refresh-time": 1000,
+            "show-text": true,
+            "show-menu": true,
+            "colors": {"read": "#c65000", "write": "#ff6700"}
+        },
+        {
+            "uuid": "cfg-disk-dev-vdb",
+            "type": "disk",
+            "device": "/dev/vdb",
+            "display": false,
+            "style": "digit",
+            "graph-width": 100,
+            "refresh-time": 1000,
+            "show-text": true,
+            "show-menu": true,
+            "colors": {"read": "#c65000", "write": "#ff6700"}
+        }
+    ]
+}
