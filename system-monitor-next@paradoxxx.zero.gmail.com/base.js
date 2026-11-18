@@ -920,6 +920,7 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
      */
     restart_cooldown_timer(max = 0) {
         source_remove_if_alive(this.graph_scale_cooldown_timer_id);
+        this.graph_scale_cooldown_timer_id = null;
         this.graph_scale_max_including_cooldown = max;
         this.graph_scale_cooldown_delay_minutes = this.extension._Schema.get_int('graph-cooldown-delay-m');
         if (this.graph_scale_cooldown_delay_minutes !== 0) {
