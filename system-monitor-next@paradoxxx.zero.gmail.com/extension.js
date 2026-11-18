@@ -413,7 +413,11 @@ export default class SystemMonitorExtension extends Extension {
         if (revived) {
             sm_log(`re-armed ${revived} timer(s) destroyed during GC`, 'warn');
             this._watchdogQuietSeconds = 0;
-            this._wallClock.force_seconds = true;
+            // Any write to force_seconds emits notify::clock, which GObject
+            // replays into this handler once it returns. Write only on a real
+            // change, or a revival that never takes would spin here forever.
+            if (!this._wallClock.force_seconds)
+                this._wallClock.force_seconds = true;
         } else if (this._wallClock.force_seconds &&
                    ++this._watchdogQuietSeconds >= WATCHDOG_QUIET_SECONDS) {
             // Drop back to the default minute-granular ticks. A permanent 1 Hz
