@@ -813,7 +813,6 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
     }
     create_text_items() {
         const Style = this.extension._Style;
-        const IconSize = this.extension._IconSize;
         const meta = this.constructor.metadata;
         const panelLayout = meta?.panelLayout ?? 'simple';
         const unit = meta?.panelUnit ?? '%';
@@ -827,7 +826,8 @@ export const ElementBase = class SystemMonitor_ElementBase extends TipBox {
             for (let i = 0; i < 2; i++) {
                 if (icons) {
                     items.push(new St.Icon({
-                        icon_size: 2 * IconSize / 3 * Style.iconsize(),
+                        icon_size: Style.get('') === '-compact' ? 12 : 14,
+                        y_align: Clutter.ActorAlign.CENTER,
                         icon_name: icons[i]}));
                 } else {
                     items.push(new St.Label({
