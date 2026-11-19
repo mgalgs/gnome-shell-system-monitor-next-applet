@@ -58,7 +58,7 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
                 let entry = lines[i].trim().split(/[\s]+/);
                 if (typeof entry[1] === 'undefined')
                     break;
-                if (this.device_id !== 'all' && !this.device_id.includes(entry[2]))
+                if (this.device_id !== 'all' && this.device_id.split('/').pop() !== entry[2])
                     continue;
                 accum[0] += parseInt(entry[5]);
                 accum[1] += parseInt(entry[9]);
@@ -67,9 +67,12 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
             let time = GLib.get_monotonic_time() / 1000;
             let delta = (time - this._lastTime) / 1000;
             let usage = [0, 0];
-            if (delta > 0) {
+            if (this._lastTime === 0) {
+                this._last = accum;
+            } else if (delta > 0) {
                 for (let i = 0; i < 2; i++) {
-                    usage[i] = (accum[i] - this._last[i]) / delta / 1024 / 8;
+                    // diskstats counts 512-byte sectors, regardless of the device block size.
+                    usage[i] = Math.max(0, accum[i] - this._last[i]) / delta / 2048;
                     this._last[i] = accum[i];
                 }
             }
