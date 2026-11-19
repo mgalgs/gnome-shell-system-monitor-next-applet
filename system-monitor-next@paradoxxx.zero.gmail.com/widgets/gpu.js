@@ -24,8 +24,8 @@ const Gpu = class SystemMonitor_Gpu extends ElementBase {
         this._percentage = 0;
 
         this.item_name = _('GPU') + (this.gpu_index !== '0' ? ' ' + this.gpu_index : '');
-        if (this.gpu_index !== '0')
-            this.label.text = _('gpu') + this.gpu_index;
+        this.setDisplayNames(this.gpu_index !== '0' ? _('gpu') + this.gpu_index : this._defaultPanelLabel,
+            this.item_name);
     }
 
     collectAsync(callback) {

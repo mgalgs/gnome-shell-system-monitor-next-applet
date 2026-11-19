@@ -42,8 +42,7 @@ const Net = class SystemMonitor_Net extends ElementBase {
         this.update_iface_list();
 
         if (this.device_id !== 'all') {
-            this.label.text = this.device_id;
-            this.item_name = _('Net') + ' ' + this.device_id;
+            this.setDisplayNames(this.device_id, _('Net') + ' ' + this.device_id);
         }
 
         this.gtop = new GTop.glibtop_netload();

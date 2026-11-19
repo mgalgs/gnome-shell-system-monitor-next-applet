@@ -23,13 +23,13 @@ const Fan = class SystemMonitor_Fan extends ElementBase {
         this._display_error = true;
         this._rpm = 0;
 
-        this.item_name = this.sensor_label ? this.sensor_label : _('Fan');
+        this.setDisplayNames(this._defaultPanelLabel, this.sensor_label || _('Fan'));
 
         if (this.sensor_label) {
             let shortLabel = this.sensor_label.split(' - ').pop();
             if (shortLabel.length > 6)
                 shortLabel = shortLabel.substring(0, 6);
-            this.label.text = shortLabel;
+            this.setDisplayNames(shortLabel, this.sensor_label);
         }
     }
 

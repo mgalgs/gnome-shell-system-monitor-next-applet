@@ -22,8 +22,7 @@ const Freq = class SystemMonitor_Freq extends ElementBase {
 
         if (this.device_id !== 'all') {
             let coreNum = parseInt(this.device_id) + 1;
-            this.label.text = _('F') + coreNum;
-            this.item_name = _('Freq Core ') + coreNum;
+            this.setDisplayNames(_('F') + coreNum, _('Freq Core ') + coreNum);
         }
 
     }

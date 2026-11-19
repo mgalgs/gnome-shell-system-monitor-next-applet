@@ -123,8 +123,7 @@ const Prometheus = class SystemMonitor_Prometheus extends ElementBase {
             short = short.substring(5);
         if (short.length > 12)
             short = short.substring(0, 12);
-        this.label.text = short;
-        this.item_name = this._metric;
+        this.setDisplayNames(short, this._metric);
     }
 
     onSettingsChanged(newConfig) {
