@@ -39,6 +39,11 @@
           </object>
         </child>
         <child>
+          <object class="AdwSwitchRow" id="monitor_separators">
+            <property name="title" translatable="yes">Separate Monitor Groups</property>
+          </object>
+        </child>
+        <child>
           <object class="AdwSwitchRow" id="center_display">
             <property name="title" translatable="yes">Display in the Middle</property>
           </object>
